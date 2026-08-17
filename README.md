@@ -1,2 +1,3 @@
-# record-hub
-様々な記録を一元管理するためのプラットフォーム
+# Hundred
+
+Hundredは、Record HubなどのAppをまとめて利用するためのプラットフォームです。

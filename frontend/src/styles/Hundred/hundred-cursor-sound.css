@@ -1,0 +1,166 @@
+/**
+ * Hundred Homeのカーソル音選択UI専用スタイル。
+ *
+ * 説明:
+ * Settingsから開くカーソル音選択画面と、各音源の選択状態を表示する。
+ */
+
+/* --------------------------------------------------------------------------
+ * 選択ダイアログ
+ * 画面下部へ選択パネルを表示し、背後のHome操作から分離する。
+ * -------------------------------------------------------------------------- */
+.sound-dialog {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 20px max(14px, env(safe-area-inset-right))
+    max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  background: rgba(8, 14, 14, 0.38);
+  backdrop-filter: blur(8px);
+  animation: sound-dialog-in 240ms ease both;
+  touch-action: manipulation;
+}
+
+.sound-dialog__panel {
+  width: min(100%, 520px);
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface-strong) 92%, #fff 8%);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.24);
+}
+
+.sound-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.sound-dialog__header span {
+  color: var(--accent);
+  font-size: 0.62rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.sound-dialog__header h2 {
+  margin: 3px 0 0;
+  font-size: 1.45rem;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+}
+
+.sound-dialog__close {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--ink);
+  font-size: 1.25rem;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+ * 音源一覧
+ * 音の特徴と現在の選択状態を、タップ可能な行として表示する。
+ * -------------------------------------------------------------------------- */
+.sound-dialog__options {
+  display: grid;
+  gap: 8px;
+}
+
+.sound-option {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 17px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.sound-option[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--ink);
+  background: var(--surface);
+}
+
+.sound-option__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  font-size: 1rem;
+  background: var(--accent-soft);
+}
+
+.sound-option__copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sound-option__copy strong {
+  font-size: 0.88rem;
+}
+
+.sound-option__copy small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.62rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sound-option__check {
+  color: var(--accent);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.sound-dialog__close:focus-visible,
+.sound-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* --------------------------------------------------------------------------
+ * 表示環境
+ * PCでは中央配置し、動きの軽減設定では表示アニメーションを停止する。
+ * -------------------------------------------------------------------------- */
+@keyframes sound-dialog-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (min-width: 700px) {
+  .sound-dialog {
+    align-items: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sound-dialog {
+    animation: none;
+  }
+}
