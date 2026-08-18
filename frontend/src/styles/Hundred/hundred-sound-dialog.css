@@ -1,10 +1,11 @@
 /**
  * 概要:
- * Hundred Homeのカーソル音選択ダイアログを装飾する。
+ * Hundred Homeのサウンド設定ダイアログを装飾する。
  *
  * 責務:
  * - 選択ダイアログのレイアウトを定義する
- * - 音源の選択状態とフォーカス状態を表現する
+ * - 効果音音量の入力UIを定義する
+ * - カーソル音の選択状態とフォーカス状態を表現する
  * - PC配置と動きの軽減設定へ対応する
  */
 
@@ -12,7 +13,7 @@
  * 選択ダイアログ
  * 画面下部へ選択パネルを表示し、背後のHome操作から分離する。
  * -------------------------------------------------------------------------- */
-.hundred-cursor-sound-dialog {
+.hundred-sound-dialog {
   position: fixed;
   z-index: 20;
   inset: 0;
@@ -23,12 +24,14 @@
     max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
   background: rgba(8, 14, 14, 0.38);
   backdrop-filter: blur(8px);
-  animation: hundred-cursor-sound-dialog-in 240ms ease both;
+  animation: hundred-sound-dialog-in 240ms ease both;
   touch-action: manipulation;
 }
 
-.hundred-cursor-sound-dialog__panel {
+.hundred-sound-dialog__panel {
   width: min(100%, 520px);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
   padding: var(--space-5);
   border: 1px solid var(--hundred-color-border);
   border-radius: 26px;
@@ -37,7 +40,7 @@
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.24);
 }
 
-.hundred-cursor-sound-dialog__header {
+.hundred-sound-dialog__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -45,7 +48,7 @@
   margin-bottom: 18px;
 }
 
-.hundred-cursor-sound-dialog__header span {
+.hundred-sound-dialog__header span {
   color: var(--hundred-color-accent);
   font-size: var(--font-size-2xs);
   font-weight: 650;
@@ -53,14 +56,14 @@
   letter-spacing: 0.12em;
 }
 
-.hundred-cursor-sound-dialog__header h2 {
+.hundred-sound-dialog__header h2 {
   margin: 3px 0 0;
   font-size: 1.45rem;
   line-height: 1.1;
   letter-spacing: -0.04em;
 }
 
-.hundred-cursor-sound-dialog__close {
+.hundred-sound-dialog__close {
   width: 36px;
   height: 36px;
   border: 1px solid var(--hundred-color-border);
@@ -72,10 +75,58 @@
 }
 
 /* --------------------------------------------------------------------------
- * 音源一覧
+ * 効果音音量
+ * Hundred Homeで再生する効果音の全体音量をスライダーで調整する。
+ * -------------------------------------------------------------------------- */
+.hundred-sound-volume {
+  padding: var(--space-3);
+  border: 1px solid var(--hundred-color-border);
+  border-radius: 17px;
+  background: var(--hundred-color-surface);
+}
+
+.hundred-sound-volume__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.hundred-sound-volume__header strong {
+  font-size: var(--font-size-sm);
+}
+
+.hundred-sound-volume__header span {
+  color: var(--hundred-color-accent);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.hundred-sound-volume__slider {
+  width: 100%;
+  margin: var(--space-3) 0 var(--space-2);
+  accent-color: var(--hundred-color-accent);
+  cursor: pointer;
+}
+
+.hundred-sound-volume small {
+  display: block;
+  color: var(--hundred-color-text-muted);
+  font-size: var(--font-size-2xs);
+}
+
+/* --------------------------------------------------------------------------
+ * カーソル音一覧
  * 音の特徴と現在の選択状態を、タップ可能な行として表示する。
  * -------------------------------------------------------------------------- */
-.hundred-cursor-sound-dialog__options {
+.hundred-sound-dialog__section-title {
+  margin: var(--space-5) 0 var(--space-2);
+  color: var(--hundred-color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 650;
+}
+
+.hundred-sound-dialog__options {
   display: grid;
   gap: var(--space-2);
 }
@@ -137,7 +188,8 @@
   text-align: center;
 }
 
-.hundred-cursor-sound-dialog__close:focus-visible,
+.hundred-sound-dialog__close:focus-visible,
+.hundred-sound-volume__slider:focus-visible,
 .hundred-cursor-sound-option:focus-visible {
   outline: 2px solid var(--hundred-color-accent);
   outline-offset: 3px;
@@ -147,7 +199,7 @@
  * 表示環境
  * PCでは中央配置し、動きの軽減設定では表示アニメーションを停止する。
  * -------------------------------------------------------------------------- */
-@keyframes hundred-cursor-sound-dialog-in {
+@keyframes hundred-sound-dialog-in {
   from {
     opacity: 0;
   }
@@ -157,13 +209,13 @@
 }
 
 @media (min-width: 700px) {
-  .hundred-cursor-sound-dialog {
+  .hundred-sound-dialog {
     align-items: center;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hundred-cursor-sound-dialog {
+  .hundred-sound-dialog {
     animation: none;
   }
 }

@@ -18,8 +18,11 @@ class HundredCursorSoundPlayer {
   /** ユーザー操作中にAudioContextを有効化し、各効果音を先読みする。 */
   prepare() {
     const context = this.getContext()
+    if (!context) return null
 
     if (context.state !== 'running') {
+      if (!this.hasActiveUserGesture()) return null
+
       void context.resume().catch(() => {
         // 再生許可前でも画面操作は止めず、次のユーザー操作で再試行する。
       })
@@ -28,19 +31,22 @@ class HundredCursorSoundPlayer {
     cursorSoundOptions.forEach((sound) => {
       if (sound.source) void this.loadBuffer(sound, context)
     })
+
+    return context
   }
 
-  /** 指定した音を独立した再生ノードで鳴らし、連続入力による中断を防ぐ。 */
-  play(soundId: CursorSoundId) {
+  /** 指定した音を全体音量込みで再生し、連続入力による中断を防ぐ。 */
+  play(soundId: CursorSoundId, effectVolume: number) {
     const sound = getCursorSound(soundId)
     if (!sound?.source) return
 
-    this.prepare()
-    const context = this.getContext()
+    const context = this.prepare()
+    if (!context) return
+
     const buffer = this.buffers.get(sound.id)
 
     if (buffer) {
-      this.startSound(context, buffer, sound.volume)
+      this.startSound(context, buffer, sound.volume * effectVolume)
       return
     }
 
@@ -50,17 +56,25 @@ class HundredCursorSoundPlayer {
 
     void this.loadBuffer(sound, context).then((loadedBuffer) => {
       this.pendingSounds.delete(sound.id)
-      if (loadedBuffer) this.startSound(context, loadedBuffer, sound.volume)
+      if (loadedBuffer) {
+        this.startSound(context, loadedBuffer, sound.volume * effectVolume)
+      }
     })
   }
 
-  /** 必要になった時だけAudioContextを作成して再利用する。 */
+  /** 有効なユーザー操作中に限ってAudioContextを作成し、以降の再生で再利用する。 */
   private getContext() {
     if (!this.context || this.context.state === 'closed') {
+      if (!this.hasActiveUserGesture()) return null
       this.context = new AudioContext()
     }
 
     return this.context
+  }
+
+  /** ブラウザが音声開始を許可する一時的なユーザー操作中か確認する。 */
+  private hasActiveUserGesture() {
+    return !navigator.userActivation || navigator.userActivation.isActive
   }
 
   /** 音源を取得・デコードし、次回以降すぐ再生できる状態で保存する。 */

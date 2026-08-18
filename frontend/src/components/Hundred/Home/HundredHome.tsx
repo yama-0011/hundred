@@ -1,16 +1,28 @@
-import { useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import HundredCursorSoundDialog from '../CursorSound/HundredCursorSoundDialog'
-import HundredCursorSoundPlayer from '../CursorSound/HundredCursorSoundPlayer'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
+import HundredSignInScreen from '../Auth/HundredSignInScreen'
+import HundredNotificationDialog from '../Notification/HundredNotificationDialog'
+import HundredProfileDialog, {
+  type HundredProfileSession,
+} from '../Profile/HundredProfileDialog'
+import HundredSoundDialog from '../Sound/HundredSoundDialog'
+import HundredCursorSoundPlayer from '../Sound/HundredCursorSoundPlayer'
 import {
   defaultCursorSoundId,
   getCursorSound,
   resolveCursorSoundId,
   type CursorSoundId,
-} from '../CursorSound/hundredCursorSoundOptions'
+} from '../Sound/hundredCursorSoundOptions'
 import { hundredThemeConfig } from '../Theme/hundredThemeConfig'
 import HundredWallpaperBackground from '../Wallpaper/HundredWallpaperBackground'
 import HundredWallpaperDialog from '../Wallpaper/HundredWallpaperDialog'
 import {
+  getWallpaper,
   getWallpaperTheme,
   isWallpaperId,
   type WallpaperId,
@@ -26,7 +38,7 @@ import '../../../styles/Hundred/hundred-home-settings.css'
  * - カテゴリとインストール済みAppをデータから描画する
  * - 選択中のカテゴリとAppの状態を管理する
  * - スワイプ、クリック、キーボード、ホイールによる選択操作を処理する
- * - カーソル移動音と壁紙の設定を管理する
+ * - プロフィール認証モックと、サウンド、通知、壁紙の設定を管理する
  */
 
 // IDを文字列の自由入力にせず、扱えるカテゴリとAppを型で限定する。
@@ -42,6 +54,11 @@ type InstalledApp = {
   id: AppId
   name: string
   detail: string
+}
+
+type NotificationSettings = {
+  enabled: boolean
+  apps: Record<AppId, boolean>
 }
 
 // 表示内容をデータとして分離し、項目追加時にJSXを書き換えずに済むようにする。
@@ -63,6 +80,8 @@ const initialCategoryIndex = categories.findIndex(({ id }) => id === 'apps')
 const swipeThreshold = 38
 const wallpaperStorageKey = 'hundred-wallpaper'
 const cursorSoundStorageKey = 'hundred-cursor-sound'
+const effectVolumeStorageKey = 'hundred-effect-volume'
+const notificationStorageKey = 'hundred-notification-settings'
 
 /** 保存済みの壁紙を読み込み、未保存または不正な値の場合はMistを返す。 */
 function getInitialWallpaper(): WallpaperId {
@@ -81,6 +100,79 @@ function getInitialCursorSound(): CursorSoundId {
     return resolveCursorSoundId(savedSound) ?? defaultCursorSoundId
   } catch {
     return defaultCursorSoundId
+  }
+}
+
+/**
+ * 概要: 保存済みの効果音音量を読み込む。
+ * 責務: 0〜1の保存値を返し、不正な値または未保存の場合は最大音量を返す。
+ */
+function getInitialEffectVolume() {
+  try {
+    const savedVolume = localStorage.getItem(effectVolumeStorageKey)
+    if (savedVolume === null) return 1
+
+    const volume = Number(savedVolume)
+    return Number.isFinite(volume) && volume >= 0 && volume <= 1 ? volume : 1
+  } catch {
+    return 1
+  }
+}
+
+/**
+ * 概要: 現在のインストール済みAppから通知設定の初期値を作成する。
+ * 責務: 通知全体と各Appをオンにした新規ユーザー向け設定を返す。
+ */
+function createDefaultNotificationSettings(): NotificationSettings {
+  return {
+    enabled: true,
+    apps: Object.fromEntries(
+      installedApps.map((app) => [app.id, true]),
+    ) as Record<AppId, boolean>,
+  }
+}
+
+/**
+ * 概要: 保存済みの通知設定を読み込む。
+ * 責務: 保存値を検証し、新しく追加されたAppにはオンの初期値を補完する。
+ */
+function getInitialNotificationSettings(): NotificationSettings {
+  const defaultSettings = createDefaultNotificationSettings()
+
+  try {
+    const savedSettings = localStorage.getItem(notificationStorageKey)
+    if (savedSettings === null) return defaultSettings
+
+    const parsedSettings: unknown = JSON.parse(savedSettings)
+    if (!parsedSettings || typeof parsedSettings !== 'object') {
+      return defaultSettings
+    }
+
+    const candidate = parsedSettings as {
+      enabled?: unknown
+      apps?: unknown
+    }
+    const savedApps =
+      candidate.apps && typeof candidate.apps === 'object'
+        ? (candidate.apps as Record<string, unknown>)
+        : {}
+
+    return {
+      enabled:
+        typeof candidate.enabled === 'boolean'
+          ? candidate.enabled
+          : defaultSettings.enabled,
+      apps: Object.fromEntries(
+        installedApps.map((app) => [
+          app.id,
+          typeof savedApps[app.id] === 'boolean'
+            ? savedApps[app.id]
+            : defaultSettings.apps[app.id],
+        ]),
+      ) as Record<AppId, boolean>,
+    }
+  } catch {
+    return defaultSettings
   }
 }
 
@@ -173,8 +265,15 @@ function HundredHome() {
     useState<WallpaperId>(getInitialWallpaper)
   const [selectedCursorSound, setSelectedCursorSound] =
     useState<CursorSoundId>(getInitialCursorSound)
+  const [effectVolume, setEffectVolume] = useState(getInitialEffectVolume)
+  const [notificationSettings, setNotificationSettings] =
+    useState(getInitialNotificationSettings)
+  const [profileSession, setProfileSession] =
+    useState<HundredProfileSession | null>(null)
   const [isWallpaperDialogOpen, setIsWallpaperDialogOpen] = useState(false)
-  const [isCursorSoundDialogOpen, setIsCursorSoundDialogOpen] = useState(false)
+  const [isSoundDialogOpen, setIsSoundDialogOpen] = useState(false)
+  const [isNotificationDialogOpen, setIsNotificationDialogOpen] = useState(false)
+  const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false)
 
   // 操作中の一時値や音声要素は、再描画を起こさないuseRefで保持する。
   const pointerStart = useRef<{ x: number; y: number } | null>(null)
@@ -182,9 +281,14 @@ function HundredHome() {
   const selectedCategoryIndexRef = useRef(initialCategoryIndex)
   const selectedAppIndexRef = useRef(0)
   const cursorSoundPlayer = useRef<HundredCursorSoundPlayer | null>(null)
+  const categoryWheelArea = useRef<HTMLElement | null>(null)
+  const appWheelArea = useRef<HTMLDivElement | null>(null)
 
   const selectedCategory = categories[selectedCategoryIndex]
   const selectedWallpaperTheme = getWallpaperTheme(selectedWallpaper)
+  const enabledNotificationAppCount = installedApps.filter(
+    (app) => notificationSettings.apps[app.id],
+  ).length
 
   /** カーソル音の再生機能を必要になった時だけ作成して返す。 */
   const getCursorSoundPlayer = () => {
@@ -194,7 +298,7 @@ function HundredHome() {
 
   /** 指定したカーソル音をWeb Audio APIで再生する。 */
   const playCursorSound = (soundId: CursorSoundId = selectedCursorSound) => {
-    getCursorSoundPlayer().play(soundId)
+    getCursorSoundPlayer().play(soundId, effectVolume)
   }
 
   /** 選択した壁紙を画面へ反映し、次回表示用にブラウザへ保存する。 */
@@ -218,6 +322,76 @@ function HundredHome() {
     } catch {
       // 保存できない環境でも、現在の画面内では選択を反映する。
     }
+  }
+
+  /** 選択した効果音音量を画面へ反映し、次回表示用にブラウザへ保存する。 */
+  const handleEffectVolumeChange = (volume: number) => {
+    setEffectVolume(volume)
+
+    try {
+      localStorage.setItem(effectVolumeStorageKey, String(volume))
+    } catch {
+      // 保存できない環境でも、現在の画面内では音量を反映する。
+    }
+  }
+
+  /** 通知全体の設定を更新し、次回表示用にブラウザへ保存する。 */
+  const handleNotificationsEnabledChange = (enabled: boolean) => {
+    setNotificationSettings((currentSettings) => {
+      const nextSettings = { ...currentSettings, enabled }
+
+      try {
+        localStorage.setItem(notificationStorageKey, JSON.stringify(nextSettings))
+      } catch {
+        // 保存できない環境でも、現在の画面内では設定を反映する。
+      }
+
+      return nextSettings
+    })
+  }
+
+  /** 指定したAppの通知設定を更新し、次回表示用にブラウザへ保存する。 */
+  const handleAppNotificationChange = (appId: string, enabled: boolean) => {
+    if (!installedApps.some((app) => app.id === appId)) return
+
+    setNotificationSettings((currentSettings) => {
+      const nextSettings = {
+        ...currentSettings,
+        apps: { ...currentSettings.apps, [appId]: enabled },
+      }
+
+      try {
+        localStorage.setItem(notificationStorageKey, JSON.stringify(nextSettings))
+      } catch {
+        // 保存できない環境でも、現在の画面内では設定を反映する。
+      }
+
+      return nextSettings
+    })
+  }
+
+  /** モックユーザーを新規登録済みとして扱い、サインイン表示へ切り替える。 */
+  const handleSignUp = () => {
+    getCursorSoundPlayer().prepare()
+    setProfileSession('member')
+  }
+
+  /** モックユーザーでサインインした状態へ切り替える。 */
+  const handleSignIn = () => {
+    getCursorSoundPlayer().prepare()
+    setProfileSession('member')
+  }
+
+  /** ゲストとしてサインインし、アカウントを作らずHomeへ移動する。 */
+  const handleGuestSignIn = () => {
+    getCursorSoundPlayer().prepare()
+    setProfileSession('guest')
+  }
+
+  /** 現在の会員・ゲストセッションを終了し、サインイン画面へ戻す。 */
+  const handleSignOut = () => {
+    setIsProfileDialogOpen(false)
+    setProfileSession(null)
   }
 
   /** 指定位置のカテゴリを選択し、位置が変わった場合だけカーソル音を鳴らす。 */
@@ -251,6 +425,55 @@ function HundredHome() {
     if (currentCategory.id !== 'apps') return
 
     selectApp(selectedAppIndexRef.current + direction)
+  }
+
+  // Reactのpassiveなwheelイベントを避け、スクロール抑止可能なイベントを直接登録する。
+  useEffect(() => {
+    const categoryElement = categoryWheelArea.current
+    const appElement = appWheelArea.current
+
+    /** カテゴリ領域の縦・横ホイール入力を、左右のカテゴリ移動へ変換する。 */
+    const handleCategoryWheel = (event: WheelEvent) => {
+      const delta =
+        Math.abs(event.deltaX) > Math.abs(event.deltaY)
+          ? event.deltaX
+          : event.deltaY
+      if (delta === 0) return
+
+      event.preventDefault()
+      event.stopPropagation()
+      moveCategory(delta < 0 ? -1 : 1)
+    }
+
+    /** App領域の縦ホイール入力を、上下のApp移動へ変換する。 */
+    const handleAppWheel = (event: WheelEvent) => {
+      if (event.deltaY === 0) return
+
+      event.preventDefault()
+      event.stopPropagation()
+      moveApp(event.deltaY < 0 ? -1 : 1)
+    }
+
+    categoryElement?.addEventListener('wheel', handleCategoryWheel, {
+      passive: false,
+    })
+    appElement?.addEventListener('wheel', handleAppWheel, { passive: false })
+
+    return () => {
+      categoryElement?.removeEventListener('wheel', handleCategoryWheel)
+      appElement?.removeEventListener('wheel', handleAppWheel)
+    }
+  })
+
+  if (profileSession === null) {
+    return (
+      <HundredSignInScreen
+        wallpaper={selectedWallpaper}
+        onSignIn={handleSignIn}
+        onSignUp={handleSignUp}
+        onGuestSignIn={handleGuestSignIn}
+      />
+    )
   }
 
   /** 矢印キーを横カテゴリ移動と縦App移動へ割り当てる。 */
@@ -305,28 +528,6 @@ function HundredHome() {
     suppressClick.current = false
   }
 
-  /** カテゴリ領域の縦・横ホイール入力を、左右のカテゴリ移動へ変換する。 */
-  const handleCategoryWheel = (event: React.WheelEvent<HTMLElement>) => {
-    const delta =
-      Math.abs(event.deltaX) > Math.abs(event.deltaY)
-        ? event.deltaX
-        : event.deltaY
-    if (delta === 0) return
-
-    event.preventDefault()
-    event.stopPropagation()
-    moveCategory(delta < 0 ? -1 : 1)
-  }
-
-  /** App領域の縦ホイール入力を、上下のApp移動へ変換する。 */
-  const handleAppWheel = (event: React.WheelEvent<HTMLElement>) => {
-    if (event.deltaY === 0) return
-
-    event.preventDefault()
-    event.stopPropagation()
-    moveApp(event.deltaY < 0 ? -1 : 1)
-  }
-
   // Reactの選択位置をCSSカスタムプロパティへ渡し、CSS側で移動量を計算する。
   const categoryTrackStyle = {
     '--hundred-selected-category': selectedCategoryIndex,
@@ -359,9 +560,9 @@ function HundredHome() {
 
       <section className="hundred-xmb" aria-label="Home navigation">
         <nav
+          ref={categoryWheelArea}
           className="hundred-category-window"
           aria-label="Categories"
-          onWheel={handleCategoryWheel}
         >
           <div className="hundred-category-track" style={categoryTrackStyle}>
             {categories.map((category, index) => {
@@ -390,12 +591,33 @@ function HundredHome() {
         </div>
 
         <div className="hundred-item-window">
-          {selectedCategory.id === 'apps' ? (
+          {selectedCategory.id === 'profile' ? (
+            <div className="hundred-profile-panel">
+              <button
+                className="hundred-profile-entry"
+                type="button"
+                onClick={() => setIsProfileDialogOpen(true)}
+              >
+                <span className="hundred-profile-entry__avatar" aria-hidden="true">
+                  {profileSession === 'member' ? 'Y' : 'G'}
+                </span>
+                <span className="hundred-profile-entry__copy">
+                  <strong>{profileSession === 'member' ? 'Yama' : 'Guest'}</strong>
+                  <small>
+                    {profileSession === 'member' ? 'Signed in' : 'Guest session'}
+                  </small>
+                </span>
+                <span className="hundred-profile-entry__arrow" aria-hidden="true">
+                  ›
+                </span>
+              </button>
+            </div>
+          ) : selectedCategory.id === 'apps' ? (
             <div
+              ref={appWheelArea}
               className="hundred-app-track"
               style={appTrackStyle}
               aria-label="Installed apps"
-              onWheel={handleAppWheel}
             >
               {installedApps.map((app, index) => {
                 const isSelected = index === selectedAppIndex
@@ -439,7 +661,7 @@ function HundredHome() {
                 </span>
                 <span className="hundred-settings-item__copy">
                   <strong>Wallpaper</strong>
-                  <small>動く背景を選択</small>
+                  <small>{getWallpaper(selectedWallpaper)?.name}</small>
                 </span>
                 <span className="hundred-settings-item__arrow" aria-hidden="true">
                   ›
@@ -449,7 +671,7 @@ function HundredHome() {
               <button
                 className="hundred-settings-item"
                 type="button"
-                onClick={() => setIsCursorSoundDialogOpen(true)}
+                onClick={() => setIsSoundDialogOpen(true)}
               >
                 <span className="hundred-settings-item__icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24">
@@ -458,8 +680,35 @@ function HundredHome() {
                   </svg>
                 </span>
                 <span className="hundred-settings-item__copy">
-                  <strong>Cursor sound</strong>
-                  <small>{getCursorSound(selectedCursorSound)?.name}</small>
+                  <strong>Sound</strong>
+                  <small>
+                    {getCursorSound(selectedCursorSound)?.name} ·{' '}
+                    {Math.round(effectVolume * 100)}%
+                  </small>
+                </span>
+                <span className="hundred-settings-item__arrow" aria-hidden="true">
+                  ›
+                </span>
+              </button>
+
+              <button
+                className="hundred-settings-item"
+                type="button"
+                onClick={() => setIsNotificationDialogOpen(true)}
+              >
+                <span className="hundred-settings-item__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M7 10a5 5 0 0 1 10 0c0 5 2 5 2 7H5c0-2 2-2 2-7Z" />
+                    <path d="M10 20h4" />
+                  </svg>
+                </span>
+                <span className="hundred-settings-item__copy">
+                  <strong>Notifications</strong>
+                  <small>
+                    {notificationSettings.enabled
+                      ? `${enabledNotificationAppCount}/${installedApps.length} apps`
+                      : 'Off'}
+                  </small>
                 </span>
                 <span className="hundred-settings-item__arrow" aria-hidden="true">
                   ›
@@ -484,11 +733,34 @@ function HundredHome() {
         />
       )}
 
-      {isCursorSoundDialogOpen && (
-        <HundredCursorSoundDialog
+      {isSoundDialogOpen && (
+        <HundredSoundDialog
+          effectVolume={effectVolume}
           selectedSound={selectedCursorSound}
+          onVolumeChange={handleEffectVolumeChange}
           onSelect={handleCursorSoundSelect}
-          onClose={() => setIsCursorSoundDialogOpen(false)}
+          onClose={() => setIsSoundDialogOpen(false)}
+        />
+      )}
+
+      {isNotificationDialogOpen && (
+        <HundredNotificationDialog
+          notificationsEnabled={notificationSettings.enabled}
+          apps={installedApps}
+          appNotifications={notificationSettings.apps}
+          onEnabledChange={handleNotificationsEnabledChange}
+          onAppChange={handleAppNotificationChange}
+          onClose={() => setIsNotificationDialogOpen(false)}
+        />
+      )}
+
+      {isProfileDialogOpen && (
+        <HundredProfileDialog
+          session={profileSession}
+          onSignUp={handleSignUp}
+          onSignIn={handleSignIn}
+          onSignOut={handleSignOut}
+          onClose={() => setIsProfileDialogOpen(false)}
         />
       )}
     </main>

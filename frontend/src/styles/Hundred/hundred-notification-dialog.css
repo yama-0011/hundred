@@ -1,0 +1,256 @@
+/**
+ * 概要:
+ * Hundred Homeの通知設定ダイアログを装飾する。
+ *
+ * 責務:
+ * - 通知設定ダイアログのレイアウトを定義する
+ * - 全体設定とApp別設定の階層を表現する
+ * - 通知スイッチのオン・オフとフォーカス状態を表現する
+ * - PC配置と動きの軽減設定へ対応する
+ */
+
+/* --------------------------------------------------------------------------
+ * 通知設定ダイアログ
+ * 画面下部へ設定パネルを表示し、背後のHome操作から分離する。
+ * -------------------------------------------------------------------------- */
+.hundred-notification-dialog {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: var(--space-5) max(14px, env(safe-area-inset-right))
+    max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  background: rgba(8, 14, 14, 0.38);
+  backdrop-filter: blur(8px);
+  animation: hundred-notification-dialog-in 240ms ease both;
+  touch-action: manipulation;
+}
+
+.hundred-notification-dialog__panel {
+  width: min(100%, 520px);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  padding: var(--space-5);
+  border: 1px solid var(--hundred-color-border);
+  border-radius: 26px;
+  color: var(--hundred-color-text);
+  background: color-mix(in srgb, var(--hundred-color-surface-strong) 92%, #fff 8%);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.24);
+}
+
+.hundred-notification-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: 18px;
+}
+
+.hundred-notification-dialog__header span {
+  color: var(--hundred-color-accent);
+  font-size: var(--font-size-2xs);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.hundred-notification-dialog__header h2 {
+  margin: 3px 0 0;
+  font-size: 1.45rem;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+}
+
+.hundred-notification-dialog__close {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--hundred-color-border);
+  border-radius: 50%;
+  color: var(--hundred-color-text);
+  font-size: var(--font-size-lg);
+  background: var(--hundred-color-surface);
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+ * 全体通知設定
+ * App別設定より優先される全体スイッチを独立したカードとして表示する。
+ * -------------------------------------------------------------------------- */
+.hundred-notification-master {
+  padding: var(--space-3);
+  border: 1px solid var(--hundred-color-border);
+  border-radius: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  background: var(--hundred-color-surface);
+  cursor: pointer;
+}
+
+.hundred-notification-master__copy,
+.hundred-notification-app__copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hundred-notification-master__copy strong,
+.hundred-notification-app__copy strong {
+  font-size: var(--font-size-sm);
+}
+
+.hundred-notification-master__copy small,
+.hundred-notification-app__copy small {
+  color: var(--hundred-color-text-muted);
+  font-size: var(--font-size-2xs);
+}
+
+/* --------------------------------------------------------------------------
+ * App別通知設定
+ * インストール済みAppと、それぞれの通知スイッチを一覧表示する。
+ * -------------------------------------------------------------------------- */
+.hundred-notification-dialog__section-header {
+  min-height: 20px;
+  margin: var(--space-5) 0 var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.hundred-notification-dialog__section-header h3 {
+  margin: 0;
+  color: var(--hundred-color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 650;
+}
+
+.hundred-notification-dialog__section-header span {
+  color: var(--hundred-color-text-quiet);
+  font-size: var(--font-size-2xs);
+}
+
+.hundred-notification-apps {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.hundred-notification-app {
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 17px;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--hundred-color-text);
+  background: transparent;
+  cursor: pointer;
+}
+
+.hundred-notification-app__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  color: var(--hundred-color-accent);
+  font-size: var(--font-size-sm);
+  font-weight: 650;
+  background: var(--hundred-color-accent-soft);
+}
+
+/* --------------------------------------------------------------------------
+ * オン・オフスイッチ
+ * checkboxの状態を、タップしやすいトラックとつまみで表現する。
+ * -------------------------------------------------------------------------- */
+.hundred-notification-switch {
+  position: relative;
+  width: 46px;
+  height: 28px;
+  flex: 0 0 auto;
+}
+
+.hundred-notification-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.hundred-notification-switch > span {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--hundred-color-border);
+  border-radius: 999px;
+  background: var(--hundred-color-surface-strong);
+  transition:
+    border-color 180ms ease,
+    background 180ms ease;
+}
+
+.hundred-notification-switch > span::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--hundred-color-text-muted);
+  transition:
+    background 180ms ease,
+    transform 180ms ease;
+}
+
+.hundred-notification-switch input:checked + span {
+  border-color: var(--hundred-color-accent);
+  background: var(--hundred-color-accent-soft);
+}
+
+.hundred-notification-switch input:checked + span::after {
+  background: var(--hundred-color-accent);
+  transform: translateX(18px);
+}
+
+.hundred-notification-dialog__close:focus-visible,
+.hundred-notification-master:has(input:focus-visible),
+.hundred-notification-app:has(input:focus-visible) {
+  outline: 2px solid var(--hundred-color-accent);
+  outline-offset: 3px;
+}
+
+/* --------------------------------------------------------------------------
+ * 表示環境
+ * PCでは中央配置し、動きの軽減設定では表示アニメーションを停止する。
+ * -------------------------------------------------------------------------- */
+@keyframes hundred-notification-dialog-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (min-width: 700px) {
+  .hundred-notification-dialog {
+    align-items: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hundred-notification-dialog {
+    animation: none;
+  }
+
+  .hundred-notification-switch > span,
+  .hundred-notification-switch > span::after {
+    transition: none;
+  }
+}

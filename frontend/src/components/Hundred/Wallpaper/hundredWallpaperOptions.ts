@@ -4,7 +4,7 @@
  *
  * 責務:
  * - 壁紙ID、表示名、説明、Light / Darkタイプを管理する
- * - 保存値の検証と、選択壁紙のテーマ取得機能を提供する
+ * - 保存値の検証と、選択壁紙の設定・テーマ取得機能を提供する
  */
 
 export type WallpaperId = 'mist' | 'midnight' | 'aurora'
@@ -47,11 +47,17 @@ export function isWallpaperId(value: string | null): value is WallpaperId {
 }
 
 /**
+ * 概要: 指定されたIDに対応する壁紙設定を取得する。
+ * 責務: Settings一覧などへ、選択中の壁紙名や説明を提供する。
+ */
+export function getWallpaper(wallpaperId: WallpaperId) {
+  return wallpaperOptions.find(({ id }) => id === wallpaperId)
+}
+
+/**
  * 概要: 選択された壁紙のLight / Darkタイプを取得する。
  * 責務: 壁紙設定からテーマを返し、設定不備の場合はLightを安全な初期値とする。
  */
 export function getWallpaperTheme(wallpaperId: WallpaperId): WallpaperTheme {
-  return (
-    wallpaperOptions.find(({ id }) => id === wallpaperId)?.theme ?? 'light'
-  )
+  return getWallpaper(wallpaperId)?.theme ?? 'light'
 }

@@ -1,0 +1,170 @@
+/**
+ * 概要:
+ * Hundred Homeへ入る前のサインイン選択画面を装飾する。
+ *
+ * 責務:
+ * - 認証パネルを画面中央へ配置する
+ * - サインイン、サインアップ、ゲスト利用の操作を表現する
+ * - 壁紙テーマ、safe-area、スマートフォン・PC表示へ対応する
+ */
+
+/* --------------------------------------------------------------------------
+ * サインイン画面
+ * 壁紙の上へ認証パネルを配置し、Home表示前の操作領域を作る。
+ * -------------------------------------------------------------------------- */
+.hundred-sign-in {
+  display: grid;
+  place-items: center;
+  padding: max(var(--space-5), env(safe-area-inset-top))
+    max(var(--space-4), env(safe-area-inset-right))
+    max(var(--space-5), env(safe-area-inset-bottom))
+    max(var(--space-4), env(safe-area-inset-left));
+}
+
+.hundred-sign-in__panel {
+  position: relative;
+  z-index: 2;
+  width: min(100%, 430px);
+  padding: var(--space-6);
+  border: 1px solid var(--hundred-color-border);
+  border-radius: 28px;
+  color: var(--hundred-color-text);
+  background: color-mix(in srgb, var(--hundred-color-surface-strong) 92%, transparent);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(18px);
+  animation: hundred-sign-in-panel-in 480ms ease both;
+}
+
+.hundred-sign-in__header span {
+  color: var(--hundred-color-accent);
+  font-size: var(--font-size-2xs);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.hundred-sign-in__header h1 {
+  margin: var(--space-1) 0 0;
+  font-size: clamp(2.6rem, 14vw, 4.2rem);
+  font-weight: 560;
+  line-height: 0.95;
+  letter-spacing: -0.07em;
+}
+
+.hundred-sign-in__header p {
+  margin: var(--space-3) 0 0;
+  color: var(--hundred-color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* --------------------------------------------------------------------------
+ * 認証方法
+ * 各認証方法の名前と補足を、縦に並ぶ操作ボタンとして表示する。
+ * -------------------------------------------------------------------------- */
+.hundred-sign-in__actions {
+  margin-top: var(--space-6);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.hundred-sign-in__actions button {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--hundred-color-border);
+  border-radius: 17px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--hundred-color-text);
+  text-align: left;
+  background: var(--hundred-color-surface);
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    transform 180ms ease;
+}
+
+.hundred-sign-in__actions button:hover {
+  border-color: color-mix(in srgb, var(--hundred-color-accent) 45%, transparent);
+  transform: translateY(-1px);
+}
+
+.hundred-sign-in__actions button:active {
+  transform: translateY(0);
+}
+
+.hundred-sign-in__actions button strong {
+  font-size: var(--font-size-sm);
+}
+
+.hundred-sign-in__actions button small {
+  color: var(--hundred-color-text-muted);
+  font-size: var(--font-size-2xs);
+}
+
+.hundred-sign-in__actions .hundred-sign-in__primary {
+  border-color: var(--hundred-color-accent);
+  color: #f7fffc;
+  background: var(--hundred-color-accent);
+}
+
+.hundred-sign-in__actions .hundred-sign-in__primary small {
+  color: rgba(247, 255, 252, 0.72);
+}
+
+.hundred-sign-in__notice {
+  margin: var(--space-4) 0 0;
+  color: var(--hundred-color-text-quiet);
+  font-size: var(--font-size-2xs);
+  line-height: 1.6;
+  text-align: center;
+}
+
+.hundred-sign-in__actions button:focus-visible {
+  outline: 2px solid var(--hundred-color-accent);
+  outline-offset: 3px;
+}
+
+/* --------------------------------------------------------------------------
+ * 表示環境
+ * 狭い画面の余白、PC表示、動きの軽減設定を調整する。
+ * -------------------------------------------------------------------------- */
+@keyframes hundred-sign-in-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 699px) {
+  .hundred-sign-in__panel {
+    padding: var(--space-5);
+    border-radius: 24px;
+  }
+}
+
+@media (min-width: 700px) {
+  .hundred-sign-in__panel {
+    width: min(100%, 520px);
+    padding: var(--space-8);
+  }
+
+  .hundred-sign-in__actions button {
+    padding: var(--space-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hundred-sign-in__panel {
+    animation: none;
+  }
+
+  .hundred-sign-in__actions button {
+    transition: none;
+  }
+}

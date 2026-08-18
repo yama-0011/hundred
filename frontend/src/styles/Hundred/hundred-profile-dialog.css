@@ -1,0 +1,378 @@
+/**
+ * 概要:
+ * Hundred Homeのプロフィール・認証モックUIを装飾する。
+ *
+ * 責務:
+ * - Profileカテゴリのアカウント入口を定義する
+ * - 認証ダイアログとサインイン状態を表現する
+ * - 連携アカウント一覧とアカウント詳細を整理する
+ * - PC配置と動きの軽減設定へ対応する
+ */
+
+/* --------------------------------------------------------------------------
+ * Profileカテゴリ
+ * 現在のサインイン状態とアカウント画面への入口を表示する。
+ * -------------------------------------------------------------------------- */
+.hundred-profile-panel {
+  padding-top: var(--space-2);
+}
+
+.hundred-profile-entry {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--hundred-color-border);
+  border-radius: 22px;
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  color: var(--hundred-color-text);
+  text-align: left;
+  background: var(--hundred-color-surface-strong);
+  box-shadow: 0 18px 48px rgba(30, 50, 46, 0.11);
+  cursor: pointer;
+  animation: hundred-home-placeholder-in 400ms ease both;
+}
+
+.hundred-profile-entry__avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  color: var(--hundred-color-accent);
+  font-size: var(--font-size-lg);
+  font-weight: 650;
+  background: var(--hundred-color-accent-soft);
+}
+
+.hundred-profile-entry__copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hundred-profile-entry__copy strong {
+  font-size: 0.94rem;
+}
+
+.hundred-profile-entry__copy small {
+  color: var(--hundred-color-text-muted);
+  font-size: var(--font-size-2xs);
+}
+
+.hundred-profile-entry__arrow {
+  color: var(--hundred-color-accent);
+  font-size: var(--font-size-xl);
+}
+
+.hundred-profile-entry:focus-visible {
+  outline: 2px solid var(--hundred-color-accent);
+  outline-offset: 4px;
+}
+
+/* --------------------------------------------------------------------------
+ * Profileダイアログ
+ * 画面下部へアカウントパネルを表示し、背後のHome操作から分離する。
+ * -------------------------------------------------------------------------- */
+.hundred-profile-dialog {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: var(--space-5) max(14px, env(safe-area-inset-right))
+    max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  background: rgba(8, 14, 14, 0.38);
+  backdrop-filter: blur(8px);
+  animation: hundred-profile-dialog-in 240ms ease both;
+  touch-action: manipulation;
+}
+
+.hundred-profile-dialog__panel {
+  width: min(100%, 520px);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  padding: var(--space-5);
+  border: 1px solid var(--hundred-color-border);
+  border-radius: 26px;
+  color: var(--hundred-color-text);
+  background: color-mix(in srgb, var(--hundred-color-surface-strong) 92%, #fff 8%);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.24);
+}
+
+.hundred-profile-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: 18px;
+}
+
+.hundred-profile-dialog__header span {
+  color: var(--hundred-color-accent);
+  font-size: var(--font-size-2xs);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.hundred-profile-dialog__header h2 {
+  margin: 3px 0 0;
+  font-size: 1.45rem;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+}
+
+.hundred-profile-dialog__close {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--hundred-color-border);
+  border-radius: 50%;
+  color: var(--hundred-color-text);
+  font-size: var(--font-size-lg);
+  background: var(--hundred-color-surface);
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+ * サインイン状態・認証操作
+ * Guestまたはモックユーザーと、状態に応じた認証ボタンを表示する。
+ * -------------------------------------------------------------------------- */
+.hundred-profile-status {
+  padding: var(--space-3);
+  border: 1px solid var(--hundred-color-border);
+  border-radius: 17px;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--hundred-color-surface);
+}
+
+.hundred-profile-status__avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  color: var(--hundred-color-accent);
+  font-size: var(--font-size-lg);
+  font-weight: 650;
+  background: var(--hundred-color-accent-soft);
+}
+
+.hundred-profile-status__copy,
+.hundred-linked-account__copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hundred-profile-status__copy strong,
+.hundred-linked-account__copy strong {
+  font-size: var(--font-size-sm);
+}
+
+.hundred-profile-status__copy small,
+.hundred-linked-account__copy small {
+  overflow: hidden;
+  color: var(--hundred-color-text-muted);
+  font-size: var(--font-size-2xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hundred-profile-actions {
+  margin-top: var(--space-3);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.hundred-profile-actions button {
+  min-height: 42px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--hundred-color-border);
+  border-radius: 14px;
+  color: var(--hundred-color-text);
+  font-size: var(--font-size-sm);
+  background: var(--hundred-color-surface);
+  cursor: pointer;
+}
+
+.hundred-profile-actions button:only-child {
+  grid-column: 1 / -1;
+}
+
+.hundred-profile-actions button:nth-child(3) {
+  grid-column: 1 / -1;
+}
+
+.hundred-profile-actions .hundred-profile-actions__primary {
+  border-color: var(--hundred-color-accent);
+  color: #f7fffc;
+  background: var(--hundred-color-accent);
+}
+
+/* --------------------------------------------------------------------------
+ * 連携アカウント・アカウント詳細
+ * サインイン後に利用可能になるモックのアカウント情報を表示する。
+ * -------------------------------------------------------------------------- */
+.hundred-profile-dialog__section-title {
+  margin: var(--space-5) 0 var(--space-2);
+  color: var(--hundred-color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 650;
+}
+
+.hundred-linked-account {
+  padding: var(--space-3);
+  border: 1px solid var(--hundred-color-border);
+  border-radius: 17px;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--hundred-color-surface);
+}
+
+.hundred-linked-account__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  color: var(--hundred-color-accent);
+  font-size: var(--font-size-sm);
+  font-weight: 650;
+  background: var(--hundred-color-accent-soft);
+}
+
+.hundred-linked-account__status {
+  color: var(--hundred-color-accent);
+  font-size: var(--font-size-2xs);
+}
+
+.hundred-account-details {
+  margin: 0;
+  border: 1px solid var(--hundred-color-border);
+  border-radius: 17px;
+  overflow: hidden;
+  background: var(--hundred-color-surface);
+}
+
+.hundred-account-details div {
+  padding: 10px var(--space-3);
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: var(--space-3);
+}
+
+.hundred-account-details div + div {
+  border-top: 1px solid var(--hundred-color-border);
+}
+
+.hundred-account-details dt {
+  color: var(--hundred-color-text-muted);
+  font-size: var(--font-size-2xs);
+}
+
+.hundred-account-details dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--font-size-xs);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hundred-profile-dialog__empty {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px dashed var(--hundred-color-border);
+  border-radius: 17px;
+  color: var(--hundred-color-text-muted);
+  font-size: var(--font-size-xs);
+  text-align: center;
+}
+
+.hundred-profile-dialog__close:focus-visible,
+.hundred-profile-actions button:focus-visible {
+  outline: 2px solid var(--hundred-color-accent);
+  outline-offset: 3px;
+}
+
+/* --------------------------------------------------------------------------
+ * 表示環境
+ * Profile入口のレスポンシブ表示と、ダイアログ配置・動きを調整する。
+ * -------------------------------------------------------------------------- */
+@keyframes hundred-profile-dialog-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 699px) {
+  .hundred-profile-entry {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    gap: var(--space-3);
+    padding: 10px var(--space-3);
+    border-radius: 19px;
+  }
+
+  .hundred-profile-entry__avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 13px;
+  }
+}
+
+@media (min-width: 700px) {
+  .hundred-profile-panel {
+    padding-top: var(--space-3);
+  }
+
+  .hundred-profile-entry {
+    grid-template-columns: 62px minmax(0, 1fr) auto;
+    gap: var(--space-4);
+    padding: 15px 18px;
+    border-radius: 26px;
+  }
+
+  .hundred-profile-entry__avatar {
+    width: 58px;
+    height: 58px;
+    border-radius: 19px;
+  }
+
+  .hundred-profile-entry__copy strong {
+    font-size: 1.08rem;
+  }
+
+  .hundred-profile-entry__copy small {
+    font-size: var(--font-size-xs);
+  }
+
+  .hundred-profile-entry__arrow {
+    font-size: 1.75rem;
+  }
+
+  .hundred-profile-dialog {
+    align-items: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hundred-profile-dialog,
+  .hundred-profile-entry {
+    animation: none;
+  }
+}
