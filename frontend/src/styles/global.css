@@ -1,21 +1,46 @@
 /**
- * hundredフロントエンド全体へ適用する共通スタイル。
+ * 概要:
+ * Hundred、Record Hubなど、フロントエンド全体へ適用する共通スタイルを定義する。
  *
- * 説明:
- * ブラウザ標準の表示差を整え、フォント、画面領域、基本背景を統一する。
- * record-hubなど、個別画面のデザインは各機能専用のCSSで管理する。
+ * 責務:
+ * - 全Appで共有するフォントファミリー、文字サイズ、余白の基準値を提供する
+ * - box-sizingやフォーム要素など、ブラウザ標準スタイルの差を整える
+ * - html、body、#rootの基本的な描画領域を設定する
+ *
+ * 境界:
+ * - 背景色、文字色、アクセントカラーは各Appの専用CSSで定義する
+ * - App固有のレイアウト、コンポーネントサイズ、アニメーションは定義しない
  */
 
 /* --------------------------------------------------------------------------
- * 基本設定
- * アプリ全体で使用するフォント、文字色、背景色、文字描画を定義する。
+ * 共通デザイントークン・文字描画
+ * 全Appで選択できるフォントと寸法の基準、および文字描画を定義する。
  * -------------------------------------------------------------------------- */
 :root {
-  font-family:
+  /* 全Appで共通利用するフォントファミリー。 */
+  --font-family-base:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
-  color: #17201f;
-  background: #edf1eb;
+
+  /* 文字サイズは段階から選び、画面ごとの不規則な値の増加を防ぐ。 */
+  --font-size-2xs: 0.625rem;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.5rem;
+  --font-size-2xl: 2rem;
+
+  /* 余白は4pxを基準とし、padding、margin、gapで共通利用する。 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  font-family: var(--font-family-base);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -32,20 +57,17 @@
 
 /* --------------------------------------------------------------------------
  * ドキュメント・画面領域
- * 最小表示サイズと背景を設定し、意図しない横スクロールを防ぐ。
+ * 全Appが描画できる最小表示サイズと縦方向の基準を定義する。
  * -------------------------------------------------------------------------- */
 html {
   min-width: 320px;
   min-height: 100%;
-  overflow-x: hidden;
-  background: #edf1eb;
 }
 
 body {
   min-width: 320px;
   min-height: 100svh;
   margin: 0;
-  overflow-x: hidden;
 }
 
 /* --------------------------------------------------------------------------
@@ -72,13 +94,14 @@ button {
 }
 
 /* --------------------------------------------------------------------------
- * Darkテーマ
- * OSのカラーテーマに合わせて、共通の文字色と背景色を切り替える。
+ * 将来追加する共通トークンの雛形
+ * 複数Appで同じ用途が確認できた段階で、次の形式を参考に値を定義する。
+ * App固有の演出時間は、各Appの専用CSSへ定義する。
+ *
+ * 追加例:
+ * :root {
+ *   --duration-fast: 160ms;
+ *   --duration-normal: 300ms;
+ *   --duration-slow: 480ms;
+ * }
  * -------------------------------------------------------------------------- */
-@media (prefers-color-scheme: dark) {
-  :root,
-  html {
-    color: #f3f6f1;
-    background: #0d1212;
-  }
-}

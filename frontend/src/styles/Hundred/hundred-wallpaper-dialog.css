@@ -1,18 +1,17 @@
 /**
  * 概要:
- * Hundred Homeのカーソル音選択ダイアログを装飾する。
+ * Hundred Homeの壁紙選択ダイアログを装飾する。
  *
  * 責務:
  * - 選択ダイアログのレイアウトを定義する
- * - 音源の選択状態とフォーカス状態を表現する
+ * - 壁紙のプレビュー、選択状態、フォーカス状態を表現する
  * - PC配置と動きの軽減設定へ対応する
  */
-
 /* --------------------------------------------------------------------------
- * 選択ダイアログ
- * 画面下部へ選択パネルを表示し、背後のHome操作から分離する。
+ * 壁紙選択ダイアログ
+ * Settingsから開く選択パネルを画面下部へ表示する。
  * -------------------------------------------------------------------------- */
-.hundred-cursor-sound-dialog {
+.hundred-wallpaper-dialog {
   position: fixed;
   z-index: 20;
   inset: 0;
@@ -23,11 +22,11 @@
     max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
   background: rgba(8, 14, 14, 0.38);
   backdrop-filter: blur(8px);
-  animation: hundred-cursor-sound-dialog-in 240ms ease both;
+  animation: hundred-wallpaper-dialog-in 240ms ease both;
   touch-action: manipulation;
 }
 
-.hundred-cursor-sound-dialog__panel {
+.hundred-wallpaper-dialog__panel {
   width: min(100%, 520px);
   padding: var(--space-5);
   border: 1px solid var(--hundred-color-border);
@@ -37,7 +36,7 @@
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.24);
 }
 
-.hundred-cursor-sound-dialog__header {
+.hundred-wallpaper-dialog__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -45,7 +44,7 @@
   margin-bottom: 18px;
 }
 
-.hundred-cursor-sound-dialog__header span {
+.hundred-wallpaper-dialog__header span {
   color: var(--hundred-color-accent);
   font-size: var(--font-size-2xs);
   font-weight: 650;
@@ -53,14 +52,14 @@
   letter-spacing: 0.12em;
 }
 
-.hundred-cursor-sound-dialog__header h2 {
+.hundred-wallpaper-dialog__header h2 {
   margin: 3px 0 0;
   font-size: 1.45rem;
   line-height: 1.1;
   letter-spacing: -0.04em;
 }
 
-.hundred-cursor-sound-dialog__close {
+.hundred-wallpaper-dialog__close {
   width: 36px;
   height: 36px;
   border: 1px solid var(--hundred-color-border);
@@ -71,22 +70,18 @@
   cursor: pointer;
 }
 
-/* --------------------------------------------------------------------------
- * 音源一覧
- * 音の特徴と現在の選択状態を、タップ可能な行として表示する。
- * -------------------------------------------------------------------------- */
-.hundred-cursor-sound-dialog__options {
+.hundred-wallpaper-dialog__options {
   display: grid;
-  gap: var(--space-2);
+  gap: 10px;
 }
 
-.hundred-cursor-sound-option {
+.hundred-wallpaper-option {
   width: 100%;
-  padding: 9px 10px;
+  padding: var(--space-2);
   border: 1px solid transparent;
-  border-radius: 17px;
+  border-radius: 18px;
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) 24px;
+  grid-template-columns: 92px minmax(0, 1fr) 24px;
   align-items: center;
   gap: var(--space-3);
   color: var(--hundred-color-text-muted);
@@ -95,35 +90,52 @@
   cursor: pointer;
 }
 
-.hundred-cursor-sound-option[aria-pressed="true"] {
+.hundred-wallpaper-option[aria-pressed="true"] {
   border-color: color-mix(in srgb, var(--hundred-color-accent) 35%, transparent);
   color: var(--hundred-color-text);
   background: var(--hundred-color-surface);
 }
 
-.hundred-cursor-sound-option__icon {
-  width: 40px;
-  height: 40px;
+.hundred-wallpaper-option__preview {
+  position: relative;
+  height: 58px;
+  overflow: hidden;
   border-radius: 13px;
-  display: grid;
-  place-items: center;
-  color: var(--hundred-color-accent);
-  font-size: var(--font-size-md);
-  background: var(--hundred-color-accent-soft);
+  background: linear-gradient(155deg, #eef4ed, #b8d8cd);
 }
 
-.hundred-cursor-sound-option__copy {
+.hundred-wallpaper-option__preview::after {
+  content: "";
+  position: absolute;
+  right: -15%;
+  bottom: 12%;
+  left: -15%;
+  height: 44%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.46);
+  transform: rotate(-4deg);
+}
+
+.hundred-wallpaper-option__preview[data-wallpaper-preview="midnight"] {
+  background: linear-gradient(155deg, #2b2235, #080b14);
+}
+
+.hundred-wallpaper-option__preview[data-wallpaper-preview="aurora"] {
+  background: linear-gradient(155deg, #0b3330, #0e1d35);
+}
+
+.hundred-wallpaper-option__copy {
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.hundred-cursor-sound-option__copy strong {
+.hundred-wallpaper-option__copy strong {
   font-size: var(--font-size-sm);
 }
 
-.hundred-cursor-sound-option__copy small {
+.hundred-wallpaper-option__copy small {
   overflow: hidden;
   color: var(--hundred-color-text-muted);
   font-size: var(--font-size-2xs);
@@ -131,23 +143,23 @@
   white-space: nowrap;
 }
 
-.hundred-cursor-sound-option__check {
+.hundred-wallpaper-option__check {
   color: var(--hundred-color-accent);
   font-size: var(--font-size-sm);
   text-align: center;
 }
 
-.hundred-cursor-sound-dialog__close:focus-visible,
-.hundred-cursor-sound-option:focus-visible {
+.hundred-wallpaper-dialog__close:focus-visible,
+.hundred-wallpaper-option:focus-visible {
   outline: 2px solid var(--hundred-color-accent);
   outline-offset: 3px;
 }
 
 /* --------------------------------------------------------------------------
- * 表示環境
- * PCでは中央配置し、動きの軽減設定では表示アニメーションを停止する。
+ * アニメーション
+ * 壁紙選択画面を開いた際に、背景とパネルを自然に表示する。
  * -------------------------------------------------------------------------- */
-@keyframes hundred-cursor-sound-dialog-in {
+@keyframes hundred-wallpaper-dialog-in {
   from {
     opacity: 0;
   }
@@ -156,14 +168,19 @@
   }
 }
 
+/* --------------------------------------------------------------------------
+ * PC・動きの軽減
+ * 広い画面での配置と、OS設定に応じた表示アニメーションを調整する。
+ * -------------------------------------------------------------------------- */
 @media (min-width: 700px) {
-  .hundred-cursor-sound-dialog {
+  .hundred-wallpaper-dialog {
     align-items: center;
   }
 }
 
+
 @media (prefers-reduced-motion: reduce) {
-  .hundred-cursor-sound-dialog {
+  .hundred-wallpaper-dialog {
     animation: none;
   }
 }

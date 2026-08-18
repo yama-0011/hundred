@@ -1,26 +1,19 @@
 /**
- * Hundred HomeのXMB型UI専用スタイル。
+ * 概要:
+ * Hundred Homeの画面枠、背景演出、ヘッダー、壁紙テーマを装飾する。
  *
- * 説明:
- * 横方向のカテゴリ、縦方向のApp一覧、選択アニメーションを構成する。
- * スマートフォンを基準とし、PC、Darkテーマ、動きの軽減設定にも対応する。
+ * 責務:
+ * - Home全体のviewportと操作領域を定義する
+ * - 背景演出とプロダクト名の配置を管理する
+ * - 壁紙タイプごとのLight / Darkテーマを定義する
+ * - Home内で共有する表示アニメーションを提供する
  */
 
 /* --------------------------------------------------------------------------
- * 基本レイアウト・テーマ変数
- * 画面全体で使用する色、サイズ、viewport、操作領域を定義する。
+ * 基本レイアウト
+ * Home全体のサイズ、viewport、操作領域を定義する。
  * -------------------------------------------------------------------------- */
 .hundred-home {
-  --ink: #17201f;
-  --muted: #67716d;
-  --quiet: #929b96;
-  --line: rgba(23, 32, 31, 0.14);
-  --surface: rgba(255, 255, 255, 0.56);
-  --surface-strong: rgba(255, 255, 255, 0.88);
-  --accent: #136f63;
-  --accent-soft: #c6e7db;
-  --accent-glow: rgba(24, 153, 132, 0.22);
-  --category-step: clamp(104px, 29vw, 164px);
   position: relative;
   isolation: isolate;
   width: 100%;
@@ -30,7 +23,7 @@
   overflow: hidden;
   display: grid;
   grid-template-rows: auto 1fr;
-  color: var(--ink);
+  color: var(--hundred-color-text);
   background: transparent;
   touch-action: none;
   user-select: none;
@@ -59,7 +52,7 @@
   width: 70vmax;
   height: 70vmax;
   border-radius: 50%;
-  background: radial-gradient(circle, var(--accent-glow), transparent 64%);
+  background: radial-gradient(circle, var(--hundred-color-accent-glow), transparent 64%);
   filter: blur(8px);
   pointer-events: none;
 }
@@ -68,386 +61,24 @@
  * ヘッダー
  * プロダクト名と現在の状態を画面上部へ配置する。
  * -------------------------------------------------------------------------- */
-.hundred-header {
-  padding: max(28px, env(safe-area-inset-top)) 24px 18px;
+.hundred-home__header {
+  padding: max(28px, env(safe-area-inset-top)) var(--space-6) 18px;
 }
 
-.hundred-header h1 {
+.hundred-home__header h1 {
   margin: 2px 0 0;
-  color: var(--ink);
+  color: var(--hundred-color-text);
   font-size: clamp(2rem, 11vw, 3.5rem);
   font-weight: 580;
   line-height: 0.95;
   letter-spacing: -0.075em;
 }
 
-.category-placeholder span,
-.app-item__index {
-  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
-/* --------------------------------------------------------------------------
- * XMBステージ・横カテゴリ
- * 選択カテゴリを中央へ移動し、前後のカテゴリを左右に表示する。
- * -------------------------------------------------------------------------- */
-.xmb {
-  min-height: 0;
-  display: grid;
-  grid-template-rows: 102px 28px minmax(235px, 1fr);
-  align-content: center;
-  padding-top: 2svh;
-}
-
-.category-window {
-  width: 100%;
-  overflow: hidden;
-}
-
-.category-track {
-  position: relative;
-  left: 50%;
-  display: flex;
-  width: max-content;
-  transform: translateX(
-    calc((var(--selected-category) * -1 - 0.5) * var(--category-step))
-  );
-  transition: transform 480ms cubic-bezier(0.2, 0.82, 0.2, 1);
-  will-change: transform;
-}
-
-.category {
-  width: var(--category-step);
-  min-width: var(--category-step);
-  height: 102px;
-  padding: 6px 4px;
-  border: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  color: var(--quiet);
-  background: transparent;
-  cursor: pointer;
-  opacity: 0.38;
-  transform: scale(0.78) translateY(5px);
-  transition:
-    opacity 380ms ease,
-    color 380ms ease,
-    transform 480ms cubic-bezier(0.2, 0.82, 0.2, 1);
-}
-
-.category__icon {
-  width: 56px;
-  height: 56px;
-  border: 1px solid var(--line);
-  border-radius: 19px;
-  display: grid;
-  place-items: center;
-  background: var(--surface);
-  box-shadow: 0 12px 32px transparent;
-  transition:
-    border-color 380ms ease,
-    background 380ms ease,
-    box-shadow 380ms ease;
-}
-
-.category__icon svg,
-.app-item__icon svg {
-  width: 25px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.45;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.category__label {
-  font-size: 0.72rem;
-  font-weight: 560;
-  letter-spacing: -0.01em;
-}
-
-.category[aria-pressed="true"] {
-  color: var(--ink);
-  opacity: 1;
-  transform: scale(1) translateY(0);
-}
-
-.category[aria-pressed="true"] .category__icon {
-  border-color: rgba(19, 111, 99, 0.32);
-  color: #f7fffc;
-  background: var(--accent);
-  box-shadow: 0 14px 38px var(--accent-glow);
-}
-
-.category:focus-visible .category__icon,
-.app-item:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
-}
-
-/* --------------------------------------------------------------------------
- * 横カテゴリと縦項目の接続表示
- * 中央のラインとマーカーで、選択カテゴリの配下であることを示す。
- * -------------------------------------------------------------------------- */
-.xmb__axis {
-  position: relative;
-  width: 1px;
-  height: 28px;
-  margin-inline: auto;
-  overflow: visible;
-  background: linear-gradient(var(--accent), transparent);
-}
-
-.xmb__axis::before {
-  content: "";
-  position: absolute;
-  top: -3px;
-  left: -3px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 6px var(--accent-glow);
-}
-
-.xmb__axis span {
-  position: absolute;
-  top: 8px;
-  left: -34px;
-  width: 69px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--line), transparent);
-}
-
-/* --------------------------------------------------------------------------
- * Apps縦リスト
- * 選択中のAppを基準位置へ移動し、カードの強弱と情報表示を管理する。
- * -------------------------------------------------------------------------- */
-.item-window {
-  position: relative;
-  width: min(88vw, 430px);
-  height: 260px;
-  margin-inline: auto;
-  overflow: hidden;
-  mask-image: linear-gradient(transparent, #000 12%, #000 84%, transparent);
-}
-
-.app-track {
-  --app-step: 86px;
-  padding-top: 8px;
-  transform: translateY(calc(var(--selected-app) * var(--app-step) * -1));
-  transition: transform 460ms cubic-bezier(0.2, 0.82, 0.2, 1);
-  will-change: transform;
-}
-
-.app-item {
-  width: 100%;
-  height: var(--app-step);
-  padding: 9px 12px;
-  border: 0;
-  border-radius: 22px;
-  display: grid;
-  grid-template-columns: 10px 54px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  color: var(--muted);
-  text-align: left;
-  background: transparent;
-  cursor: pointer;
-  opacity: 0.42;
-  transform: translateX(10px) scale(0.92);
-  transform-origin: left center;
-  transition:
-    color 340ms ease,
-    opacity 340ms ease,
-    background 340ms ease,
-    transform 460ms cubic-bezier(0.2, 0.82, 0.2, 1),
-    box-shadow 340ms ease;
-}
-
-.app-item__marker {
-  width: 7px;
-  height: 7px;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  transition:
-    background 340ms ease,
-    box-shadow 340ms ease,
-    transform 340ms ease;
-}
-
-.app-item__icon {
-  width: 50px;
-  height: 50px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  display: grid;
-  place-items: center;
-  color: var(--muted);
-  background: var(--surface);
-}
-
-.app-item__copy {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.app-item__copy strong {
-  overflow: hidden;
-  color: currentColor;
-  font-size: 1rem;
-  font-weight: 610;
-  letter-spacing: -0.025em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.app-item__copy small {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 0.65rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.app-item__index {
-  color: var(--quiet);
-  font-size: 0.55rem;
-}
-
-.app-item[aria-pressed="true"] {
-  color: var(--ink);
-  opacity: 1;
-  background: var(--surface-strong);
-  box-shadow: 0 18px 48px rgba(30, 50, 46, 0.11);
-  transform: translateX(0) scale(1);
-}
-
-.app-item[aria-pressed="true"] .app-item__marker {
-  border-color: var(--accent);
-  background: var(--accent);
-  box-shadow: 0 0 0 5px var(--accent-glow);
-  transform: scale(1.08);
-}
-
-.app-item[aria-pressed="true"] .app-item__icon {
-  border-color: rgba(19, 111, 99, 0.22);
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-
-/* --------------------------------------------------------------------------
- * 未実装カテゴリの表示
- * Apps以外を選択したときに、選択状態と準備中メッセージを表示する。
- * -------------------------------------------------------------------------- */
-.category-placeholder {
-  padding-top: 30px;
-  text-align: center;
-  animation: placeholder-in 400ms ease both;
-}
-
-.category-placeholder span {
-  color: var(--accent);
-  font-size: 0.58rem;
-}
-
-.category-placeholder strong {
-  display: block;
-  margin-top: 8px;
-  color: var(--ink);
-  font-size: 1.32rem;
-  font-weight: 610;
-  letter-spacing: -0.035em;
-}
-
-.category-placeholder p {
-  margin: 6px 0 0;
-  color: var(--muted);
-  font-size: 0.72rem;
-}
-
-/* --------------------------------------------------------------------------
- * Settings項目
- * Settings選択時に、各設定画面へ進むための項目を表示する。
- * -------------------------------------------------------------------------- */
-.settings-list {
-  display: grid;
-  gap: 9px;
-  padding-top: 8px;
-}
-
-.settings-item {
-  width: 100%;
-  padding: 12px 16px;
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  display: grid;
-  grid-template-columns: 50px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 14px;
-  color: var(--ink);
-  text-align: left;
-  background: var(--surface-strong);
-  box-shadow: 0 18px 48px rgba(30, 50, 46, 0.11);
-  cursor: pointer;
-  animation: placeholder-in 400ms ease both;
-}
-
-.settings-item__icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 15px;
-  display: grid;
-  place-items: center;
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.settings-item__icon svg {
-  width: 24px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.45;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.settings-item__copy {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.settings-item__copy strong {
-  font-size: 0.94rem;
-}
-
-.settings-item__copy small {
-  color: var(--muted);
-  font-size: 0.62rem;
-}
-
-.settings-item__arrow {
-  color: var(--accent);
-  font-size: 1.5rem;
-}
-
-.settings-item:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
-}
-
 /* --------------------------------------------------------------------------
  * アニメーション
  * カテゴリ切り替え時の補助表示に使用する。
  * -------------------------------------------------------------------------- */
-@keyframes placeholder-in {
+@keyframes hundred-home-placeholder-in {
   from {
     opacity: 0;
     transform: translateY(8px);
@@ -459,372 +90,80 @@
 }
 
 /* --------------------------------------------------------------------------
- * スマートフォン
- * 390px前後を基準に、余白、カテゴリ、Appカードを画面内へ収める。
+ * スマートフォン用ヘッダー
+ * safe-areaを考慮し、狭い画面でタイトルが収まるよう調整する。
  * -------------------------------------------------------------------------- */
 @media (max-width: 699px) {
-  .hundred-home {
-    --category-step: clamp(88px, 24vw, 104px);
-  }
-
-  .hundred-header {
-    padding-top: max(20px, calc(env(safe-area-inset-top) + 10px));
+  .hundred-home__header {
+    padding-top: max(var(--space-5), calc(env(safe-area-inset-top) + 10px));
     padding-right: max(18px, env(safe-area-inset-right));
-    padding-bottom: 12px;
+    padding-bottom: var(--space-3);
     padding-left: max(18px, env(safe-area-inset-left));
   }
 
-  .hundred-header h1 {
+  .hundred-home__header h1 {
     font-size: clamp(2rem, 9vw, 2.6rem);
   }
-
-  .xmb {
-    grid-template-rows: 88px 22px minmax(210px, 1fr);
-    padding-top: 0;
-  }
-
-  .category,
-  .category-window {
-    height: 88px;
-  }
-
-  .category {
-    gap: 6px;
-    padding: 4px 2px;
-  }
-
-  .category__icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 16px;
-  }
-
-  .category__icon svg {
-    width: 22px;
-  }
-
-  .category__label {
-    font-size: 0.66rem;
-  }
-
-  .xmb__axis {
-    height: 22px;
-  }
-
-  .item-window {
-    width: min(
-      420px,
-      calc(
-        100% - max(16px, env(safe-area-inset-left)) -
-          max(16px, env(safe-area-inset-right))
-      )
-    );
-    height: 230px;
-  }
-
-  .app-track {
-    --app-step: 76px;
-    padding: 6px 4px 0;
-  }
-
-  .app-item {
-    grid-template-columns: 8px 46px minmax(0, 1fr) auto;
-    gap: 9px;
-    height: var(--app-step);
-    padding: 8px 10px;
-    border-radius: 19px;
-  }
-
-  .app-item__marker {
-    width: 6px;
-    height: 6px;
-  }
-
-  .app-item__icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 14px;
-  }
-
-  .app-item__icon svg {
-    width: 22px;
-  }
-
-  .app-item__copy strong {
-    font-size: 0.9rem;
-  }
-
-  .app-item__copy small {
-    font-size: 0.6rem;
-  }
-
-  .app-item__index {
-    font-size: 0.5rem;
-  }
-
-  .settings-item {
-    grid-template-columns: 44px minmax(0, 1fr) auto;
-    gap: 11px;
-    padding: 10px 12px;
-    border-radius: 19px;
-  }
-
-  .settings-item__icon {
-    width: 42px;
-    height: 42px;
-    border-radius: 13px;
-  }
-
 }
 
 /* --------------------------------------------------------------------------
- * PC・タブレット
- * 既存のXMB感を保ちながら、広い画面に合わせて要素を拡大する。
+ * PC・タブレット用ヘッダー
+ * 広い画面に合わせてタイトルの左右余白を調整する。
  * -------------------------------------------------------------------------- */
 @media (min-width: 700px) {
-  .hundred-home {
-    --category-step: 196px;
-  }
-
-  .hundred-header {
+  .hundred-home__header {
     width: 100%;
     margin-inline: 0;
     padding-inline: clamp(30px, 4vw, 58px);
   }
 
-  .hundred-header {
+  .hundred-home__header {
     padding-top: max(28px, env(safe-area-inset-top));
     padding-bottom: 18px;
   }
-
-  .xmb {
-    grid-template-rows: 138px 38px minmax(320px, 1fr);
-  }
-
-  .category {
-    height: 138px;
-    gap: 10px;
-  }
-
-  .category__icon {
-    width: 86px;
-    height: 86px;
-    border-radius: 28px;
-  }
-
-  .category__icon svg {
-    width: 34px;
-  }
-
-  .app-item__icon svg {
-    width: 30px;
-  }
-
-  .category__label {
-    font-size: 0.9rem;
-  }
-
-  .xmb__axis {
-    height: 38px;
-  }
-
-  .item-window {
-    width: 560px;
-    height: 340px;
-  }
-
-  .app-track {
-    --app-step: 108px;
-  }
-
-  .app-item {
-    grid-template-columns: 12px 66px minmax(0, 1fr) auto;
-    gap: 16px;
-    padding-inline: 18px;
-    border-radius: 26px;
-  }
-
-  .app-item__marker {
-    width: 8px;
-    height: 8px;
-  }
-
-  .app-item__icon {
-    width: 62px;
-    height: 62px;
-    border-radius: 20px;
-  }
-
-  .app-item__copy strong {
-    font-size: 1.15rem;
-  }
-
-  .app-item__copy small {
-    font-size: 0.75rem;
-  }
-
-  .app-item__index {
-    font-size: 0.62rem;
-  }
-
-  .category-placeholder {
-    padding-top: 42px;
-  }
-
-  .category-placeholder span {
-    font-size: 0.68rem;
-  }
-
-  .category-placeholder strong {
-    font-size: 1.58rem;
-  }
-
-  .category-placeholder p {
-    font-size: 0.82rem;
-  }
-
-  .settings-list {
-    gap: 12px;
-    padding-top: 12px;
-  }
-
-  .settings-item {
-    grid-template-columns: 62px minmax(0, 1fr) auto;
-    gap: 16px;
-    padding: 15px 18px;
-    border-radius: 26px;
-  }
-
-  .settings-item__icon {
-    width: 58px;
-    height: 58px;
-    border-radius: 19px;
-  }
-
-  .settings-item__icon svg {
-    width: 29px;
-  }
-
-  .settings-item__copy strong {
-    font-size: 1.08rem;
-  }
-
-  .settings-item__copy small {
-    font-size: 0.72rem;
-  }
-
-  .settings-item__arrow {
-    font-size: 1.75rem;
-  }
 }
 
 /* --------------------------------------------------------------------------
- * 高さの低い画面
- * 横向き端末や低いブラウザ領域でも縦方向へ収まるよう調整する。
+ * 高さの低い画面用ヘッダー
+ * 横向き端末や低いブラウザ領域でタイトル領域を縮小する。
  * -------------------------------------------------------------------------- */
 @media (max-height: 650px) {
-  .hundred-header {
+  .hundred-home__header {
     padding-top: max(18px, env(safe-area-inset-top));
   }
 
-  .hundred-header h1 {
-    font-size: 2rem;
-  }
-
-  .xmb {
-    grid-template-rows: 90px 22px minmax(190px, 1fr);
-    padding-top: 0;
-  }
-
-  .category,
-  .category-window {
-    height: 90px;
-  }
-
-  .category__icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 16px;
-  }
-
-  .xmb__axis {
-    height: 22px;
-  }
-
-  .item-window {
-    height: 200px;
-  }
-
-  .app-track {
-    --app-step: 72px;
-  }
-
-  .app-item {
-    height: var(--app-step);
-  }
-
-  .app-item__icon {
-    width: 44px;
-    height: 44px;
+  .hundred-home__header h1 {
+    font-size: var(--font-size-2xl);
   }
 }
 
 /* --------------------------------------------------------------------------
- * Darkテーマ
- * OSのカラーテーマに合わせて色と影をDark向けへ切り替える。
+ * 壁紙タイプによるテーマ
+ * Light壁紙では暗い文字色を、Dark壁紙では明るい文字色を適用する。
+ * OSのカラーテーマには依存せず、選択中の壁紙タイプだけで決定する。
  * -------------------------------------------------------------------------- */
-@media (prefers-color-scheme: dark) {
-  .hundred-home {
-    --ink: #f1f5f0;
-    --muted: #9aa49f;
-    --quiet: #6e7874;
-    --line: rgba(235, 246, 240, 0.13);
-    --surface: rgba(255, 255, 255, 0.045);
-    --surface-strong: rgba(255, 255, 255, 0.085);
-    --accent: #79d7c2;
-    --accent-soft: rgba(70, 180, 157, 0.2);
-    --accent-glow: rgba(67, 213, 181, 0.18);
-  }
-
-  .category[aria-pressed="true"] .category__icon {
-    border-color: rgba(121, 215, 194, 0.38);
-    color: #09201b;
-    background: var(--accent);
-  }
-
-  .app-item[aria-pressed="true"] {
-    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.3);
-  }
+.hundred-home[data-theme="light"] {
+  --hundred-color-text: #17201f;
+  --hundred-color-text-muted: #67716d;
+  --hundred-color-text-quiet: #929b96;
+  --hundred-color-border: rgba(23, 32, 31, 0.14);
+  --hundred-color-surface: rgba(255, 255, 255, 0.56);
+  --hundred-color-surface-strong: rgba(255, 255, 255, 0.88);
+  --hundred-color-accent: #136f63;
+  --hundred-color-accent-soft: #c6e7db;
+  --hundred-color-accent-glow: rgba(24, 153, 132, 0.22);
+  color-scheme: light;
 }
 
-.hundred-home[data-wallpaper="midnight"],
-.hundred-home[data-wallpaper="aurora"] {
-  --ink: #f1f5f0;
-  --muted: #a8b1ae;
-  --quiet: #74807c;
-  --line: rgba(235, 246, 240, 0.14);
-  --surface: rgba(255, 255, 255, 0.06);
-  --surface-strong: rgba(255, 255, 255, 0.1);
-  --accent: #8bdfcc;
-  --accent-soft: rgba(80, 194, 169, 0.22);
-  --accent-glow: rgba(67, 213, 181, 0.2);
-}
-
-/* --------------------------------------------------------------------------
- * 動きの軽減
- * OSで視覚効果の軽減が指定されている場合、アニメーションを抑える。
- * -------------------------------------------------------------------------- */
-@media (prefers-reduced-motion: reduce) {
-  .category-track,
-  .category,
-  .category__icon,
-  .app-track,
-  .app-item,
-  .app-item__marker {
-    transition-duration: 0.01ms;
-  }
-
-  .category-placeholder {
-    animation: none;
-  }
+.hundred-home[data-theme="dark"] {
+  --hundred-color-text: #f1f5f0;
+  --hundred-color-text-muted: #a8b1ae;
+  --hundred-color-text-quiet: #74807c;
+  --hundred-color-border: rgba(235, 246, 240, 0.14);
+  --hundred-color-surface: rgba(255, 255, 255, 0.06);
+  --hundred-color-surface-strong: rgba(255, 255, 255, 0.1);
+  --hundred-color-accent: #8bdfcc;
+  --hundred-color-accent-soft: rgba(80, 194, 169, 0.22);
+  --hundred-color-accent-glow: rgba(67, 213, 181, 0.2);
+  color-scheme: dark;
 }

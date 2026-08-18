@@ -7,13 +7,17 @@ import {
   resolveCursorSoundId,
   type CursorSoundId,
 } from '../CursorSound/hundredCursorSoundOptions'
+import { hundredThemeConfig } from '../Theme/hundredThemeConfig'
 import HundredWallpaperBackground from '../Wallpaper/HundredWallpaperBackground'
 import HundredWallpaperDialog from '../Wallpaper/HundredWallpaperDialog'
 import {
+  getWallpaperTheme,
   isWallpaperId,
   type WallpaperId,
 } from '../Wallpaper/hundredWallpaperOptions'
 import '../../../styles/Hundred/hundred-home.css'
+import '../../../styles/Hundred/hundred-home-navigation.css'
+import '../../../styles/Hundred/hundred-home-settings.css'
 
 /**
  * Hundred HomeのXMB型UIを構成するコンポーネント。
@@ -180,6 +184,7 @@ function HundredHome() {
   const cursorSoundPlayer = useRef<HundredCursorSoundPlayer | null>(null)
 
   const selectedCategory = categories[selectedCategoryIndex]
+  const selectedWallpaperTheme = getWallpaperTheme(selectedWallpaper)
 
   /** カーソル音の再生機能を必要になった時だけ作成して返す。 */
   const getCursorSoundPlayer = () => {
@@ -324,16 +329,18 @@ function HundredHome() {
 
   // Reactの選択位置をCSSカスタムプロパティへ渡し、CSS側で移動量を計算する。
   const categoryTrackStyle = {
-    '--selected-category': selectedCategoryIndex,
+    '--hundred-selected-category': selectedCategoryIndex,
   } as CSSProperties
 
   const appTrackStyle = {
-    '--selected-app': selectedAppIndex,
+    '--hundred-selected-app': selectedAppIndex,
   } as CSSProperties
 
   return (
     <main
       className="hundred-home"
+      data-theme-strategy={hundredThemeConfig.strategy}
+      data-theme={selectedWallpaperTheme}
       data-wallpaper={selectedWallpaper}
       aria-label="Hundred Home"
       tabIndex={0}
@@ -346,46 +353,46 @@ function HundredHome() {
       <HundredWallpaperBackground wallpaper={selectedWallpaper} />
       <div className="hundred-home__ambient" aria-hidden="true" />
 
-      <header className="hundred-header">
+      <header className="hundred-home__header">
         <h1>Hundred</h1>
       </header>
 
-      <section className="xmb" aria-label="Home navigation">
+      <section className="hundred-xmb" aria-label="Home navigation">
         <nav
-          className="category-window"
+          className="hundred-category-window"
           aria-label="Categories"
           onWheel={handleCategoryWheel}
         >
-          <div className="category-track" style={categoryTrackStyle}>
+          <div className="hundred-category-track" style={categoryTrackStyle}>
             {categories.map((category, index) => {
               const isSelected = index === selectedCategoryIndex
 
               return (
                 <button
-                  className="category"
+                  className="hundred-category"
                   type="button"
                   key={category.id}
                   aria-pressed={isSelected}
                   onClick={() => selectCategory(index)}
                 >
-                  <span className="category__icon">
+                  <span className="hundred-category__icon">
                     <CategoryIcon id={category.id} />
                   </span>
-                  <span className="category__label">{category.label}</span>
+                  <span className="hundred-category__label">{category.label}</span>
                 </button>
               )
             })}
           </div>
         </nav>
 
-        <div className="xmb__axis" aria-hidden="true">
+        <div className="hundred-xmb__axis" aria-hidden="true">
           <span />
         </div>
 
-        <div className="item-window">
+        <div className="hundred-item-window">
           {selectedCategory.id === 'apps' ? (
             <div
-              className="app-track"
+              className="hundred-app-track"
               style={appTrackStyle}
               aria-label="Installed apps"
               onWheel={handleAppWheel}
@@ -395,21 +402,21 @@ function HundredHome() {
 
                 return (
                   <button
-                    className="app-item"
+                    className="hundred-app-item"
                     type="button"
                     key={app.id}
                     aria-pressed={isSelected}
                     onClick={() => selectApp(index)}
                   >
-                    <span className="app-item__marker" aria-hidden="true" />
-                    <span className="app-item__icon">
+                    <span className="hundred-app-item__marker" aria-hidden="true" />
+                    <span className="hundred-app-item__icon">
                       <AppIcon id={app.id} />
                     </span>
-                    <span className="app-item__copy">
+                    <span className="hundred-app-item__copy">
                       <strong>{app.name}</strong>
                       <small>{app.detail}</small>
                     </span>
-                    <span className="app-item__index" aria-hidden="true">
+                    <span className="hundred-app-item__index" aria-hidden="true">
                       {String(index + 1).padStart(2, '0')}
                     </span>
                   </button>
@@ -417,50 +424,50 @@ function HundredHome() {
               })}
             </div>
           ) : selectedCategory.id === 'settings' ? (
-            <div className="settings-list">
+            <div className="hundred-settings-list">
               <button
-                className="settings-item"
+                className="hundred-settings-item"
                 type="button"
                 onClick={() => setIsWallpaperDialogOpen(true)}
               >
-                <span className="settings-item__icon" aria-hidden="true">
+                <span className="hundred-settings-item__icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24">
                     <rect x="3.5" y="5" width="17" height="14" rx="2" />
                     <circle cx="9" cy="10" r="1.5" />
                     <path d="m5.5 17 4.5-4 3 2.5 2.5-2 3 3.5" />
                   </svg>
                 </span>
-                <span className="settings-item__copy">
+                <span className="hundred-settings-item__copy">
                   <strong>Wallpaper</strong>
                   <small>動く背景を選択</small>
                 </span>
-                <span className="settings-item__arrow" aria-hidden="true">
+                <span className="hundred-settings-item__arrow" aria-hidden="true">
                   ›
                 </span>
               </button>
 
               <button
-                className="settings-item"
+                className="hundred-settings-item"
                 type="button"
                 onClick={() => setIsCursorSoundDialogOpen(true)}
               >
-                <span className="settings-item__icon" aria-hidden="true">
+                <span className="hundred-settings-item__icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24">
                     <path d="M5 10v4h3l4 3V7L8 10H5Z" />
                     <path d="M16 9.5a4 4 0 0 1 0 5M18.5 7a7.5 7.5 0 0 1 0 10" />
                   </svg>
                 </span>
-                <span className="settings-item__copy">
+                <span className="hundred-settings-item__copy">
                   <strong>Cursor sound</strong>
                   <small>{getCursorSound(selectedCursorSound)?.name}</small>
                 </span>
-                <span className="settings-item__arrow" aria-hidden="true">
+                <span className="hundred-settings-item__arrow" aria-hidden="true">
                   ›
                 </span>
               </button>
             </div>
           ) : (
-            <div className="category-placeholder" key={selectedCategory.id}>
+            <div className="hundred-category-placeholder" key={selectedCategory.id}>
               <span>Selected</span>
               <strong>{selectedCategory.label}</strong>
               <p>このカテゴリは準備中です</p>

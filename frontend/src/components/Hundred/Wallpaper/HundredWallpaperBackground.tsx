@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import '../../../styles/Hundred/hundred-wallpaper.css'
+import '../../../styles/Hundred/hundred-wallpaper-background.css'
 import type { WallpaperId } from './hundredWallpaperOptions'
 
 type HundredWallpaperBackgroundProps = {
@@ -299,11 +299,11 @@ function HundredWallpaperBackground({
 
   return (
     <div
-      className="wallpaper-background"
-      data-wallpaper-background={wallpaper}
+      className="hundred-wallpaper-background"
+      data-hundred-wallpaper-background={wallpaper}
       aria-hidden="true"
     >
-      <canvas ref={canvasRef} className="wallpaper-background__canvas" />
+      <canvas ref={canvasRef} className="hundred-wallpaper-background__canvas" />
     </div>
   )
 }

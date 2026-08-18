@@ -2,6 +2,7 @@ import {
   wallpaperOptions,
   type WallpaperId,
 } from './hundredWallpaperOptions'
+import '../../../styles/Hundred/hundred-wallpaper-dialog.css'
 
 type HundredWallpaperDialogProps = {
   selectedWallpaper: WallpaperId
@@ -29,25 +30,25 @@ function HundredWallpaperDialog({
 
   return (
     <div
-      className="wallpaper-dialog"
+      className="hundred-wallpaper-dialog"
       onClick={handleBackdropClick}
       onKeyDown={handleKeyDown}
       onPointerDown={(event) => event.stopPropagation()}
       onPointerUp={(event) => event.stopPropagation()}
     >
       <section
-        className="wallpaper-dialog__panel"
+        className="hundred-wallpaper-dialog__panel"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="wallpaper-dialog-title"
+        aria-labelledby="hundred-wallpaper-dialog-title"
       >
-        <header className="wallpaper-dialog__header">
+        <header className="hundred-wallpaper-dialog__header">
           <div>
             <span>Settings</span>
-            <h2 id="wallpaper-dialog-title">Wallpaper</h2>
+            <h2 id="hundred-wallpaper-dialog-title">Wallpaper</h2>
           </div>
           <button
-            className="wallpaper-dialog__close"
+            className="hundred-wallpaper-dialog__close"
             type="button"
             onClick={onClose}
             aria-label="壁紙選択を閉じる"
@@ -57,28 +58,28 @@ function HundredWallpaperDialog({
           </button>
         </header>
 
-        <div className="wallpaper-dialog__options">
+        <div className="hundred-wallpaper-dialog__options">
           {wallpaperOptions.map((wallpaper) => {
             const isSelected = wallpaper.id === selectedWallpaper
 
             return (
               <button
-                className="wallpaper-option"
+                className="hundred-wallpaper-option"
                 type="button"
                 key={wallpaper.id}
                 aria-pressed={isSelected}
                 onClick={() => onSelect(wallpaper.id)}
               >
                 <span
-                  className="wallpaper-option__preview"
+                  className="hundred-wallpaper-option__preview"
                   data-wallpaper-preview={wallpaper.id}
                   aria-hidden="true"
                 />
-                <span className="wallpaper-option__copy">
+                <span className="hundred-wallpaper-option__copy">
                   <strong>{wallpaper.name}</strong>
                   <small>{wallpaper.description}</small>
                 </span>
-                <span className="wallpaper-option__check" aria-hidden="true">
+                <span className="hundred-wallpaper-option__check" aria-hidden="true">
                   {isSelected ? '✓' : ''}
                 </span>
               </button>
