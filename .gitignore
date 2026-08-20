@@ -13,6 +13,11 @@ frontend/dist/
 frontend/dist-ssr/
 frontend/**/*.local
 
+# Cloudflare Workers
+workers/**/node_modules/
+workers/**/.wrangler/
+workers/**/.dev.vars
+
 # Backend (Java / Maven)
 *.class
 *.jar

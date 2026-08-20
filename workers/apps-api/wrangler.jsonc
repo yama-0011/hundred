@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "hundred-apps-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-21",
+  "workers_dev": true,
+  "vars": {
+    "APP_ORIGIN": "https://yamahit.com",
+    "WORDPRESS_CLIENT_ID": "146245"
+  }
+}
