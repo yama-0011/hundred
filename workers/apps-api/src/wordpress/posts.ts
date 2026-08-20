@@ -14,8 +14,8 @@ interface WordPressConnectionRow {
 }
 
 interface WordPressPostResponse {
-  id?: unknown;
-  link?: unknown;
+  ID?: unknown;
+  URL?: unknown;
   status?: unknown;
 }
 
@@ -203,7 +203,7 @@ export async function createWordPressDraft(
       env.TOKEN_ENCRYPTION_KEY,
     );
     const endpoint = new URL(
-      `/wp/v2/sites/${encodeURIComponent(connection.selected_site_id)}/posts`,
+      `/rest/v1/sites/${encodeURIComponent(connection.selected_site_id)}/posts/new`,
       wordpressApiOrigin,
     );
     const response = await fetch(endpoint, {
@@ -242,14 +242,14 @@ export async function createWordPressDraft(
     const post = (await response.json()) as WordPressPostResponse;
 
     if (
-      (typeof post.id !== "string" && typeof post.id !== "number") ||
+      (typeof post.ID !== "string" && typeof post.ID !== "number") ||
       post.status !== "draft"
     ) {
       throw new WordPressPostError("WORDPRESS_REQUEST_FAILED");
     }
 
-    const postId = String(post.id);
-    const postUrl = typeof post.link === "string" ? post.link : null;
+    const postId = String(post.ID);
+    const postUrl = typeof post.URL === "string" ? post.URL : null;
 
     await env.DB.prepare(
       `UPDATE wordpress_post_requests
