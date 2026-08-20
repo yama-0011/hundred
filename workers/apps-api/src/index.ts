@@ -7,6 +7,10 @@ import {
   handleWordPressOAuthCallback,
   type WordPressOAuthEnv,
 } from "./wordpress/oauth";
+import {
+  createWordPressDraft,
+  WordPressPostError,
+} from "./wordpress/posts";
 
 interface Env extends WordPressOAuthEnv {
   COGNITO_USER_POOL_ID: string;
@@ -181,6 +185,45 @@ export default {
         const redirectUrl = new URL(env.APP_ORIGIN);
         redirectUrl.searchParams.set("wordpress", "failed");
         return Response.redirect(redirectUrl.toString(), 303);
+      }
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/creative-ia/wordpress/posts"
+    ) {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        const result = await createWordPressDraft(request, env, ownerUserId);
+        return json(request, env, result, result.duplicate ? 200 : 201);
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+
+        if (error instanceof WordPressPostError) {
+          if (error.code === "INVALID_INPUT") {
+            return json(request, env, { error: "入力内容を確認してください" }, 400);
+          }
+
+          if (error.code === "WORDPRESS_NOT_CONNECTED") {
+            return json(request, env, { error: "WordPress.comとの接続が必要です" }, 409);
+          }
+
+          if (
+            error.code === "REQUEST_CONFLICT" ||
+            error.code === "REQUEST_IN_PROGRESS"
+          ) {
+            return json(request, env, { error: "同じ保存操作を処理中です" }, 409);
+          }
+        }
+
+        return json(
+          request,
+          env,
+          { error: "WordPress.comへ下書きを保存できませんでした" },
+          502,
+        );
       }
     }
 

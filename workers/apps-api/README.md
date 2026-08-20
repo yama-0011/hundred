@@ -1,6 +1,6 @@
 # Hundred Apps API
 
-Hundred上の各アプリで共用するCloudflare Workerです。最初の対象として、Creative IAとWordPress.comのOAuthコールバックを受け付けます。
+Hundred上の各アプリで共用するCloudflare Workerです。最初の対象として、Creative IAとWordPress.comのOAuth接続および下書き保存を受け付けます。
 
 ## Cloudflare Workers Builds
 
@@ -13,7 +13,8 @@ Hundred上の各アプリで共用するCloudflare Workerです。最初の対�
 
 - Workerカスタムドメイン: `https://apps-api.yamahit.com`
 - ヘルスチェック: `https://apps-api.yamahit.com/health`
-- WordPress.com OAuthコールバック: `https://apps-api.yamahit.com/api/creative-ia/wordpress/oauth/callback`
+- WordPress.com OAuthコールバック: `https://hundred-apps-api.oneonewapig.workers.dev/api/creative-ia/wordpress/oauth/callback`
+- WordPress.com下書き保存: `POST /api/creative-ia/wordpress/posts`
 
 ## Cognito認証
 

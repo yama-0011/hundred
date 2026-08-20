@@ -1,4 +1,5 @@
 const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
 
 function bytesToBase64Url(bytes: Uint8Array): string {
   let binary = "";
@@ -82,4 +83,39 @@ export async function encryptAccessToken(
     ciphertext: bytesToBase64Url(new Uint8Array(ciphertext)),
     iv: bytesToBase64Url(iv),
   };
+}
+
+/** D1に保存したWordPress.com Access TokenをWorker内だけで復号する。 */
+export async function decryptAccessToken(
+  ciphertext: string,
+  encodedIv: string,
+  base64Key: string,
+): Promise<string> {
+  const keyBytes = base64ToBytes(base64Key);
+  const iv = base64ToBytes(encodedIv);
+  const encryptedBytes = base64ToBytes(ciphertext);
+
+  if (keyBytes.byteLength !== 32 || iv.byteLength !== 12) {
+    throw new Error("INVALID_ENCRYPTED_TOKEN_FORMAT");
+  }
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyBytes,
+    { name: "AES-GCM" },
+    false,
+    ["decrypt"],
+  );
+  const plaintext = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv },
+    key,
+    encryptedBytes,
+  );
+  const accessToken = textDecoder.decode(plaintext);
+
+  if (!accessToken) {
+    throw new Error("DECRYPTED_TOKEN_EMPTY");
+  }
+
+  return accessToken;
 }

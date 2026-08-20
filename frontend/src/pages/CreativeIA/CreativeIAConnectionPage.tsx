@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
+  createCreativeIAWordPressDraft,
   getCreativeIAWordPressAuthorizationUrl,
   getCreativeIAWordPressStatus,
+  type CreativeIAWordPressDraft,
   type CreativeIAWordPressStatus,
 } from '../../services/CreativeIA/creativeIaWordPressApi'
 import '../../styles/CreativeIA/creative-ia-connection.css'
@@ -27,6 +29,15 @@ function CreativeIAConnectionPage() {
     useState<CreativeIAWordPressStatus | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(false)
+  const [draftTitle, setDraftTitle] = useState('Creative IA 接続テスト')
+  const [draftContent, setDraftContent] = useState(
+    'Creative IAから作成したテスト下書きです。\n\nこの投稿は公開されていません。',
+  )
+  const [isSavingDraft, setIsSavingDraft] = useState(false)
+  const [draftResult, setDraftResult] =
+    useState<CreativeIAWordPressDraft | null>(null)
+  const [draftError, setDraftError] = useState<string | null>(null)
+  const draftRequestKeyRef = useRef<string | null>(null)
   const oauthResultMessage = getOAuthResultMessage(
     searchParams.get('wordpress'),
   )
@@ -99,6 +110,38 @@ function CreativeIAConnectionPage() {
     void loadConnection()
   }
 
+  /** 利用者の明示操作で、入力内容をWordPress.comへdraft固定で保存する。 */
+  const handleSaveTestDraft = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault()
+    setIsSavingDraft(true)
+    setDraftError(null)
+    setDraftResult(null)
+
+    try {
+      const requestKey = draftRequestKeyRef.current ?? crypto.randomUUID()
+      draftRequestKeyRef.current = requestKey
+      const result = await createCreativeIAWordPressDraft(
+        {
+          title: draftTitle,
+          content: draftContent,
+        },
+        requestKey,
+      )
+      setDraftResult(result)
+      draftRequestKeyRef.current = null
+    } catch (error) {
+      setDraftError(
+        error instanceof Error && error.message === 'AUTH_REQUIRED'
+          ? 'Hundredへサインインし直してからお試しください。'
+          : 'WordPress.comへ下書きを保存できませんでした。入力内容は保持されています。',
+      )
+    } finally {
+      setIsSavingDraft(false)
+    }
+  }
+
   const selectedSiteLabel =
     connection?.selectedSite?.name ||
     connection?.selectedSite?.url ||
@@ -151,18 +194,87 @@ function CreativeIAConnectionPage() {
         </div>
 
         {connection?.connected && (
-          <dl className="creative-ia-connection__site">
-            <div>
-              <dt>投稿先</dt>
-              <dd>{selectedSiteLabel}</dd>
-            </div>
-            {connection.selectedSite?.id && (
+          <>
+            <dl className="creative-ia-connection__site">
               <div>
-                <dt>サイトID</dt>
-                <dd>{connection.selectedSite.id}</dd>
+                <dt>投稿先</dt>
+                <dd>{selectedSiteLabel}</dd>
               </div>
-            )}
-          </dl>
+              {connection.selectedSite?.id && (
+                <div>
+                  <dt>サイトID</dt>
+                  <dd>{connection.selectedSite.id}</dd>
+                </div>
+              )}
+            </dl>
+
+            <form
+              className="creative-ia-connection__draft-form"
+              onSubmit={(event) => void handleSaveTestDraft(event)}
+            >
+              <div className="creative-ia-connection__draft-heading">
+                <div>
+                  <p className="creative-ia-connection__eyebrow">接続テスト</p>
+                  <h2>下書きを保存</h2>
+                </div>
+                <span>公開されません</span>
+              </div>
+
+              <label>
+                <span>タイトル</span>
+                <input
+                  type="text"
+                  value={draftTitle}
+                  maxLength={200}
+                  required
+                  onChange={(event) => {
+                    draftRequestKeyRef.current = null
+                    setDraftTitle(event.target.value)
+                  }}
+                />
+              </label>
+
+              <label>
+                <span>本文</span>
+                <textarea
+                  value={draftContent}
+                  maxLength={20000}
+                  rows={6}
+                  required
+                  onChange={(event) => {
+                    draftRequestKeyRef.current = null
+                    setDraftContent(event.target.value)
+                  }}
+                />
+              </label>
+
+              {draftError && (
+                <p className="creative-ia-connection__error" role="alert">
+                  {draftError}
+                </p>
+              )}
+
+              {draftResult && (
+                <div className="creative-ia-connection__draft-result" role="status">
+                  <strong>WordPress.comへ下書きを保存しました。</strong>
+                  <span>Post ID: {draftResult.postId}</span>
+                  {draftResult.postUrl && (
+                    <a
+                      href={draftResult.postUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      WordPress.comで確認
+                    </a>
+                  )}
+                </div>
+              )}
+
+              <button type="submit" disabled={isSavingDraft}>
+                {isSavingDraft ? '下書きを保存中' : 'テスト下書きを保存'}
+              </button>
+            </form>
+          </>
         )}
 
         {errorMessage && (

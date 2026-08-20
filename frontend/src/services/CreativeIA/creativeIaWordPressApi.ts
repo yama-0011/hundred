@@ -12,6 +12,13 @@ export type CreativeIAWordPressStatus = {
   } | null
 }
 
+export type CreativeIAWordPressDraft = {
+  postId: string
+  postUrl: string | null
+  status: 'draft'
+  duplicate: boolean
+}
+
 /** HundredのCognitoセッションからWorkerへ送信するAccess Tokenを取得する。 */
 async function getCreativeIAAccessToken() {
   const session = await fetchAuthSession()
@@ -25,12 +32,17 @@ async function getCreativeIAAccessToken() {
 }
 
 /** Creative IA Workerの認証必須APIを呼び出す。 */
-async function requestCreativeIAApi<T>(path: string): Promise<T> {
+async function requestCreativeIAApi<T>(
+  path: string,
+  options: RequestInit = {},
+): Promise<T> {
   const accessToken = await getCreativeIAAccessToken()
   const response = await fetch(new URL(path, creativeIaApiOrigin), {
+    ...options,
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: 'application/json',
+      ...options.headers,
     },
   })
 
@@ -39,6 +51,24 @@ async function requestCreativeIAApi<T>(path: string): Promise<T> {
   }
 
   return (await response.json()) as T
+}
+
+/** 接続済みWordPress.comサイトへ、利用者が確認した内容を下書き保存する。 */
+export function createCreativeIAWordPressDraft(input: {
+  title: string
+  content: string
+}, idempotencyKey: string) {
+  return requestCreativeIAApi<CreativeIAWordPressDraft>(
+    '/api/creative-ia/wordpress/posts',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey,
+      },
+      body: JSON.stringify(input),
+    },
+  )
 }
 
 /** 現在の利用者に紐づくWordPress.com接続状態を取得する。 */
