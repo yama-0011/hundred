@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   createCreativeIAWordPressDraft,
+  generateCreativeIAArticle,
   getCreativeIAWordPressAuthorizationUrl,
   getCreativeIAWordPressStatus,
   type CreativeIAWordPressDraft,
@@ -29,10 +30,17 @@ function CreativeIAConnectionPage() {
     useState<CreativeIAWordPressStatus | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(false)
-  const [draftTitle, setDraftTitle] = useState('Creative IA 接続テスト')
-  const [draftContent, setDraftContent] = useState(
-    'Creative IAから作成したテスト下書きです。\n\nこの投稿は公開されていません。',
-  )
+  const [topic, setTopic] = useState('')
+  const [keyPoints, setKeyPoints] = useState('')
+  const [audience, setAudience] = useState('')
+  const [tone, setTone] = useState<
+    'friendly' | 'professional' | 'casual'
+  >('friendly')
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [generationError, setGenerationError] = useState<string | null>(null)
+  const [generationWarnings, setGenerationWarnings] = useState<string[]>([])
+  const [draftTitle, setDraftTitle] = useState('')
+  const [draftContent, setDraftContent] = useState('')
   const [isSavingDraft, setIsSavingDraft] = useState(false)
   const [draftResult, setDraftResult] =
     useState<CreativeIAWordPressDraft | null>(null)
@@ -142,6 +150,42 @@ function CreativeIAConnectionPage() {
     }
   }
 
+  /** 利用者の明示操作で入力内容をGeminiへ送り、編集可能な記事案を受け取る。 */
+  const handleGenerateArticle = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault()
+    setIsGenerating(true)
+    setGenerationError(null)
+    setGenerationWarnings([])
+    setDraftResult(null)
+    setDraftError(null)
+
+    try {
+      const result = await generateCreativeIAArticle({
+        topic,
+        keyPoints,
+        audience,
+        tone,
+      })
+      setDraftTitle(result.title)
+      setDraftContent(result.content)
+      setGenerationWarnings(result.warnings)
+      draftRequestKeyRef.current = null
+    } catch (error) {
+      const errorCode = error instanceof Error ? error.message : ''
+      setGenerationError(
+        errorCode === 'AUTH_REQUIRED'
+          ? 'Hundredへサインインし直してからお試しください。'
+          : errorCode === 'RATE_LIMITED'
+            ? '生成回数の上限に達しました。時間をおいてお試しください。'
+            : '記事案を生成できませんでした。入力内容は保持されています。',
+      )
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
   const selectedSiteLabel =
     connection?.selectedSite?.name ||
     connection?.selectedSite?.url ||
@@ -210,12 +254,93 @@ function CreativeIAConnectionPage() {
 
             <form
               className="creative-ia-connection__draft-form"
+              onSubmit={(event) => void handleGenerateArticle(event)}
+            >
+              <div className="creative-ia-connection__draft-heading">
+                <div>
+                  <p className="creative-ia-connection__eyebrow">記事作成</p>
+                  <h2>記事案を生成</h2>
+                </div>
+                <span>生成後に編集できます</span>
+              </div>
+
+              <label>
+                <span>テーマ</span>
+                <input
+                  type="text"
+                  value={topic}
+                  maxLength={200}
+                  required
+                  placeholder="例：朝の散歩を続けるコツ"
+                  onChange={(event) => setTopic(event.target.value)}
+                />
+              </label>
+
+              <label>
+                <span>含めたい要点</span>
+                <textarea
+                  value={keyPoints}
+                  maxLength={2000}
+                  rows={4}
+                  placeholder="1行ずつ、記事に含めたい内容を入力"
+                  onChange={(event) => setKeyPoints(event.target.value)}
+                />
+              </label>
+
+              <label>
+                <span>想定読者</span>
+                <input
+                  type="text"
+                  value={audience}
+                  maxLength={200}
+                  placeholder="例：運動を習慣にしたい初心者"
+                  onChange={(event) => setAudience(event.target.value)}
+                />
+              </label>
+
+              <label>
+                <span>文体</span>
+                <select
+                  value={tone}
+                  onChange={(event) =>
+                    setTone(
+                      event.target.value as
+                        | 'friendly'
+                        | 'professional'
+                        | 'casual',
+                    )
+                  }
+                >
+                  <option value="friendly">親しみやすい</option>
+                  <option value="professional">信頼感がある</option>
+                  <option value="casual">カジュアル</option>
+                </select>
+              </label>
+
+              <p className="creative-ia-connection__privacy-note">
+                入力内容は記事案の生成に限ってGemini APIへ送信されます。個人情報や機密情報は入力しないでください。
+              </p>
+
+              {generationError && (
+                <p className="creative-ia-connection__error" role="alert">
+                  {generationError}
+                </p>
+              )}
+
+              <button type="submit" disabled={isGenerating}>
+                {isGenerating ? '記事案を生成中' : '記事案を生成'}
+              </button>
+            </form>
+
+            {(draftTitle || draftContent) && (
+            <form
+              className="creative-ia-connection__draft-form"
               onSubmit={(event) => void handleSaveTestDraft(event)}
             >
               <div className="creative-ia-connection__draft-heading">
                 <div>
-                  <p className="creative-ia-connection__eyebrow">接続テスト</p>
-                  <h2>下書きを保存</h2>
+                  <p className="creative-ia-connection__eyebrow">編集・確認</p>
+                  <h2>記事案</h2>
                 </div>
                 <span>公開されません</span>
               </div>
@@ -233,6 +358,25 @@ function CreativeIAConnectionPage() {
                   }}
                 />
               </label>
+
+              {generationWarnings.length > 0 && (
+                <div className="creative-ia-connection__warnings" role="status">
+                  <strong>確認してください</strong>
+                  <ul>
+                    {generationWarnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <details className="creative-ia-connection__preview">
+                <summary>プレビュー</summary>
+                <article>
+                  <h3>{draftTitle || 'タイトル未入力'}</h3>
+                  <p>{draftContent || '本文未入力'}</p>
+                </article>
+              </details>
 
               <label>
                 <span>本文</span>
@@ -271,9 +415,10 @@ function CreativeIAConnectionPage() {
               )}
 
               <button type="submit" disabled={isSavingDraft}>
-                {isSavingDraft ? '下書きを保存中' : 'テスト下書きを保存'}
+                {isSavingDraft ? '下書きを保存中' : 'WordPress.comへ下書きを保存'}
               </button>
             </form>
+            )}
           </>
         )}
 

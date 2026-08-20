@@ -1,6 +1,6 @@
 # Hundred Apps API
 
-Hundred上の各アプリで共用するCloudflare Workerです。最初の対象として、Creative IAとWordPress.comのOAuth接続および下書き保存を受け付けます。
+Hundred上の各アプリで共用するCloudflare Workerです。Creative IAの記事案生成、WordPress.comのOAuth接続および下書き保存を受け付けます。
 
 ## Cloudflare Workers Builds
 
@@ -15,6 +15,7 @@ Hundred上の各アプリで共用するCloudflare Workerです。最初の対�
 - ヘルスチェック: `https://apps-api.yamahit.com/health`
 - WordPress.com OAuthコールバック: `https://hundred-apps-api.oneonewapig.workers.dev/api/creative-ia/wordpress/oauth/callback`
 - WordPress.com下書き保存: `POST /api/creative-ia/wordpress/posts`
+- Gemini記事案生成: `POST /api/creative-ia/generate`
 
 ## Cognito認証
 
@@ -27,6 +28,9 @@ Hundred上の各アプリで共用するCloudflare Workerです。最初の対�
 - `WORDPRESS_CLIENT_SECRET`
 - `OAUTH_STATE_SECRET`
 - `TOKEN_ENCRYPTION_KEY`
+- `GEMINI_API_KEY`
+
+Geminiのモデル名は公開設定`GEMINI_MODEL`で切り替えます。初期値は安定版の`gemini-2.5-flash-lite`です。記事生成は利用者ごとに1分3回・UTC日次20回までとし、D1には入力文や生成本文ではなく利用時刻と成否だけを記録します。
 
 ## D1マイグレーション
 

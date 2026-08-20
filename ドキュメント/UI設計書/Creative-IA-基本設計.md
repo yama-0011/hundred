@@ -193,6 +193,8 @@ Gemini Developer API
 
 GoogleアカウントによるHundredへのサインインと、Gemini APIの利用権・料金は別に扱う。個人向けGeminiプランの契約をCreative IAのAPI利用へ自動適用できることを前提としない。
 
+Phase 1の初期モデルは、安定版かつ低コストの`gemini-2.5-flash-lite`とする。モデル名はWorkerの環境変数`GEMINI_MODEL`で切り替え可能にし、UIと記事保存処理を特定モデルへ依存させない。
+
 ### 7.2 共通APIキーを採用する理由
 
 - 初期利用者の設定負担が少ない
@@ -205,11 +207,10 @@ GoogleアカウントによるHundredへのサインインと、Gemini APIの利
 
 必要性が明確になった場合に限り、次を検討する。
 
-1. 利用者ごとの生成回数制限
-2. プランごとの利用上限
-3. BYOK（利用者自身のAPIキーを登録）
-4. Google OAuthによるGemini API認可
-5. Gemini以外のAIプロバイダー
+1. プランごとの利用上限
+2. BYOK（利用者自身のAPIキーを登録）
+3. Google OAuthによるGemini API認可
+4. Gemini以外のAIプロバイダー
 
 利用者ごとのOAuthは、同意画面、Access Token、Refresh Token、失効、再認証、暗号化保存が必要になるため、Phase 1では採用しない。
 
@@ -225,15 +226,14 @@ AI Provider Interface
   └─ 将来: その他のAI
 ```
 
-共通の生成結果候補:
+Phase 1の生成結果:
 
 - title
 - content
 - excerpt
-- suggestedSlug
-- suggestedCategories
-- suggestedTags
 - warnings
+
+`suggestedSlug`、カテゴリ、タグはWordPress側の運用を確認してから追加する。
 
 ---
 
@@ -593,7 +593,8 @@ OAuth要件:
 ### 18.2 コスト管理
 
 - Gemini APIの呼び出し回数を利用者単位で制限できる構造にする
-- 入力文字数、出力文字数、生成回数を記録できるようにする
+- Phase 1は利用者ごとに1分3回、UTC日次20回までに制限する
+- D1には生成日時、モデル、成否だけを記録し、入力文と生成本文は保存しない
 - 長すぎる会話履歴を毎回AIへ送らない
 - Phase 1では無料枠内で検証し、利用量を確認してから課金を有効にする
 - 課金を有効にする場合は予算通知と利用上限を設定する
@@ -649,9 +650,9 @@ Phase 7: 分析結果を利用した提案・エージェント支援
 7. Access Tokenの暗号化保存と接続解除を実装する
 8. サイト一覧取得と投稿先1サイトの選択を実装する
 9. WordPress.comへテスト記事を`draft`で保存する
-10. Gemini APIと記事生成APIを実装する
-11. Creative IAの入力・編集・プレビュー画面を作成する
-12. 生成からWordPress下書き保存までを結合する
+10. Gemini APIと記事生成APIを実装する（実装済み・本番設定待ち）
+11. Creative IAの入力・編集・プレビュー画面を作成する（実装済み）
+12. 生成からWordPress下書き保存までを結合する（実装済み）
 13. エラー、レート制限、OAuth state、重複投稿防止を確認する
 
 AIや画面を先に完成させず、最初にWordPressへ安全に下書きを保存できることを確認する。
@@ -670,8 +671,8 @@ AIや画面を先に完成させず、最初にWordPressへ安全に下書きを
 - WordPress.com REST APIの投稿先URLとSite IDの扱い
 - WordPress側の下書き・承認フロー
 - 利用しているSEOプラグイン
-- Geminiで使用するモデル
-- AIへ送信してよいデータの範囲
+- Gemini APIキーの本番Secret登録
+- Gemini無料枠のデータ利用条件を踏まえ、実データを送信する範囲
 
 ### 将来確認する事項
 

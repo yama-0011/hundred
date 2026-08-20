@@ -3,6 +3,11 @@ import {
   verifyCognitoAccessToken,
 } from "./auth/cognito";
 import {
+  ArticleGenerationError,
+  generateArticle,
+} from "./ai/generate";
+import type { GeminiEnv } from "./ai/gemini";
+import {
   createWordPressAuthorizationUrl,
   handleWordPressOAuthCallback,
   type WordPressOAuthEnv,
@@ -12,7 +17,7 @@ import {
   WordPressPostError,
 } from "./wordpress/posts";
 
-interface Env extends WordPressOAuthEnv {
+interface Env extends WordPressOAuthEnv, GeminiEnv {
   COGNITO_USER_POOL_ID: string;
   COGNITO_USER_POOL_CLIENT_ID: string;
 }
@@ -186,6 +191,38 @@ export default {
         const redirectUrl = new URL(env.APP_ORIGIN);
         redirectUrl.searchParams.set("wordpress", "failed");
         return Response.redirect(redirectUrl.toString(), 303);
+      }
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/creative-ia/generate"
+    ) {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        const result = await generateArticle(request, env, ownerUserId);
+        return json(request, env, result);
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+
+        if (error instanceof ArticleGenerationError) {
+          if (error.code === "INVALID_INPUT") {
+            return json(request, env, { error: "入力内容を確認してください" }, 400);
+          }
+
+          if (error.code === "RATE_LIMITED") {
+            return json(
+              request,
+              env,
+              { error: "生成回数の上限に達しました。時間をおいてお試しください" },
+              429,
+            );
+          }
+        }
+
+        return json(request, env, { error: "記事案を生成できませんでした" }, 502);
       }
     }
 

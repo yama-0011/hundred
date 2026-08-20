@@ -19,6 +19,14 @@ export type CreativeIAWordPressDraft = {
   duplicate: boolean
 }
 
+export type CreativeIAGeneratedArticle = {
+  title: string
+  content: string
+  excerpt: string
+  warnings: string[]
+  model: string
+}
+
 /** HundredのCognitoセッションからWorkerへ送信するAccess Tokenを取得する。 */
 async function getCreativeIAAccessToken() {
   const session = await fetchAuthSession()
@@ -47,10 +55,33 @@ async function requestCreativeIAApi<T>(
   })
 
   if (!response.ok) {
-    throw new Error(response.status === 401 ? 'AUTH_REQUIRED' : 'API_FAILED')
+    throw new Error(
+      response.status === 401
+        ? 'AUTH_REQUIRED'
+        : response.status === 429
+          ? 'RATE_LIMITED'
+          : 'API_FAILED',
+    )
   }
 
   return (await response.json()) as T
+}
+
+/** 入力したテーマと要点をGeminiへ送り、編集可能な日本語の記事案を生成する。 */
+export function generateCreativeIAArticle(input: {
+  topic: string
+  keyPoints: string
+  audience: string
+  tone: 'friendly' | 'professional' | 'casual'
+}) {
+  return requestCreativeIAApi<CreativeIAGeneratedArticle>(
+    '/api/creative-ia/generate',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  )
 }
 
 /** 接続済みWordPress.comサイトへ、利用者が確認した内容を下書き保存する。 */

@@ -202,7 +202,8 @@
 }
 
 .creative-ia-connection__draft-form input,
-.creative-ia-connection__draft-form textarea {
+.creative-ia-connection__draft-form textarea,
+.creative-ia-connection__draft-form select {
   width: 100%;
   border: 1px solid rgba(239, 248, 244, 0.14);
   border-radius: 14px;
@@ -215,9 +216,63 @@
 }
 
 .creative-ia-connection__draft-form input:focus,
-.creative-ia-connection__draft-form textarea:focus {
+.creative-ia-connection__draft-form textarea:focus,
+.creative-ia-connection__draft-form select:focus {
   border-color: #82e0c3;
   outline: 2px solid rgba(130, 224, 195, 0.16);
+}
+
+.creative-ia-connection__draft-form select option {
+  color: #10201b;
+}
+
+.creative-ia-connection__privacy-note {
+  margin: 0;
+  color: #8d9995;
+  font-size: var(--font-size-xs);
+  line-height: 1.6;
+}
+
+.creative-ia-connection__warnings {
+  padding: var(--space-4);
+  border-radius: 14px;
+  color: #f4e7bd;
+  background: rgba(194, 150, 55, 0.14);
+  font-size: var(--font-size-sm);
+}
+
+.creative-ia-connection__warnings ul {
+  margin: var(--space-2) 0 0;
+  padding-left: 1.2rem;
+}
+
+.creative-ia-connection__preview {
+  border: 1px solid rgba(239, 248, 244, 0.12);
+  border-radius: 14px;
+  padding: var(--space-3) var(--space-4);
+  background: rgba(4, 10, 9, 0.2);
+}
+
+.creative-ia-connection__preview summary {
+  color: #bfeedd;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.creative-ia-connection__preview article {
+  padding-top: var(--space-4);
+}
+
+.creative-ia-connection__preview h3 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-lg);
+}
+
+.creative-ia-connection__preview p {
+  margin: 0;
+  color: #dbe4e1;
+  line-height: 1.8;
+  white-space: pre-wrap;
 }
 
 .creative-ia-connection__draft-form > button {
