@@ -19,6 +19,10 @@ interface WordPressPostResponse {
   status?: unknown;
 }
 
+interface WordPressPostErrorResponse {
+  code?: unknown;
+}
+
 interface StoredPostRequest {
   request_hash: string;
   status: string;
@@ -218,8 +222,19 @@ export async function createWordPressDraft(
     });
 
     if (!response.ok) {
+      let providerError: string | undefined;
+
+      try {
+        const errorResponse = (await response.json()) as WordPressPostErrorResponse;
+        providerError =
+          typeof errorResponse.code === "string" ? errorResponse.code : undefined;
+      } catch {
+        // 外部レスポンス本文は記録せず、HTTPステータスだけを診断に使用する。
+      }
+
       console.error("WORDPRESS_DRAFT_REQUEST_FAILED", {
         providerStatus: response.status,
+        providerError,
       });
       throw new WordPressPostError("WORDPRESS_REQUEST_FAILED");
     }
