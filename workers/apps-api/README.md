@@ -15,6 +15,10 @@ Hundred上の各アプリで共用するCloudflare Workerです。最初の対�
 - ヘルスチェック: `https://apps-api.yamahit.com/health`
 - WordPress.com OAuthコールバック: `https://apps-api.yamahit.com/api/creative-ia/wordpress/oauth/callback`
 
+## Cognito認証
+
+`GET /api/creative-ia/wordpress/status`などの保護対象APIでは、HundredのCognito Access Tokenを`Authorization: Bearer <token>`で受け取ります。WorkerはAWS公式の`aws-jwt-verify`を使用し、署名、User Pool、App Client、期限、`token_use=access`を検証します。
+
 ## Secrets
 
 値はリポジトリに保存せず、Cloudflare WorkerのSecretとして登録します。

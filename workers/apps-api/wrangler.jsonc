@@ -6,7 +6,9 @@
   "workers_dev": true,
   "vars": {
     "APP_ORIGIN": "https://yamahit.com",
-    "WORDPRESS_CLIENT_ID": "146245"
+    "WORDPRESS_CLIENT_ID": "146245",
+    "COGNITO_USER_POOL_ID": "ap-northeast-1_CqkNv5buN",
+    "COGNITO_USER_POOL_CLIENT_ID": "6lp8qk50nnuf5n4a8u71dl9idi"
   },
   "d1_databases": [
     {
