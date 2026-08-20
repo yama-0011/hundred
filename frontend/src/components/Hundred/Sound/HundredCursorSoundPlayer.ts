@@ -20,13 +20,7 @@ class HundredCursorSoundPlayer {
     const context = this.getContext()
     if (!context) return null
 
-    if (context.state !== 'running') {
-      if (!this.hasActiveUserGesture()) return null
-
-      void context.resume().catch(() => {
-        // 再生許可前でも画面操作は止めず、次のユーザー操作で再試行する。
-      })
-    }
+    void this.resumeContext(context)
 
     cursorSoundOptions.forEach((sound) => {
       if (sound.source) void this.loadBuffer(sound, context)
@@ -43,10 +37,17 @@ class HundredCursorSoundPlayer {
     const context = this.prepare()
     if (!context) return
 
+    // 初回操作ではAudioContextの再開が非同期になるため、再生許可を待つ。
+    const contextReady = this.resumeContext(context)
+
     const buffer = this.buffers.get(sound.id)
 
     if (buffer) {
-      this.startSound(context, buffer, sound.volume * effectVolume)
+      void contextReady.then((isReady) => {
+        if (isReady) {
+          this.startSound(context, buffer, sound.volume * effectVolume)
+        }
+      })
       return
     }
 
@@ -54,12 +55,14 @@ class HundredCursorSoundPlayer {
     if (this.pendingSounds.has(sound.id)) return
     this.pendingSounds.add(sound.id)
 
-    void this.loadBuffer(sound, context).then((loadedBuffer) => {
-      this.pendingSounds.delete(sound.id)
-      if (loadedBuffer) {
-        this.startSound(context, loadedBuffer, sound.volume * effectVolume)
-      }
-    })
+    void Promise.all([contextReady, this.loadBuffer(sound, context)]).then(
+      ([isReady, loadedBuffer]) => {
+        this.pendingSounds.delete(sound.id)
+        if (isReady && loadedBuffer) {
+          this.startSound(context, loadedBuffer, sound.volume * effectVolume)
+        }
+      },
+    )
   }
 
   /** 有効なユーザー操作中に限ってAudioContextを作成し、以降の再生で再利用する。 */
@@ -75,6 +78,17 @@ class HundredCursorSoundPlayer {
   /** ブラウザが音声開始を許可する一時的なユーザー操作中か確認する。 */
   private hasActiveUserGesture() {
     return !navigator.userActivation || navigator.userActivation.isActive
+  }
+
+  /** AudioContextの再開完了を待ち、最初のユーザー操作でも再生可能にする。 */
+  private resumeContext(context: AudioContext) {
+    if (context.state === 'running') return Promise.resolve(true)
+    if (!this.hasActiveUserGesture()) return Promise.resolve(false)
+
+    return context
+      .resume()
+      .then(() => context.state === 'running')
+      .catch(() => false)
   }
 
   /** 音源を取得・デコードし、次回以降すぐ再生できる状態で保存する。 */
