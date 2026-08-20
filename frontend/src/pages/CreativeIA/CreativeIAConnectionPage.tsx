@@ -179,6 +179,8 @@ function CreativeIAConnectionPage() {
           ? 'Hundredへサインインし直してからお試しください。'
           : errorCode === 'RATE_LIMITED'
             ? '生成回数の上限に達しました。時間をおいてお試しください。'
+            : errorCode === 'SERVICE_BUSY'
+              ? 'Geminiが混雑しています。時間をおいてもう一度お試しください。'
             : '記事案を生成できませんでした。入力内容は保持されています。',
       )
     } finally {

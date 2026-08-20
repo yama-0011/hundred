@@ -1,4 +1,8 @@
-import { createGeminiArticleGenerator, type GeminiEnv } from "./gemini";
+import {
+  createGeminiArticleGenerator,
+  GeminiGenerationError,
+  type GeminiEnv,
+} from "./gemini";
 import type { ArticleGenerationInput, GeneratedArticle } from "./provider";
 
 const maxTopicLength = 200;
@@ -13,7 +17,11 @@ interface GenerationEnv extends GeminiEnv {
 
 export class ArticleGenerationError extends Error {
   constructor(
-    readonly code: "INVALID_INPUT" | "RATE_LIMITED" | "GENERATION_FAILED",
+    readonly code:
+      | "INVALID_INPUT"
+      | "RATE_LIMITED"
+      | "PROVIDER_BUSY"
+      | "GENERATION_FAILED",
   ) {
     super(code);
     this.name = "ArticleGenerationError";
@@ -120,7 +128,7 @@ export async function generateArticle(
       .bind(requestId)
       .run();
     return result;
-  } catch {
+  } catch (error) {
     await env.DB.prepare(
       `UPDATE generation_requests
           SET status = 'failed', completed_at = unixepoch()
@@ -128,6 +136,10 @@ export async function generateArticle(
     )
       .bind(requestId)
       .run();
-    throw new ArticleGenerationError("GENERATION_FAILED");
+    throw new ArticleGenerationError(
+      error instanceof GeminiGenerationError && error.code === "PROVIDER_BUSY"
+        ? "PROVIDER_BUSY"
+        : "GENERATION_FAILED",
+    );
   }
 }

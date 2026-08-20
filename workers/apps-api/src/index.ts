@@ -220,6 +220,15 @@ export default {
               429,
             );
           }
+
+          if (error.code === "PROVIDER_BUSY") {
+            return json(
+              request,
+              env,
+              { error: "Geminiが混雑しています。時間をおいてお試しください" },
+              503,
+            );
+          }
         }
 
         return json(request, env, { error: "記事案を生成できませんでした" }, 502);

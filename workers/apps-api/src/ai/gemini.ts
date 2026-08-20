@@ -7,6 +7,8 @@ import type {
 const geminiApiOrigin = "https://generativelanguage.googleapis.com";
 const requestTimeoutMilliseconds = 30_000;
 const modelPattern = /^[a-z0-9._-]+$/u;
+const retryableStatuses = new Set([429, 500, 502, 503, 504]);
+const retryDelaysMilliseconds = [600, 1_500];
 
 export interface GeminiEnv {
   GEMINI_API_KEY: string;
@@ -18,6 +20,17 @@ interface GeminiResponse {
     content?: { parts?: Array<{ text?: unknown }> };
     finishReason?: unknown;
   }>;
+}
+
+export class GeminiGenerationError extends Error {
+  constructor(readonly code: "PROVIDER_BUSY" | "PROVIDER_FAILED") {
+    super(code);
+    this.name = "GeminiGenerationError";
+  }
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -80,39 +93,66 @@ export function createGeminiArticleGenerator(env: GeminiEnv): ArticleGenerator {
         `/v1beta/models/${model}:generateContent`,
         geminiApiOrigin,
       );
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          "x-goog-api-key": env.GEMINI_API_KEY,
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: buildPrompt(input) }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            maxOutputTokens: 3_000,
-            responseSchema: {
-              type: "OBJECT",
-              properties: {
-                title: { type: "STRING" },
-                content: { type: "STRING" },
-                excerpt: { type: "STRING" },
-                warnings: { type: "ARRAY", items: { type: "STRING" } },
-              },
-              required: ["title", "content", "excerpt", "warnings"],
+      const requestBody = JSON.stringify({
+        contents: [{ parts: [{ text: buildPrompt(input) }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          maxOutputTokens: 3_000,
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              title: { type: "STRING" },
+              content: { type: "STRING" },
+              excerpt: { type: "STRING" },
+              warnings: { type: "ARRAY", items: { type: "STRING" } },
             },
+            required: ["title", "content", "excerpt", "warnings"],
           },
-        }),
-        signal: AbortSignal.timeout(requestTimeoutMilliseconds),
+        },
       });
+      let response: Response | null = null;
 
-      if (!response.ok) {
+      for (
+        let attempt = 0;
+        attempt <= retryDelaysMilliseconds.length;
+        attempt += 1
+      ) {
+        try {
+          response = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+              "x-goog-api-key": env.GEMINI_API_KEY,
+            },
+            body: requestBody,
+            signal: AbortSignal.timeout(requestTimeoutMilliseconds),
+          });
+        } catch {
+          response = null;
+        }
+
+        if (response?.ok) break;
+
+        const shouldRetry =
+          response === null || retryableStatuses.has(response.status);
+        const retryDelay = retryDelaysMilliseconds[attempt];
+
+        if (!shouldRetry || retryDelay === undefined) break;
+        await wait(retryDelay);
+      }
+
+      if (!response?.ok) {
+        const providerStatus = response?.status ?? 0;
         console.error("GEMINI_GENERATION_FAILED", {
-          providerStatus: response.status,
+          providerStatus,
           model,
         });
-        throw new Error("PROVIDER_REQUEST_FAILED");
+        throw new GeminiGenerationError(
+          providerStatus === 0 || retryableStatuses.has(providerStatus)
+            ? "PROVIDER_BUSY"
+            : "PROVIDER_FAILED",
+        );
       }
 
       const body = (await response.json()) as GeminiResponse;

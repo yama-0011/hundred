@@ -60,6 +60,8 @@ async function requestCreativeIAApi<T>(
         ? 'AUTH_REQUIRED'
         : response.status === 429
           ? 'RATE_LIMITED'
+          : response.status === 503
+            ? 'SERVICE_BUSY'
           : 'API_FAILED',
     )
   }
