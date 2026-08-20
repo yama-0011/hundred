@@ -35,16 +35,8 @@
   animation: hundred-sign-in-panel-in 480ms ease both;
 }
 
-.hundred-sign-in__header span {
-  color: var(--hundred-color-accent);
-  font-size: var(--font-size-2xs);
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-}
-
 .hundred-sign-in__header h1 {
-  margin: var(--space-1) 0 0;
+  margin: 0;
   font-size: clamp(2.6rem, 14vw, 4.2rem);
   font-weight: 560;
   line-height: 0.95;

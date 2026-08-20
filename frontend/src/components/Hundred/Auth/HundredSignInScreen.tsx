@@ -41,16 +41,15 @@ function HundredSignInScreen({
       data-theme-strategy={hundredThemeConfig.strategy}
       data-theme={wallpaperTheme}
       data-wallpaper={wallpaper}
-      aria-label="Hundred sign in"
+      aria-label="Hundredのサインイン画面"
     >
       <HundredWallpaperBackground wallpaper={wallpaper} />
       <div className="hundred-home__ambient" aria-hidden="true" />
 
       <section className="hundred-sign-in__panel" aria-labelledby="hundred-sign-in-title">
         <header className="hundred-sign-in__header">
-          <span>Welcome to</span>
           <h1 id="hundred-sign-in-title">Hundred</h1>
-          <p>アカウントを選択してHomeを開始します</p>
+          <p>利用方法を選択してHundredを開始します</p>
         </header>
 
         <div className="hundred-sign-in__actions">
@@ -59,21 +58,21 @@ function HundredSignInScreen({
             type="button"
             onClick={onSignIn}
           >
-            <strong>Sign in</strong>
+            <strong>サインイン</strong>
             <small>既存のHundredアカウントを使用</small>
           </button>
           <button type="button" onClick={onSignUp}>
-            <strong>Sign up</strong>
-            <small>新しいHundredアカウントを作成</small>
+            <strong>アカウントを作成</strong>
+            <small>Hundredを初めて利用する方</small>
           </button>
           <button type="button" onClick={onGuestSignIn}>
-            <strong>Continue as guest</strong>
+            <strong>ゲストとして続ける</strong>
             <small>アカウントを作成せずに試す</small>
           </button>
         </div>
 
         <p className="hundred-sign-in__notice">
-          現在はUI確認用のモックです。実際の認証やデータ保存は行いません。
+          現在は画面確認用です。認証やデータ保存は行われません。
         </p>
       </section>
     </main>

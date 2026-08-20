@@ -70,8 +70,8 @@ function HundredNotificationDialog({
       >
         <header className="hundred-notification-dialog__header">
           <div>
-            <span>Settings</span>
-            <h2 id="hundred-notification-dialog-title">Notifications</h2>
+            <span>設定</span>
+            <h2 id="hundred-notification-dialog-title">通知</h2>
           </div>
           <button
             className="hundred-notification-dialog__close"
@@ -86,8 +86,8 @@ function HundredNotificationDialog({
 
         <label className="hundred-notification-master">
           <span className="hundred-notification-master__copy">
-            <strong>All notifications</strong>
-            <small>すべてのApp通知に優先して適用されます</small>
+            <strong>すべての通知</strong>
+            <small>すべてのアプリの通知に適用されます</small>
           </span>
           <span className="hundred-notification-switch">
             <input
@@ -95,7 +95,7 @@ function HundredNotificationDialog({
               role="switch"
               checked={notificationsEnabled}
               onChange={(event) => onEnabledChange(event.currentTarget.checked)}
-              aria-label="通知全体を切り替える"
+              aria-label="すべての通知を切り替える"
             />
             <span aria-hidden="true" />
           </span>
@@ -103,8 +103,8 @@ function HundredNotificationDialog({
 
         <section aria-labelledby="hundred-notification-apps-title">
           <div className="hundred-notification-dialog__section-header">
-            <h3 id="hundred-notification-apps-title">Apps</h3>
-            {!notificationsEnabled && <span>全体設定がオフです</span>}
+            <h3 id="hundred-notification-apps-title">アプリ</h3>
+            {!notificationsEnabled && <span>すべての通知がオフです</span>}
           </div>
           <div className="hundred-notification-apps">
             {apps.map((app) => (

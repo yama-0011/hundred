@@ -63,11 +63,11 @@ type NotificationSettings = {
 
 // 表示内容をデータとして分離し、項目追加時にJSXを書き換えずに済むようにする。
 const categories: Category[] = [
-  { id: 'profile', label: 'Profile' },
-  { id: 'apps', label: 'Apps' },
-  { id: 'store', label: 'Store' },
-  { id: 'mail', label: 'Mail' },
-  { id: 'settings', label: 'Settings' },
+  { id: 'profile', label: 'プロフィール' },
+  { id: 'apps', label: 'アプリ' },
+  { id: 'store', label: 'ストア' },
+  { id: 'mail', label: 'メール' },
+  { id: 'settings', label: '設定' },
 ]
 
 const installedApps: InstalledApp[] = [
@@ -543,7 +543,7 @@ function HundredHome() {
       data-theme-strategy={hundredThemeConfig.strategy}
       data-theme={selectedWallpaperTheme}
       data-wallpaper={selectedWallpaper}
-      aria-label="Hundred Home"
+      aria-label="Hundredのホーム"
       tabIndex={0}
       onKeyDown={handleKeyDown}
       onPointerDown={handlePointerDown}
@@ -558,11 +558,11 @@ function HundredHome() {
         <h1>Hundred</h1>
       </header>
 
-      <section className="hundred-xmb" aria-label="Home navigation">
+      <section className="hundred-xmb" aria-label="ホームナビゲーション">
         <nav
           ref={categoryWheelArea}
           className="hundred-category-window"
-          aria-label="Categories"
+          aria-label="カテゴリ"
         >
           <div className="hundred-category-track" style={categoryTrackStyle}>
             {categories.map((category, index) => {
@@ -602,9 +602,11 @@ function HundredHome() {
                   {profileSession === 'member' ? 'Y' : 'G'}
                 </span>
                 <span className="hundred-profile-entry__copy">
-                  <strong>{profileSession === 'member' ? 'Yama' : 'Guest'}</strong>
+                  <strong>{profileSession === 'member' ? 'Yama' : 'ゲスト'}</strong>
                   <small>
-                    {profileSession === 'member' ? 'Signed in' : 'Guest session'}
+                    {profileSession === 'member'
+                      ? 'サインイン中'
+                      : 'ゲストとして利用中'}
                   </small>
                 </span>
                 <span className="hundred-profile-entry__arrow" aria-hidden="true">
@@ -617,7 +619,7 @@ function HundredHome() {
               ref={appWheelArea}
               className="hundred-app-track"
               style={appTrackStyle}
-              aria-label="Installed apps"
+              aria-label="インストール済みアプリ"
             >
               {installedApps.map((app, index) => {
                 const isSelected = index === selectedAppIndex
@@ -660,7 +662,7 @@ function HundredHome() {
                   </svg>
                 </span>
                 <span className="hundred-settings-item__copy">
-                  <strong>Wallpaper</strong>
+                  <strong>壁紙</strong>
                   <small>{getWallpaper(selectedWallpaper)?.name}</small>
                 </span>
                 <span className="hundred-settings-item__arrow" aria-hidden="true">
@@ -680,10 +682,11 @@ function HundredHome() {
                   </svg>
                 </span>
                 <span className="hundred-settings-item__copy">
-                  <strong>Sound</strong>
+                  <strong>サウンド</strong>
                   <small>
-                    {getCursorSound(selectedCursorSound)?.name} ·{' '}
-                    {Math.round(effectVolume * 100)}%
+                    {selectedCursorSound === 'none'
+                      ? 'オフ'
+                      : `${getCursorSound(selectedCursorSound)?.name} · ${Math.round(effectVolume * 100)}%`}
                   </small>
                 </span>
                 <span className="hundred-settings-item__arrow" aria-hidden="true">
@@ -703,11 +706,11 @@ function HundredHome() {
                   </svg>
                 </span>
                 <span className="hundred-settings-item__copy">
-                  <strong>Notifications</strong>
+                  <strong>通知</strong>
                   <small>
                     {notificationSettings.enabled
-                      ? `${enabledNotificationAppCount}/${installedApps.length} apps`
-                      : 'Off'}
+                      ? `${enabledNotificationAppCount}/${installedApps.length} アプリ`
+                      : 'オフ'}
                   </small>
                 </span>
                 <span className="hundred-settings-item__arrow" aria-hidden="true">
@@ -717,7 +720,7 @@ function HundredHome() {
             </div>
           ) : (
             <div className="hundred-category-placeholder" key={selectedCategory.id}>
-              <span>Selected</span>
+              <span>選択中</span>
               <strong>{selectedCategory.label}</strong>
               <p>このカテゴリは準備中です</p>
             </div>

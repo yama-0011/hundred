@@ -111,7 +111,7 @@ function createCursorSoundOptions() {
     ...detectedSounds,
     {
       id: 'none',
-      name: 'Off',
+      name: 'オフ',
       description: 'カーソル音を再生しない',
       source: null,
       volume: 0,

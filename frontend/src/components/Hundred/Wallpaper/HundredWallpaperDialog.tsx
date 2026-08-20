@@ -44,14 +44,14 @@ function HundredWallpaperDialog({
       >
         <header className="hundred-wallpaper-dialog__header">
           <div>
-            <span>Settings</span>
-            <h2 id="hundred-wallpaper-dialog-title">Wallpaper</h2>
+            <span>設定</span>
+            <h2 id="hundred-wallpaper-dialog-title">壁紙</h2>
           </div>
           <button
             className="hundred-wallpaper-dialog__close"
             type="button"
             onClick={onClose}
-            aria-label="壁紙選択を閉じる"
+            aria-label="壁紙設定を閉じる"
             autoFocus
           >
             ×

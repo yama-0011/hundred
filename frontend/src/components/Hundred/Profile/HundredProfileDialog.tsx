@@ -67,14 +67,14 @@ function HundredProfileDialog({
       >
         <header className="hundred-profile-dialog__header">
           <div>
-            <span>Profile</span>
-            <h2 id="hundred-profile-dialog-title">Account</h2>
+            <span>プロフィール</span>
+            <h2 id="hundred-profile-dialog-title">アカウント</h2>
           </div>
           <button
             className="hundred-profile-dialog__close"
             type="button"
             onClick={onClose}
-            aria-label="プロフィール設定を閉じる"
+            aria-label="アカウントを閉じる"
             autoFocus
           >
             ×
@@ -86,15 +86,15 @@ function HundredProfileDialog({
             {isMember ? 'Y' : 'G'}
           </span>
           <span className="hundred-profile-status__copy">
-            <strong>{isMember ? 'Yama' : 'Guest'}</strong>
-            <small>{isMember ? 'Signed in' : 'Guest session'}</small>
+            <strong>{isMember ? 'Yama' : 'ゲスト'}</strong>
+            <small>{isMember ? 'サインイン中' : 'ゲストとして利用中'}</small>
           </span>
         </section>
 
         <div className="hundred-profile-actions">
           {isMember ? (
             <button type="button" onClick={onSignOut}>
-              Sign out
+              サインアウト
             </button>
           ) : (
             <>
@@ -103,13 +103,13 @@ function HundredProfileDialog({
                 type="button"
                 onClick={onSignIn}
               >
-                Sign in
+                サインイン
               </button>
               <button type="button" onClick={onSignUp}>
-                Sign up
+                アカウントを作成
               </button>
               <button type="button" onClick={onSignOut}>
-                Sign out
+                ゲスト利用を終了
               </button>
             </>
           )}
@@ -120,7 +120,7 @@ function HundredProfileDialog({
             className="hundred-profile-dialog__section-title"
             id="hundred-linked-accounts-title"
           >
-            Linked accounts
+            連携アカウント
           </h3>
           {isMember ? (
             <div className="hundred-linked-account">
@@ -131,11 +131,11 @@ function HundredProfileDialog({
                 <strong>Google</strong>
                 <small>yama@example.com</small>
               </span>
-              <span className="hundred-linked-account__status">Connected</span>
+              <span className="hundred-linked-account__status">接続済み</span>
             </div>
           ) : (
             <p className="hundred-profile-dialog__empty">
-              ゲスト利用では連携アカウントは保存されません
+              ゲスト利用では連携アカウントは保存されません。
             </p>
           )}
         </section>
@@ -145,26 +145,26 @@ function HundredProfileDialog({
             className="hundred-profile-dialog__section-title"
             id="hundred-account-details-title"
           >
-            Account details
+            アカウント詳細
           </h3>
           {isMember ? (
             <dl className="hundred-account-details">
               <div>
-                <dt>Display name</dt>
+                <dt>表示名</dt>
                 <dd>Yama</dd>
               </div>
               <div>
-                <dt>Email</dt>
+                <dt>メールアドレス</dt>
                 <dd>yama@example.com</dd>
               </div>
               <div>
-                <dt>Member ID</dt>
+                <dt>メンバーID</dt>
                 <dd>hundred-001</dd>
               </div>
             </dl>
           ) : (
             <p className="hundred-profile-dialog__empty">
-              アカウント詳細を表示するにはSign inまたはSign upしてください
+              アカウント詳細を表示するには、サインインまたはアカウントを作成してください。
             </p>
           )}
         </section>

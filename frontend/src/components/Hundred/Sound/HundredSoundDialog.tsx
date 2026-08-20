@@ -75,8 +75,8 @@ function HundredSoundDialog({
       >
         <header className="hundred-sound-dialog__header">
           <div>
-            <span>Settings</span>
-            <h2 id="hundred-sound-dialog-title">Sound</h2>
+            <span>設定</span>
+            <h2 id="hundred-sound-dialog-title">サウンド</h2>
           </div>
           <button
             className="hundred-sound-dialog__close"
@@ -94,7 +94,7 @@ function HundredSoundDialog({
           aria-labelledby="hundred-sound-volume-title"
         >
           <div className="hundred-sound-volume__header">
-            <strong id="hundred-sound-volume-title">Effect volume</strong>
+            <strong id="hundred-sound-volume-title">効果音の音量</strong>
             <span>{Math.round(effectVolume * 100)}%</span>
           </div>
           <input
@@ -106,8 +106,9 @@ function HundredSoundDialog({
             value={effectVolume}
             onChange={handleVolumeChange}
             aria-label="効果音の音量"
+            aria-valuetext={`${Math.round(effectVolume * 100)}%`}
           />
-          <small>カーソル移動など、Hundred Homeの効果音へ反映されます</small>
+          <small>カーソル移動など、Hundredの効果音に反映されます</small>
         </section>
 
         <section aria-labelledby="hundred-cursor-sound-options-title">
@@ -115,7 +116,7 @@ function HundredSoundDialog({
             className="hundred-sound-dialog__section-title"
             id="hundred-cursor-sound-options-title"
           >
-            Cursor sound
+            カーソル音
           </h3>
           <div className="hundred-sound-dialog__options">
             {cursorSoundOptions.map((sound) => {
