@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom'
+import CreativeIAConnectionPage from './pages/CreativeIA/CreativeIAConnectionPage'
 import HundredHomePage from './pages/Hundred/HundredHomePage'
 
 /**
@@ -13,6 +14,7 @@ function App() {
     <Routes>
       <Route path="/" element={<HundredHomePage />} />
       <Route path="/auth/callback" element={<HundredHomePage />} />
+      <Route path="/creative-ia" element={<CreativeIAConnectionPage />} />
     </Routes>
   )
 }

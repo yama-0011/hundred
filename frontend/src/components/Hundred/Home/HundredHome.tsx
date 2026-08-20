@@ -53,7 +53,7 @@ import '../../../styles/Hundred/hundred-home-settings.css'
 
 // IDを文字列の自由入力にせず、扱えるカテゴリとAppを型で限定する。
 type CategoryId = 'profile' | 'apps' | 'store' | 'mail' | 'settings'
-type AppId = 'record-hub' | 'memo' | 'game'
+type AppId = 'record-hub' | 'creative-ia' | 'memo' | 'game'
 
 type Category = {
   id: CategoryId
@@ -82,6 +82,11 @@ const categories: Category[] = [
 
 const installedApps: InstalledApp[] = [
   { id: 'record-hub', name: 'Record Hub', detail: '記録をひとつの場所に' },
+  {
+    id: 'creative-ia',
+    name: 'Creative IA',
+    detail: 'ブログ記事をかんたんに作成',
+  },
   { id: 'memo', name: 'Memo', detail: '考えをすばやく残す' },
   { id: 'game', name: 'Game', detail: 'ひと息つく時間' },
 ]
@@ -256,6 +261,12 @@ function AppIcon({ id }: { id: AppId }) {
         <path d="M7 5.5h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Z" />
         <path d="M8.5 10h7M8.5 14h4.5" />
         <path d="M9 3.5v4M15 3.5v4" />
+      </>
+    ),
+    'creative-ia': (
+      <>
+        <path d="M6 18.5 7.2 14l8.9-8.9a1.9 1.9 0 0 1 2.7 2.7L9.9 16.7 6 18.5Z" />
+        <path d="m14.8 6.4 2.8 2.8M5 6.5h4M7 4.5v4M15.5 15v4M13.5 17h4" />
       </>
     ),
     memo: (
@@ -572,6 +583,19 @@ function HundredHome() {
     playCursorSound()
   }
 
+  /** Appを選択し、選択済みのCreative IAが押された場合は画面を開く。 */
+  const handleAppClick = (app: InstalledApp, index: number) => {
+    if (
+      app.id === 'creative-ia' &&
+      index === selectedAppIndexRef.current
+    ) {
+      navigate('/creative-ia')
+      return
+    }
+
+    selectApp(index)
+  }
+
   /** 現在のカテゴリから指定方向へ選択を移動する。 */
   const moveCategory = (direction: -1 | 1) => {
     selectCategory(selectedCategoryIndexRef.current + direction)
@@ -792,7 +816,7 @@ function HundredHome() {
                     type="button"
                     key={app.id}
                     aria-pressed={isSelected}
-                    onClick={() => selectApp(index)}
+                    onClick={() => handleAppClick(app, index)}
                   >
                     <span className="hundred-app-item__marker" aria-hidden="true" />
                     <span className="hundred-app-item__icon">
