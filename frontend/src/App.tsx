@@ -12,6 +12,7 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<HundredHomePage />} />
+      <Route path="/auth/callback" element={<HundredHomePage />} />
     </Routes>
   )
 }

@@ -7,15 +7,21 @@ import '../../../styles/Hundred/hundred-profile-dialog.css'
  * 責務:
  * - サインイン状態に応じた認証操作を表示する
  * - 連携アカウント一覧とアカウント詳細を表示する
- * - サインアップ、サインイン、サインアウト、閉じる操作を親へ通知する
+ * - Googleサインイン、サインアウト、閉じる操作を親へ通知する
  */
 
 export type HundredProfileSession = 'member' | 'guest'
 
+export type HundredMemberProfile = {
+  userId: string
+  displayName: string
+  email: string
+}
+
 type HundredProfileDialogProps = {
   session: HundredProfileSession
-  onSignUp: () => void
-  onSignIn: () => void
+  memberProfile: HundredMemberProfile | null
+  onGoogleSignIn: () => void
   onSignOut: () => void
   onClose: () => void
 }
@@ -26,12 +32,16 @@ type HundredProfileDialogProps = {
  */
 function HundredProfileDialog({
   session,
-  onSignUp,
-  onSignIn,
+  memberProfile,
+  onGoogleSignIn,
   onSignOut,
   onClose,
 }: HundredProfileDialogProps) {
   const isMember = session === 'member'
+  const displayName = memberProfile?.displayName ?? 'Hundredユーザー'
+  const email = memberProfile?.email ?? '未取得'
+  const memberId = memberProfile?.userId ?? '未取得'
+  const avatarLabel = displayName.trim().charAt(0).toUpperCase() || 'H'
 
   /**
    * 概要: ダイアログ外側のクリックを処理する。
@@ -83,10 +93,10 @@ function HundredProfileDialog({
 
         <section className="hundred-profile-status" aria-label="サインイン状態">
           <span className="hundred-profile-status__avatar" aria-hidden="true">
-            {isMember ? 'Y' : 'G'}
+            {isMember ? avatarLabel : 'G'}
           </span>
           <span className="hundred-profile-status__copy">
-            <strong>{isMember ? 'Yama' : 'ゲスト'}</strong>
+            <strong>{isMember ? displayName : 'ゲスト'}</strong>
             <small>{isMember ? 'サインイン中' : 'ゲストとして利用中'}</small>
           </span>
         </section>
@@ -101,12 +111,9 @@ function HundredProfileDialog({
               <button
                 className="hundred-profile-actions__primary"
                 type="button"
-                onClick={onSignIn}
+                onClick={onGoogleSignIn}
               >
-                サインイン
-              </button>
-              <button type="button" onClick={onSignUp}>
-                アカウントを作成
+                Googleアカウントで続ける
               </button>
               <button type="button" onClick={onSignOut}>
                 ゲスト利用を終了
@@ -129,7 +136,7 @@ function HundredProfileDialog({
               </span>
               <span className="hundred-linked-account__copy">
                 <strong>Google</strong>
-                <small>yama@example.com</small>
+                <small>{email}</small>
               </span>
               <span className="hundred-linked-account__status">接続済み</span>
             </div>
@@ -151,15 +158,15 @@ function HundredProfileDialog({
             <dl className="hundred-account-details">
               <div>
                 <dt>表示名</dt>
-                <dd>Yama</dd>
+                <dd>{displayName}</dd>
               </div>
               <div>
                 <dt>メールアドレス</dt>
-                <dd>yama@example.com</dd>
+                <dd>{email}</dd>
               </div>
               <div>
                 <dt>メンバーID</dt>
-                <dd>hundred-001</dd>
+                <dd>{memberId}</dd>
               </div>
             </dl>
           ) : (

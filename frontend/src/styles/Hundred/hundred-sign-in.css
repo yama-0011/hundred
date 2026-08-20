@@ -86,6 +86,15 @@
   transform: translateY(0);
 }
 
+.hundred-sign-in__actions button:disabled {
+  border-color: var(--hundred-color-border);
+  color: var(--hundred-color-text-muted);
+  background: color-mix(in srgb, var(--hundred-color-surface) 72%, transparent);
+  cursor: not-allowed;
+  opacity: 0.66;
+  transform: none;
+}
+
 .hundred-sign-in__actions button strong {
   font-size: var(--font-size-sm);
 }
@@ -113,6 +122,37 @@
   text-align: center;
 }
 
+.hundred-sign-in__error {
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, #d94040 42%, transparent);
+  border-radius: 14px;
+  color: #9f2222;
+  background: color-mix(in srgb, #ffe7e7 88%, transparent);
+  font-size: var(--font-size-2xs);
+  line-height: 1.6;
+}
+
+.hundred-sign-in__checking {
+  margin-top: var(--space-6);
+  min-height: 104px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--space-3);
+  color: var(--hundred-color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.hundred-sign-in__checking span {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--hundred-color-border);
+  border-top-color: var(--hundred-color-accent);
+  border-radius: 50%;
+  animation: hundred-sign-in-spin 800ms linear infinite;
+}
+
 .hundred-sign-in__actions button:focus-visible {
   outline: 2px solid var(--hundred-color-accent);
   outline-offset: 3px;
@@ -130,6 +170,12 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes hundred-sign-in-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -153,6 +199,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .hundred-sign-in__panel {
+    animation: none;
+  }
+
+  .hundred-sign-in__checking span {
     animation: none;
   }
 

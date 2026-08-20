@@ -1,4 +1,13 @@
 import {
+  fetchAuthSession,
+  fetchUserAttributes,
+  getCurrentUser,
+  signInWithRedirect,
+  signOut,
+} from 'aws-amplify/auth'
+import { Hub } from 'aws-amplify/utils'
+import { useNavigate } from 'react-router-dom'
+import {
   useEffect,
   useRef,
   useState,
@@ -8,6 +17,7 @@ import {
 import HundredSignInScreen from '../Auth/HundredSignInScreen'
 import HundredNotificationDialog from '../Notification/HundredNotificationDialog'
 import HundredProfileDialog, {
+  type HundredMemberProfile,
   type HundredProfileSession,
 } from '../Profile/HundredProfileDialog'
 import HundredSoundDialog from '../Sound/HundredSoundDialog'
@@ -82,6 +92,22 @@ const wallpaperStorageKey = 'hundred-wallpaper'
 const cursorSoundStorageKey = 'hundred-cursor-sound'
 const effectVolumeStorageKey = 'hundred-effect-volume'
 const notificationStorageKey = 'hundred-notification-settings'
+
+/** Cognitoやブラウザから返された認証エラーを日本語の案内へ変換する。 */
+function getAuthErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    if (error.name === 'UserCancelledException') return null
+    if (error.name === 'NotAuthorizedException') {
+      return 'サインインの有効期限が切れました。もう一度お試しください。'
+    }
+
+    if (import.meta.env.DEV && error.message.trim()) {
+      return `Googleでサインインできませんでした。（開発情報: ${error.name}: ${error.message}）`
+    }
+  }
+
+  return 'Googleでサインインできませんでした。通信状態を確認して、もう一度お試しください。'
+}
 
 /** 保存済みの壁紙を読み込み、未保存または不正な値の場合はMistを返す。 */
 function getInitialWallpaper(): WallpaperId {
@@ -257,6 +283,8 @@ function AppIcon({ id }: { id: AppId }) {
 
 /** Hundred Homeの表示、選択状態、ユーザー操作をまとめて管理する。 */
 function HundredHome() {
+  const navigate = useNavigate()
+
   // 配列の何番目を選択しているかをstateとして保持する。
   const [selectedCategoryIndex, setSelectedCategoryIndex] =
     useState(initialCategoryIndex)
@@ -270,6 +298,11 @@ function HundredHome() {
     useState(getInitialNotificationSettings)
   const [profileSession, setProfileSession] =
     useState<HundredProfileSession | null>(null)
+  const [memberProfile, setMemberProfile] =
+    useState<HundredMemberProfile | null>(null)
+  const [isAuthChecking, setIsAuthChecking] = useState(true)
+  const [isSigningIn, setIsSigningIn] = useState(false)
+  const [authError, setAuthError] = useState<string | null>(null)
   const [isWallpaperDialogOpen, setIsWallpaperDialogOpen] = useState(false)
   const [isSoundDialogOpen, setIsSoundDialogOpen] = useState(false)
   const [isNotificationDialogOpen, setIsNotificationDialogOpen] = useState(false)
@@ -289,6 +322,118 @@ function HundredHome() {
   const enabledNotificationAppCount = installedApps.filter(
     (app) => notificationSettings.apps[app.id],
   ).length
+  const memberDisplayName = memberProfile?.displayName ?? 'Hundredユーザー'
+  const memberAvatarLabel =
+    memberDisplayName.trim().charAt(0).toUpperCase() || 'H'
+
+  useEffect(() => {
+    let isActive = true
+
+    /** 保存済みCognitoセッションを確認し、実ユーザー情報を画面へ反映する。 */
+    const syncAuthSession = async () => {
+      try {
+        const user = await getCurrentUser()
+
+        if (!isActive) return
+
+        // プロフィール属性の取得に失敗しても、成立済みの認証セッションは維持する。
+        setMemberProfile({
+          userId: user.userId,
+          displayName: user.username,
+          email: 'メールアドレス未取得',
+        })
+        setProfileSession('member')
+        setAuthError(null)
+
+        try {
+          const authSession = await fetchAuthSession()
+          const claims = authSession.tokens?.idToken?.payload
+          const tokenName =
+            typeof claims?.name === 'string' ? claims.name.trim() : ''
+          const tokenEmail =
+            typeof claims?.email === 'string' ? claims.email : ''
+
+          if (!isActive) return
+
+          setMemberProfile({
+            userId: user.userId,
+            displayName: tokenName || user.username,
+            email: tokenEmail || 'メールアドレス未取得',
+          })
+        } catch {
+          // IDトークンを参照できない場合は、Cognito内部名の仮表示を維持する。
+        }
+
+        try {
+          const attributes = await fetchUserAttributes()
+
+          if (!isActive) return
+
+          setMemberProfile({
+            userId: user.userId,
+            displayName: attributes.name?.trim() || user.username,
+            email: attributes.email ?? 'メールアドレス未取得',
+          })
+        } catch {
+          // 認証済みであれば、属性は未取得表示のままHomeを利用できるようにする。
+        }
+
+        if (window.location.pathname === '/auth/callback') {
+          navigate('/', { replace: true })
+        }
+      } catch {
+        if (!isActive) return
+        setMemberProfile(null)
+        setProfileSession(null)
+      } finally {
+        if (isActive) {
+          setIsAuthChecking(false)
+          setIsSigningIn(false)
+        }
+      }
+    }
+
+    const cancelAuthListener = Hub.listen('auth', ({ payload }) => {
+      if (
+        payload.event === 'signedIn' ||
+        payload.event === 'signInWithRedirect' ||
+        payload.event === 'tokenRefresh'
+      ) {
+        void syncAuthSession()
+        return
+      }
+
+      if (payload.event === 'signedOut') {
+        setMemberProfile(null)
+        setProfileSession(null)
+        setIsSigningIn(false)
+        return
+      }
+
+      if (payload.event === 'signInWithRedirect_failure') {
+        setAuthError(getAuthErrorMessage(payload.data.error))
+        setIsAuthChecking(false)
+        setIsSigningIn(false)
+      }
+    })
+
+    void syncAuthSession()
+
+    // OAuthリスナーはReactより先に動き始めるため、開発時のStrictModeを含め、
+    // コールバック完了イベントとuseEffectの購読がすれ違った場合も再同期する。
+    const callbackRetryTimer =
+      window.location.pathname === '/auth/callback'
+        ? window.setTimeout(() => void syncAuthSession(), 750)
+        : null
+
+    return () => {
+      isActive = false
+      cancelAuthListener()
+      if (callbackRetryTimer !== null) {
+        window.clearTimeout(callbackRetryTimer)
+      }
+    }
+  }, [navigate])
 
   /** カーソル音の再生機能を必要になった時だけ作成して返す。 */
   const getCursorSoundPlayer = () => {
@@ -370,27 +515,40 @@ function HundredHome() {
     })
   }
 
-  /** モックユーザーを新規登録済みとして扱い、サインイン表示へ切り替える。 */
-  const handleSignUp = () => {
+  /** Cognitoを経由してGoogleのサインイン画面へ移動する。 */
+  const handleGoogleSignIn = async () => {
     getCursorSoundPlayer().prepare()
-    setProfileSession('member')
-  }
+    setAuthError(null)
+    setIsSigningIn(true)
 
-  /** モックユーザーでサインインした状態へ切り替える。 */
-  const handleSignIn = () => {
-    getCursorSoundPlayer().prepare()
-    setProfileSession('member')
+    try {
+      await signInWithRedirect({ provider: 'Google' })
+    } catch (error) {
+      setAuthError(getAuthErrorMessage(error))
+      setIsSigningIn(false)
+    }
   }
 
   /** ゲストとしてサインインし、アカウントを作らずHomeへ移動する。 */
   const handleGuestSignIn = () => {
     getCursorSoundPlayer().prepare()
+    setAuthError(null)
     setProfileSession('guest')
   }
 
   /** 現在の会員・ゲストセッションを終了し、サインイン画面へ戻す。 */
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     setIsProfileDialogOpen(false)
+
+    if (profileSession === 'member') {
+      try {
+        await signOut()
+      } catch (error) {
+        setAuthError(getAuthErrorMessage(error))
+      }
+    }
+
+    setMemberProfile(null)
     setProfileSession(null)
   }
 
@@ -469,8 +627,10 @@ function HundredHome() {
     return (
       <HundredSignInScreen
         wallpaper={selectedWallpaper}
-        onSignIn={handleSignIn}
-        onSignUp={handleSignUp}
+        isCheckingSession={isAuthChecking}
+        isSigningIn={isSigningIn}
+        authError={authError}
+        onGoogleSignIn={() => void handleGoogleSignIn()}
         onGuestSignIn={handleGuestSignIn}
       />
     )
@@ -599,10 +759,12 @@ function HundredHome() {
                 onClick={() => setIsProfileDialogOpen(true)}
               >
                 <span className="hundred-profile-entry__avatar" aria-hidden="true">
-                  {profileSession === 'member' ? 'Y' : 'G'}
+                  {profileSession === 'member' ? memberAvatarLabel : 'G'}
                 </span>
                 <span className="hundred-profile-entry__copy">
-                  <strong>{profileSession === 'member' ? 'Yama' : 'ゲスト'}</strong>
+                  <strong>
+                    {profileSession === 'member' ? memberDisplayName : 'ゲスト'}
+                  </strong>
                   <small>
                     {profileSession === 'member'
                       ? 'サインイン中'
@@ -760,9 +922,9 @@ function HundredHome() {
       {isProfileDialogOpen && (
         <HundredProfileDialog
           session={profileSession}
-          onSignUp={handleSignUp}
-          onSignIn={handleSignIn}
-          onSignOut={handleSignOut}
+          memberProfile={memberProfile}
+          onGoogleSignIn={() => void handleGoogleSignIn()}
+          onSignOut={() => void handleSignOut()}
           onClose={() => setIsProfileDialogOpen(false)}
         />
       )}

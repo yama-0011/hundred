@@ -11,15 +11,18 @@ import '../../../styles/Hundred/hundred-sign-in.css'
  * Hundred Homeへ入る前のサインイン選択画面を表示する。
  *
  * 責務:
- * - サインイン、サインアップ、ゲスト利用の入口を表示する
+ * - Googleサインイン、メール認証、ゲスト利用の入口を表示する
+ * - セッション確認中と認証失敗を利用者へ通知する
  * - 選択された認証方法を親へ通知する
  * - 選択中の壁紙とテーマを認証画面にも適用する
  */
 
 type HundredSignInScreenProps = {
   wallpaper: WallpaperId
-  onSignIn: () => void
-  onSignUp: () => void
+  isCheckingSession: boolean
+  isSigningIn: boolean
+  authError: string | null
+  onGoogleSignIn: () => void
   onGuestSignIn: () => void
 }
 
@@ -29,8 +32,10 @@ type HundredSignInScreenProps = {
  */
 function HundredSignInScreen({
   wallpaper,
-  onSignIn,
-  onSignUp,
+  isCheckingSession,
+  isSigningIn,
+  authError,
+  onGoogleSignIn,
   onGuestSignIn,
 }: HundredSignInScreenProps) {
   const wallpaperTheme = getWallpaperTheme(wallpaper)
@@ -49,30 +54,62 @@ function HundredSignInScreen({
       <section className="hundred-sign-in__panel" aria-labelledby="hundred-sign-in-title">
         <header className="hundred-sign-in__header">
           <h1 id="hundred-sign-in-title">Hundred</h1>
-          <p>利用方法を選択してHundredを開始します</p>
+          <p>
+            {isCheckingSession
+              ? 'サインイン状態を確認しています'
+              : '利用方法を選択してHundredを開始します'}
+          </p>
         </header>
 
-        <div className="hundred-sign-in__actions">
-          <button
-            className="hundred-sign-in__primary"
-            type="button"
-            onClick={onSignIn}
+        {isCheckingSession ? (
+          <div
+            className="hundred-sign-in__checking"
+            role="status"
+            aria-live="polite"
           >
-            <strong>サインイン</strong>
-            <small>既存のHundredアカウントを使用</small>
-          </button>
-          <button type="button" onClick={onSignUp}>
-            <strong>アカウントを作成</strong>
-            <small>Hundredを初めて利用する方</small>
-          </button>
-          <button type="button" onClick={onGuestSignIn}>
-            <strong>ゲストとして続ける</strong>
-            <small>アカウントを作成せずに試す</small>
-          </button>
-        </div>
+            <span aria-hidden="true" />
+            <strong>確認中</strong>
+          </div>
+        ) : (
+          <>
+            <div className="hundred-sign-in__actions">
+              <button
+                className="hundred-sign-in__primary"
+                type="button"
+                onClick={onGoogleSignIn}
+                disabled={isSigningIn}
+              >
+                <strong>
+                  {isSigningIn
+                    ? 'Googleへ移動しています'
+                    : 'Googleアカウントで続ける'}
+                </strong>
+                <small>Googleで本人確認してHundredを利用</small>
+              </button>
+              <button type="button" disabled>
+                <strong>メールアドレスで続ける</strong>
+                <small>メール認証は現在準備中です</small>
+              </button>
+              <button
+                type="button"
+                onClick={onGuestSignIn}
+                disabled={isSigningIn}
+              >
+                <strong>ゲストとして続ける</strong>
+                <small>アカウントを作成せずに試す</small>
+              </button>
+            </div>
+
+            {authError && (
+              <p className="hundred-sign-in__error" role="alert">
+                {authError}
+              </p>
+            )}
+          </>
+        )}
 
         <p className="hundred-sign-in__notice">
-          現在は画面確認用です。認証やデータ保存は行われません。
+          Googleから取得する情報は、名前、メールアドレス、プロフィール画像です。
         </p>
       </section>
     </main>
