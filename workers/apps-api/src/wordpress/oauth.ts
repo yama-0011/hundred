@@ -32,6 +32,33 @@ interface WordPressTokenResponse {
   token_type?: unknown;
 }
 
+interface WordPressErrorResponse {
+  error?: unknown;
+}
+
+class WordPressOAuthError extends Error {
+  constructor(
+    readonly code: string,
+    readonly providerStatus?: number,
+    readonly providerError?: string,
+  ) {
+    super(code);
+    this.name = "WordPressOAuthError";
+  }
+}
+
+function getOAuthErrorLog(error: unknown): Record<string, unknown> {
+  if (error instanceof WordPressOAuthError) {
+    return {
+      code: error.code,
+      providerStatus: error.providerStatus,
+      providerError: error.providerError,
+    };
+  }
+
+  return { code: "UNEXPECTED_OAUTH_ERROR" };
+}
+
 function normalizeReturnTo(value: string | null): string {
   if (!value) {
     return "/";
@@ -157,7 +184,23 @@ async function exchangeAuthorizationCode(
   });
 
   if (!response.ok) {
-    throw new Error("WORDPRESS_TOKEN_EXCHANGE_FAILED");
+    let providerError: string | undefined;
+
+    try {
+      const errorResponse = (await response.json()) as WordPressErrorResponse;
+      providerError =
+        typeof errorResponse.error === "string"
+          ? errorResponse.error
+          : undefined;
+    } catch {
+      // 外部レスポンス本文は記録せず、HTTPステータスだけを診断に使用する。
+    }
+
+    throw new WordPressOAuthError(
+      "WORDPRESS_TOKEN_EXCHANGE_FAILED",
+      response.status,
+      providerError,
+    );
   }
 
   const tokenResponse = (await response.json()) as WordPressTokenResponse;
@@ -168,7 +211,7 @@ async function exchangeAuthorizationCode(
     (typeof tokenResponse.token_type === "string" &&
       tokenResponse.token_type.toLowerCase() !== "bearer")
   ) {
-    throw new Error("WORDPRESS_TOKEN_RESPONSE_INVALID");
+    throw new WordPressOAuthError("WORDPRESS_TOKEN_RESPONSE_INVALID");
   }
 
   return {
@@ -248,8 +291,9 @@ export async function handleWordPressOAuthCallback(
       .run();
 
     return createFrontendRedirect(env, stateRow.return_to, "connected");
-  } catch {
-    // 認可コード、Access Token、Secret、外部APIの生エラーは返却・記録しない。
+  } catch (error) {
+    // 認可コード、Access Token、Secret、外部APIの本文は記録しない。
+    console.error("WORDPRESS_OAUTH_CALLBACK_FAILED", getOAuthErrorLog(error));
     return createFrontendRedirect(env, stateRow.return_to, "failed");
   }
 }
