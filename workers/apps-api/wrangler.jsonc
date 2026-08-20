@@ -7,5 +7,12 @@
   "vars": {
     "APP_ORIGIN": "https://yamahit.com",
     "WORDPRESS_CLIENT_ID": "146245"
-  }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "hundred-apps-prod",
+      "database_id": "cecee6f9-06fa-4c36-9e34-a9b1d8a17130"
+    }
+  ]
 }

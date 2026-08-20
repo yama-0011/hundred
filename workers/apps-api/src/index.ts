@@ -1,6 +1,7 @@
 interface Env {
   APP_ORIGIN: string;
   WORDPRESS_CLIENT_ID: string;
+  DB: D1Database;
 }
 
 const jsonHeaders = {
