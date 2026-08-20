@@ -22,3 +22,11 @@ Hundred上の各アプリで共用するCloudflare Workerです。最初の対�
 - `WORDPRESS_CLIENT_SECRET`
 - `OAUTH_STATE_SECRET`
 - `TOKEN_ENCRYPTION_KEY`
+
+## D1マイグレーション
+
+本番D1へ未適用のマイグレーションを反映します。
+
+```bash
+npx wrangler d1 migrations apply hundred-apps-prod --remote
+```
