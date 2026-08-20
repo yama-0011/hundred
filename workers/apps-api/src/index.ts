@@ -31,7 +31,8 @@ function getCorsHeaders(request: Request, env: Env): HeadersInit {
 
   return {
     "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Headers": "Authorization, Content-Type",
+    "Access-Control-Allow-Headers":
+      "Authorization, Content-Type, Idempotency-Key",
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     Vary: "Origin",
   };
