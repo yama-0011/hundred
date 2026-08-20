@@ -30,7 +30,7 @@ Hundred上の各アプリで共用するCloudflare Workerです。Creative IAの
 - `TOKEN_ENCRYPTION_KEY`
 - `GEMINI_API_KEY`
 
-Geminiのモデル名は公開設定`GEMINI_MODEL`で切り替えます。初期値は安定版の`gemini-2.5-flash-lite`です。記事生成は利用者ごとに1分3回・UTC日次20回までとし、D1には入力文や生成本文ではなく利用時刻と成否だけを記録します。
+Geminiのモデル名は公開設定`GEMINI_MODEL`で切り替えます。初期値は低コスト安定版の`gemini-3.5-flash-lite`です。記事生成は利用者ごとに1分3回・UTC日次20回までとし、D1には入力文や生成本文ではなく利用時刻と成否だけを記録します。
 
 ## D1マイグレーション
 

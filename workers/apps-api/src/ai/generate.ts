@@ -101,7 +101,7 @@ export async function generateArticle(
 
   await enforceRateLimit(env, ownerUserId);
 
-  const model = env.GEMINI_MODEL?.trim() || "gemini-2.5-flash-lite";
+  const model = env.GEMINI_MODEL?.trim() || "gemini-3.5-flash-lite";
   const requestId = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO generation_requests (id, owner_user_id, model, status)

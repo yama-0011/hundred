@@ -10,7 +10,7 @@
     "WORDPRESS_REDIRECT_URI": "https://hundred-apps-api.oneonewapig.workers.dev/api/creative-ia/wordpress/oauth/callback",
     "COGNITO_USER_POOL_ID": "ap-northeast-1_CqkNv5buN",
     "COGNITO_USER_POOL_CLIENT_ID": "6lp8qk50nnuf5n4a8u71dl9idi",
-    "GEMINI_MODEL": "gemini-2.5-flash-lite"
+    "GEMINI_MODEL": "gemini-3.5-flash-lite"
   },
   "d1_databases": [
     {

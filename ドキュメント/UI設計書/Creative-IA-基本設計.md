@@ -193,7 +193,7 @@ Gemini Developer API
 
 GoogleアカウントによるHundredへのサインインと、Gemini APIの利用権・料金は別に扱う。個人向けGeminiプランの契約をCreative IAのAPI利用へ自動適用できることを前提としない。
 
-Phase 1の初期モデルは、安定版かつ低コストの`gemini-2.5-flash-lite`とする。モデル名はWorkerの環境変数`GEMINI_MODEL`で切り替え可能にし、UIと記事保存処理を特定モデルへ依存させない。
+Phase 1の初期モデルは、安定版かつ低コストの`gemini-3.5-flash-lite`とする。モデル名はWorkerの環境変数`GEMINI_MODEL`で切り替え可能にし、UIと記事保存処理を特定モデルへ依存させない。新規Google Cloudプロジェクトでは旧2.5系モデルが404になる場合があるため、現行のFlash-Liteを使用する。
 
 ### 7.2 共通APIキーを採用する理由
 
