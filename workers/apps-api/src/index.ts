@@ -2,13 +2,15 @@ import {
   CognitoAuthenticationError,
   verifyCognitoAccessToken,
 } from "./auth/cognito";
+import {
+  createWordPressAuthorizationUrl,
+  handleWordPressOAuthCallback,
+  type WordPressOAuthEnv,
+} from "./wordpress/oauth";
 
-interface Env {
-  APP_ORIGIN: string;
-  WORDPRESS_CLIENT_ID: string;
+interface Env extends WordPressOAuthEnv {
   COGNITO_USER_POOL_ID: string;
   COGNITO_USER_POOL_CLIENT_ID: string;
-  DB: D1Database;
 }
 
 const localOrigins = new Set([
@@ -144,35 +146,42 @@ export default {
 
     if (
       request.method === "GET" &&
-      url.pathname === "/api/creative-ia/wordpress/oauth/callback"
+      url.pathname === "/api/creative-ia/wordpress/oauth/start"
     ) {
-      const oauthError = url.searchParams.get("error");
-      const authorizationCode = url.searchParams.get("code");
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        const authorizationUrl = await createWordPressAuthorizationUrl(
+          env,
+          ownerUserId,
+          url.searchParams.get("returnTo"),
+        );
 
-      if (oauthError) {
+        return json(request, env, { authorizationUrl });
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+
         return json(
           request,
           env,
-          { error: "WordPress.comの認証が完了しませんでした" },
-          400,
+          { error: "WordPress.comとの接続を開始できませんでした" },
+          500,
         );
       }
+    }
 
-      if (!authorizationCode) {
-        return json(request, env, {
-          status: "ready",
-          message: "OAuth callback endpoint is ready",
-        });
+    if (
+      request.method === "GET" &&
+      url.pathname === "/api/creative-ia/wordpress/oauth/callback"
+    ) {
+      try {
+        return await handleWordPressOAuthCallback(url, env);
+      } catch {
+        const redirectUrl = new URL(env.APP_ORIGIN);
+        redirectUrl.searchParams.set("wordpress", "failed");
+        return Response.redirect(redirectUrl.toString(), 303);
       }
-
-      // 次工程でstate検証と認可コードのトークン交換を追加する。
-      // 認可コードはログやレスポンスへ出力しない。
-      return json(
-        request,
-        env,
-        { error: "OAuth token exchange is not configured yet" },
-        501,
-      );
     }
 
     return json(request, env, { error: "Not found" }, 404);
