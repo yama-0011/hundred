@@ -315,6 +315,14 @@ Hundredからマネージドログインを開始する際は`lang=ja`を指定�
 
 ## 10. ローカル動作確認
 
+Hundredのサインイン選択画面は、Hundredアカウントを主体として次の順に表示する。
+
+1. メールアドレスで続ける
+2. Googleアカウントで続ける
+3. ゲストとして続ける
+
+メールアドレスを第一選択、Googleを簡便な外部認証、ゲストをアカウントなしの試用として位置付ける。
+
 ### 10.1 起動
 
 ```bash
@@ -356,7 +364,7 @@ http://localhost:5173
 
 検証時は確認メールの受信を確認できなかったため、管理者確認で認証フローの機能検証を継続した。これはメールアドレスの所有確認を代替するものではない。本番前にCognito標準メールまたはAmazon SESによる確認メールとパスワード再設定メールの到達性を別途検証する。
 
-メールユーザーは`name`属性を持たない場合がある。HundredはCognito内部ユーザー名やUUIDを表示名として使用せず、`name`が未設定の場合はメールアドレスのローカル部を暫定表示する。恒久的な表示名の登録・編集はプロフィール機能の拡張時に対応する。
+メールユーザーは`name`属性を持たない場合がある。HundredはCognito内部ユーザー名やUUIDを表示名として使用せず、`name`が未設定の場合はメールアドレスのローカル部を暫定表示する。メールユーザーはHundredのプロフィール画面から表示名を登録・編集でき、値はCognitoの標準`name`属性へ保存する。
 
 ### 10.4 セッション復元
 
@@ -433,6 +441,44 @@ Cognitoの標準ドメインを使用しているため正常な表示である�
 - Cognitoのカスタムドメイン
 - マネージドログインページのブランディング
 - Google Auth Platformのアプリ名、ロゴ、ホームページ、プライバシーポリシー
+
+### 11.6 認証URLをHundredのドメインにする
+
+当初使用していた`ap-northeast-1cqknv5bun.auth.ap-northeast-1.amazoncognito.com`は、Cognitoが発行した標準ドメインである。2026年8月22日から、ユーザー向けには`login.yamahit.com`をCognitoのカスタムドメインとして使用する。
+
+認証処理は引き続きCognitoが担当する。カスタムドメインはCognitoを隠す仕組みではなく、ブラウザに表示される認証URLとマネージドログインのブランドをHundredへ統一する設定である。
+
+設定順序:
+
+1. AWSの`us-east-1`リージョンで`login.yamahit.com`の公開ACM証明書を申請する
+2. Cloudflare DNSへACM検証用CNAMEを「DNSのみ」で追加し、証明書が`発行済み`になるまで待つ
+3. `ap-northeast-1`のCognito User Poolでカスタムドメイン`login.yamahit.com`を作成し、上記ACM証明書を選択する
+4. Cognitoが表示するCloudFrontディストリビューション名を控える
+5. Cloudflare DNSへ`login`のCNAMEを追加し、CloudFrontディストリビューションへ向ける。初期確認時は「DNSのみ」とする
+6. Google Auth Platformの承認済みリダイレクトURIへ`https://login.yamahit.com/oauth2/idpresponse`を追加する
+7. 既存のCognito標準ドメイン設定を残したまま、HundredのOAuthドメインを`login.yamahit.com`へ変更する
+8. ローカルと本番でGoogle・メールのサインイン、コールバック、サインアウトを確認する
+9. 問題がないことを確認してから旧設定の整理を検討する
+
+2026年8月22日に、`us-east-1`でのACM証明書発行、Cloudflare DNSへの検証用CNAMEとCloudFront向けCNAMEの登録、Cognitoカスタムドメインのアクティブ化、Google Auth Platformへの新しいリダイレクトURI追加を完了した。HundredのOAuth設定も`login.yamahit.com`へ切り替えた。移行確認中は旧Cognitoドメインと旧GoogleリダイレクトURIを削除しない。
+
+注意事項:
+
+- User Poolが東京リージョンでも、Cognitoカスタムドメイン用ACM証明書は`us-east-1`に作成する
+- User Poolの親ドメインがDNSで解決できる状態である必要がある
+- Cognitoのドメイン作成とDNS反映には時間がかかる場合がある
+- `https://yamahit.com/auth/callback`などHundredへ戻るコールバックURLは変更しない
+- Google側の新しいリダイレクトURIを登録する前にHundredのコードだけ変更しない
+
+### 11.7 表示名の扱い
+
+- メールユーザーはHundredのプロフィール画面で表示名を編集する
+- 表示名はCognitoの標準`name`属性へ保存し、パスワードや独自の秘密情報は扱わない
+- 未設定時はメールアドレスの`@`より前を暫定表示する
+- GoogleユーザーはGoogleから同期された`name`を表示する
+- プロフィールの入口とアカウント画面には、`Googleでサインイン中`または`メールアドレスでサインイン中`と認証方法を明示する
+- Googleからマッピングされた属性は再サインイン時に同期される可能性があるため、初期実装ではGoogleユーザーの表示名編集を提供しない
+- 将来、認証元と独立したニックネームが必要になった場合は、Cognito属性ではなくHundredのプロフィールデータとして保存する
 
 ---
 
@@ -512,6 +558,9 @@ Amazon Cognitoの料金は、利用プラン、月間アクティブユーザー
 - [Cognito User PoolでソーシャルIDプロバイダーを使用する](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-social-idp.html)
 - [Cognitoの属性マッピング](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-specifying-attribute-mapping.html)
 - [Cognito App Clientの設定](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-settings-client-apps.html)
+- [Cognito User Poolへカスタムドメインを追加する](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-add-custom-domain.html)
+- [Cognitoマネージドログインのブランディング](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-managed-login.html)
+- [Amplifyでユーザー属性を更新する](https://docs.amplify.aws/javascript/frontend/auth/manage-user-attributes/)
 - [Amazon Cognitoの料金](https://aws.amazon.com/cognito/pricing/)
 - [Cloudflare Turnstileのサーバー側検証](https://developers.cloudflare.com/turnstile/get-started/server-side-validation/)
 - [Cloudflare Workers Rate Limiting binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)

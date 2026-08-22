@@ -79,18 +79,6 @@ function HundredSignInScreen({
               <button
                 className="hundred-sign-in__primary"
                 type="button"
-                onClick={onGoogleSignIn}
-                disabled={isSigningIn}
-              >
-                <strong>
-                  {isSigningIn
-                    ? 'Googleへ移動しています'
-                    : 'Googleアカウントで続ける'}
-                </strong>
-                <small>Googleで本人確認してHundredを利用</small>
-              </button>
-              <button
-                type="button"
                 onClick={onEmailSignIn}
                 disabled={isSigningIn}
               >
@@ -99,7 +87,19 @@ function HundredSignInScreen({
                     ? 'メール認証へ移動しています'
                     : 'メールアドレスで続ける'}
                 </strong>
-                <small>サインイン、アカウント作成、パスワード再設定</small>
+                <small>Hundredアカウントでサインイン・新規登録</small>
+              </button>
+              <button
+                type="button"
+                onClick={onGoogleSignIn}
+                disabled={isSigningIn}
+              >
+                <strong>
+                  {signingInMethod === 'google'
+                    ? 'Googleへ移動しています'
+                    : 'Googleアカウントで続ける'}
+                </strong>
+                <small>Googleですばやくサインイン</small>
               </button>
               <button
                 type="button"

@@ -10,8 +10,7 @@ import 'aws-amplify/auth/enable-oauth-listener'
 const hundredCognitoConfig = {
   userPoolId: 'ap-northeast-1_CqkNv5buN',
   userPoolClientId: '6lp8qk50nnuf5n4a8u71dl9idi',
-  domain:
-    'ap-northeast-1cqknv5bun.auth.ap-northeast-1.amazoncognito.com',
+  domain: 'login.yamahit.com',
 } as const
 
 /** 現在の実行環境に対応する、Cognitoからの戻り先Originを返す。 */
@@ -49,4 +48,3 @@ export function configureHundredAuth() {
     },
   })
 }
-

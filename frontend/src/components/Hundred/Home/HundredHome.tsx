@@ -4,6 +4,7 @@ import {
   getCurrentUser,
   signInWithRedirect,
   signOut,
+  updateUserAttributes,
 } from 'aws-amplify/auth'
 import { Hub } from 'aws-amplify/utils'
 import { useNavigate } from 'react-router-dom'
@@ -326,6 +327,9 @@ function HundredHome() {
     'google' | 'email' | null
   >(null)
   const [authError, setAuthError] = useState<string | null>(null)
+  const [isUpdatingDisplayName, setIsUpdatingDisplayName] = useState(false)
+  const [displayNameError, setDisplayNameError] = useState<string | null>(null)
+  const [displayNameNotice, setDisplayNameNotice] = useState<string | null>(null)
   const [isWallpaperDialogOpen, setIsWallpaperDialogOpen] = useState(false)
   const [isSoundDialogOpen, setIsSoundDialogOpen] = useState(false)
   const [isNotificationDialogOpen, setIsNotificationDialogOpen] = useState(false)
@@ -346,6 +350,10 @@ function HundredHome() {
     (app) => notificationSettings.apps[app.id],
   ).length
   const memberDisplayName = memberProfile?.displayName ?? 'Hundredユーザー'
+  const memberSignInLabel =
+    memberProfile?.authProvider === 'google'
+      ? 'Googleでサインイン中'
+      : 'メールアドレスでサインイン中'
   const memberAvatarLabel =
     memberDisplayName.trim().charAt(0).toUpperCase() || 'H'
 
@@ -604,6 +612,49 @@ function HundredHome() {
     setProfileSession(null)
   }
 
+  /** メール利用者の表示名をCognitoのname属性へ保存する。 */
+  const handleDisplayNameChange = async (displayName: string) => {
+    const normalizedDisplayName = displayName.trim()
+
+    setDisplayNameError(null)
+    setDisplayNameNotice(null)
+
+    if (profileSession !== 'member' || memberProfile?.authProvider !== 'email') {
+      setDisplayNameError('このアカウントでは表示名を変更できません。')
+      return
+    }
+
+    if (!normalizedDisplayName) {
+      setDisplayNameError('表示名を入力してください。')
+      return
+    }
+
+    if (normalizedDisplayName.length > 50) {
+      setDisplayNameError('表示名は50文字以内で入力してください。')
+      return
+    }
+
+    setIsUpdatingDisplayName(true)
+
+    try {
+      await updateUserAttributes({
+        userAttributes: { name: normalizedDisplayName },
+      })
+      setMemberProfile((currentProfile) =>
+        currentProfile
+          ? { ...currentProfile, displayName: normalizedDisplayName }
+          : currentProfile,
+      )
+      setDisplayNameNotice('表示名を更新しました。')
+    } catch {
+      setDisplayNameError(
+        '表示名を更新できませんでした。通信状態を確認して、もう一度お試しください。',
+      )
+    } finally {
+      setIsUpdatingDisplayName(false)
+    }
+  }
+
   /** 指定位置のカテゴリを選択し、位置が変わった場合だけカーソル音を鳴らす。 */
   const selectCategory = (index: number) => {
     const nextIndex = Math.min(Math.max(index, 0), categories.length - 1)
@@ -833,7 +884,7 @@ function HundredHome() {
                   </strong>
                   <small>
                     {profileSession === 'member'
-                      ? 'サインイン中'
+                      ? memberSignInLabel
                       : 'ゲストとして利用中'}
                   </small>
                 </span>
@@ -989,10 +1040,18 @@ function HundredHome() {
         <HundredProfileDialog
           session={profileSession}
           memberProfile={memberProfile}
+          isUpdatingDisplayName={isUpdatingDisplayName}
+          displayNameError={displayNameError}
+          displayNameNotice={displayNameNotice}
           onGoogleSignIn={() => void handleGoogleSignIn()}
           onEmailSignIn={() => void handleEmailSignIn()}
+          onDisplayNameChange={handleDisplayNameChange}
           onSignOut={() => void handleSignOut()}
-          onClose={() => setIsProfileDialogOpen(false)}
+          onClose={() => {
+            setIsProfileDialogOpen(false)
+            setDisplayNameError(null)
+            setDisplayNameNotice(null)
+          }}
         />
       )}
     </main>

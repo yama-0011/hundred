@@ -1,3 +1,4 @@
+import { useState, type FormEvent } from 'react'
 import '../../../styles/Hundred/hundred-profile-dialog.css'
 
 /**
@@ -22,8 +23,12 @@ export type HundredMemberProfile = {
 type HundredProfileDialogProps = {
   session: HundredProfileSession
   memberProfile: HundredMemberProfile | null
+  isUpdatingDisplayName: boolean
+  displayNameError: string | null
+  displayNameNotice: string | null
   onGoogleSignIn: () => void
   onEmailSignIn: () => void
+  onDisplayNameChange: (displayName: string) => Promise<void>
   onSignOut: () => void
   onClose: () => void
 }
@@ -35,8 +40,12 @@ type HundredProfileDialogProps = {
 function HundredProfileDialog({
   session,
   memberProfile,
+  isUpdatingDisplayName,
+  displayNameError,
+  displayNameNotice,
   onGoogleSignIn,
   onEmailSignIn,
+  onDisplayNameChange,
   onSignOut,
   onClose,
 }: HundredProfileDialogProps) {
@@ -45,7 +54,22 @@ function HundredProfileDialog({
   const email = memberProfile?.email ?? '未取得'
   const memberId = memberProfile?.userId ?? '未取得'
   const authProvider = memberProfile?.authProvider ?? 'email'
+  const signInLabel =
+    authProvider === 'google'
+      ? 'Googleでサインイン中'
+      : 'メールアドレスでサインイン中'
   const avatarLabel = displayName.trim().charAt(0).toUpperCase() || 'H'
+  const [displayNameDraft, setDisplayNameDraft] = useState(displayName)
+
+  /** 入力した表示名をCognitoプロフィールへ保存する。 */
+  const handleDisplayNameSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault()
+    const normalizedDisplayName = displayNameDraft.trim()
+    await onDisplayNameChange(normalizedDisplayName)
+    setDisplayNameDraft(normalizedDisplayName)
+  }
 
   /**
    * 概要: ダイアログ外側のクリックを処理する。
@@ -101,7 +125,7 @@ function HundredProfileDialog({
           </span>
           <span className="hundred-profile-status__copy">
             <strong>{isMember ? displayName : 'ゲスト'}</strong>
-            <small>{isMember ? 'サインイン中' : 'ゲストとして利用中'}</small>
+            <small>{isMember ? signInLabel : 'ゲストとして利用中'}</small>
           </span>
         </section>
 
@@ -115,12 +139,12 @@ function HundredProfileDialog({
               <button
                 className="hundred-profile-actions__primary"
                 type="button"
-                onClick={onGoogleSignIn}
+                onClick={onEmailSignIn}
               >
-                Googleアカウントで続ける
-              </button>
-              <button type="button" onClick={onEmailSignIn}>
                 メールアドレスで続ける
+              </button>
+              <button type="button" onClick={onGoogleSignIn}>
+                Googleアカウントで続ける
               </button>
               <button type="button" onClick={onSignOut}>
                 ゲスト利用を終了
@@ -155,6 +179,61 @@ function HundredProfileDialog({
             </p>
           )}
         </section>
+
+        {isMember && authProvider === 'email' && (
+          <section aria-labelledby="hundred-display-name-title">
+            <h3
+              className="hundred-profile-dialog__section-title"
+              id="hundred-display-name-title"
+            >
+              表示名
+            </h3>
+            <form
+              className="hundred-display-name-form"
+              onSubmit={handleDisplayNameSubmit}
+            >
+              <label htmlFor="hundred-display-name-input">
+                Hundredで表示する名前
+              </label>
+              <div className="hundred-display-name-form__controls">
+                <input
+                  id="hundred-display-name-input"
+                  name="displayName"
+                  type="text"
+                  value={displayNameDraft}
+                  minLength={1}
+                  maxLength={50}
+                  autoComplete="name"
+                  disabled={isUpdatingDisplayName}
+                  onChange={(event) => setDisplayNameDraft(event.target.value)}
+                />
+                <button
+                  type="submit"
+                  disabled={
+                    isUpdatingDisplayName ||
+                    !displayNameDraft.trim() ||
+                    displayNameDraft.trim() === displayName
+                  }
+                >
+                  {isUpdatingDisplayName ? '保存中…' : '保存'}
+                </button>
+              </div>
+              {displayNameError && (
+                <p className="hundred-display-name-form__message" role="alert">
+                  {displayNameError}
+                </p>
+              )}
+              {displayNameNotice && (
+                <p
+                  className="hundred-display-name-form__message hundred-display-name-form__message--success"
+                  role="status"
+                >
+                  {displayNameNotice}
+                </p>
+              )}
+            </form>
+          </section>
+        )}
 
         <section aria-labelledby="hundred-account-details-title">
           <h3
