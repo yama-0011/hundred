@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
+  connectCreativeIAWordPressWithApplicationPassword,
   createCreativeIAWordPressDraft,
+  disconnectCreativeIAWordPress,
   generateCreativeIAArticle,
   getCreativeIAWordPressAuthorizationUrl,
   getCreativeIAWordPressStatus,
@@ -22,7 +24,7 @@ function getOAuthResultMessage(result: string | null) {
   return null
 }
 
-/** Creative IAのWordPress.com接続状態と接続操作を表示する。 */
+/** Creative IAのWordPress接続状態と接続操作を表示する。 */
 function CreativeIAConnectionPage() {
   const [searchParams] = useSearchParams()
   const [pageState, setPageState] = useState<PageState>('loading')
@@ -30,6 +32,15 @@ function CreativeIAConnectionPage() {
     useState<CreativeIAWordPressStatus | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(false)
+  const [siteUrl, setSiteUrl] = useState('')
+  const [wordpressUsername, setWordpressUsername] = useState('')
+  const [applicationPassword, setApplicationPassword] = useState('')
+  const [isConnectingApplicationPassword, setIsConnectingApplicationPassword] =
+    useState(false)
+  const [connectionFormError, setConnectionFormError] = useState<string | null>(
+    null,
+  )
+  const [isDisconnecting, setIsDisconnecting] = useState(false)
   const [topic, setTopic] = useState('')
   const [keyPoints, setKeyPoints] = useState('')
   const [audience, setAudience] = useState('')
@@ -50,7 +61,7 @@ function CreativeIAConnectionPage() {
     searchParams.get('wordpress'),
   )
 
-  /** Workerから現在のWordPress.com接続状態を読み込む。 */
+  /** Workerから現在のWordPress接続状態を読み込む。 */
   const loadConnection = useCallback(async () => {
     try {
       const status = await getCreativeIAWordPressStatus()
@@ -118,7 +129,63 @@ function CreativeIAConnectionPage() {
     void loadConnection()
   }
 
-  /** 利用者の明示操作で、入力内容をWordPress.comへdraft固定で保存する。 */
+  /** Application Passwordで認証確認し、Workerへ暗号化保存する。 */
+  const handleApplicationPasswordConnect = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault()
+    setIsConnectingApplicationPassword(true)
+    setConnectionFormError(null)
+
+    try {
+      const status = await connectCreativeIAWordPressWithApplicationPassword({
+        siteUrl,
+        username: wordpressUsername,
+        applicationPassword,
+      })
+      setConnection(status)
+      setApplicationPassword('')
+      setPageState('ready')
+    } catch (error) {
+      const code = error instanceof Error ? error.message : ''
+      setConnectionFormError(
+        code === 'AUTH_REQUIRED'
+          ? 'Hundredへサインインし直してからお試しください。'
+          : code === 'WORDPRESS_AUTH_FAILED'
+            ? 'WordPressユーザー名またはApplication Passwordを確認してください。'
+            : code === 'WORDPRESS_PERMISSION_DENIED'
+              ? 'このWordPressユーザーには記事を作成する権限がありません。'
+              : code === 'INVALID_INPUT'
+                ? 'HTTPSのサイトURLと入力内容を確認してください。'
+                : 'WordPressへ接続できませんでした。REST APIやセキュリティ設定を確認してください。',
+      )
+    } finally {
+      setIsConnectingApplicationPassword(false)
+    }
+  }
+
+  /** Workerに保存したWordPress認証情報を利用者の明示操作で削除する。 */
+  const handleDisconnect = async () => {
+    setIsDisconnecting(true)
+    setErrorMessage(null)
+
+    try {
+      await disconnectCreativeIAWordPress()
+      setConnection({
+        connected: false,
+        authType: null,
+        wordpressUsername: null,
+        selectedSite: null,
+      })
+      setDraftResult(null)
+    } catch {
+      setErrorMessage('WordPress接続を解除できませんでした。')
+    } finally {
+      setIsDisconnecting(false)
+    }
+  }
+
+  /** 利用者の明示操作で、入力内容をWordPressへdraft固定で保存する。 */
   const handleSaveTestDraft = async (
     event: React.FormEvent<HTMLFormElement>,
   ) => {
@@ -143,7 +210,7 @@ function CreativeIAConnectionPage() {
       setDraftError(
         error instanceof Error && error.message === 'AUTH_REQUIRED'
           ? 'Hundredへサインインし直してからお試しください。'
-          : 'WordPress.comへ下書きを保存できませんでした。入力内容は保持されています。',
+          : 'WordPressへ下書きを保存できませんでした。入力内容は保持されています。',
       )
     } finally {
       setIsSavingDraft(false)
@@ -192,7 +259,7 @@ function CreativeIAConnectionPage() {
     connection?.selectedSite?.name ||
     connection?.selectedSite?.url ||
     connection?.selectedSite?.id ||
-    'WordPress.comサイト'
+    'WordPressサイト'
 
   return (
     <main className="creative-ia-connection">
@@ -210,9 +277,9 @@ function CreativeIAConnectionPage() {
         aria-labelledby="creative-ia-connection-title"
       >
         <p className="creative-ia-connection__eyebrow">設定</p>
-        <h1 id="creative-ia-connection-title">WordPress.com連携</h1>
+        <h1 id="creative-ia-connection-title">WordPress連携</h1>
         <p className="creative-ia-connection__lead">
-          記事を下書きとして保存するWordPress.comサイトを接続します。
+          記事を下書きとして保存するWordPressサイトを接続します。
         </p>
 
         {oauthResultMessage && (
@@ -239,6 +306,87 @@ function CreativeIAConnectionPage() {
           </span>
         </div>
 
+        <details
+          className="creative-ia-connection__connection-method"
+          open={!connection?.connected}
+        >
+          <summary>
+            {connection?.connected
+              ? '別のWordPressへ接続'
+              : '独自ドメインWordPressへ接続'}
+          </summary>
+          <form
+            className="creative-ia-connection__credential-form"
+            onSubmit={(event) =>
+              void handleApplicationPasswordConnect(event)
+            }
+          >
+            <div>
+              <strong>Application Passwordを使用</strong>
+              <p>
+                通常のログインパスワードではなく、WordPressのプロフィール画面で発行したApplication Passwordを入力します。
+              </p>
+            </div>
+
+            <label>
+              <span>WordPressサイトURL</span>
+              <input
+                type="url"
+                inputMode="url"
+                value={siteUrl}
+                maxLength={500}
+                required
+                placeholder="https://example.com"
+                onChange={(event) => setSiteUrl(event.target.value)}
+              />
+            </label>
+
+            <label>
+              <span>WordPressユーザー名</span>
+              <input
+                type="text"
+                value={wordpressUsername}
+                maxLength={100}
+                required
+                autoComplete="username"
+                onChange={(event) => setWordpressUsername(event.target.value)}
+              />
+            </label>
+
+            <label>
+              <span>Application Password</span>
+              <input
+                type="password"
+                value={applicationPassword}
+                maxLength={255}
+                required
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(event) => setApplicationPassword(event.target.value)}
+              />
+            </label>
+
+            <p className="creative-ia-connection__privacy-note">
+              Workerで接続確認後に暗号化して保存します。画面への再表示、ログ出力、APIレスポンスへの返却は行いません。
+            </p>
+
+            {connectionFormError && (
+              <p className="creative-ia-connection__error" role="alert">
+                {connectionFormError}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={isConnectingApplicationPassword}
+            >
+              {isConnectingApplicationPassword
+                ? '接続を確認中'
+                : 'WordPressへ接続'}
+            </button>
+          </form>
+        </details>
+
         {connection?.connected && (
           <>
             <dl className="creative-ia-connection__site">
@@ -246,6 +394,20 @@ function CreativeIAConnectionPage() {
                 <dt>投稿先</dt>
                 <dd>{selectedSiteLabel}</dd>
               </div>
+              <div>
+                <dt>接続方式</dt>
+                <dd>
+                  {connection.authType === 'application_password'
+                    ? 'Application Password'
+                    : 'WordPress.com OAuth'}
+                </dd>
+              </div>
+              {connection.wordpressUsername && (
+                <div>
+                  <dt>WordPressユーザー</dt>
+                  <dd>{connection.wordpressUsername}</dd>
+                </div>
+              )}
               {connection.selectedSite?.id && (
                 <div>
                   <dt>サイトID</dt>
@@ -402,7 +564,7 @@ function CreativeIAConnectionPage() {
 
               {draftResult && (
                 <div className="creative-ia-connection__draft-result" role="status">
-                  <strong>WordPress.comへ下書きを保存しました。</strong>
+                  <strong>WordPressへ下書きを保存しました。</strong>
                   <span>Post ID: {draftResult.postId}</span>
                   {draftResult.postUrl && (
                     <a
@@ -410,14 +572,14 @@ function CreativeIAConnectionPage() {
                       target="_blank"
                       rel="noreferrer"
                     >
-                      WordPress.comで確認
+                      WordPressで確認
                     </a>
                   )}
                 </div>
               )}
 
               <button type="submit" disabled={isSavingDraft}>
-                {isSavingDraft ? '下書きを保存中' : 'WordPress.comへ下書きを保存'}
+                {isSavingDraft ? '下書きを保存中' : 'WordPressへ下書きを保存'}
               </button>
             </form>
             )}
@@ -442,6 +604,16 @@ function CreativeIAConnectionPage() {
                 ? 'WordPress.comへ再接続'
                 : 'WordPress.comと接続'}
           </button>
+          {connection?.connected && (
+            <button
+              className="creative-ia-connection__danger"
+              type="button"
+              onClick={() => void handleDisconnect()}
+              disabled={isDisconnecting}
+            >
+              {isDisconnecting ? '接続を解除中' : 'WordPress接続を解除'}
+            </button>
+          )}
           {pageState === 'error' && (
             <button
               className="creative-ia-connection__secondary"
@@ -456,6 +628,11 @@ function CreativeIAConnectionPage() {
         <p className="creative-ia-connection__footnote">
           Creative IAから保存する記事は、必ず下書きになります。
         </p>
+        {connection?.authType === 'application_password' && (
+          <p className="creative-ia-connection__footnote">
+            接続解除ではCreative IA側の保存情報を削除します。WordPress側のApplication Passwordは、WordPressのプロフィール画面から別途取り消せます。
+          </p>
+        )}
       </section>
     </main>
   )

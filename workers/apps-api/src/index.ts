@@ -16,6 +16,10 @@ import {
   createWordPressDraft,
   WordPressPostError,
 } from "./wordpress/posts";
+import {
+  connectWordPressWithApplicationPassword,
+  WordPressApplicationPasswordError,
+} from "./wordpress/application-password";
 
 interface Env extends WordPressOAuthEnv, GeminiEnv {
   COGNITO_USER_POOL_ID: string;
@@ -88,19 +92,38 @@ async function handleWordPressStatus(
     .run();
 
   const connection = await env.DB.prepare(
-    `SELECT selected_site_id, selected_site_url, selected_site_name
-       FROM wordpress_connections
-      WHERE owner_user_id = ?1`,
+    `SELECT
+       'wordpress_com' AS auth_type,
+       selected_site_id,
+       selected_site_url,
+       selected_site_name,
+       wordpress_username
+     FROM wordpress_connections
+     WHERE owner_user_id = ?1
+     UNION ALL
+     SELECT
+       'application_password' AS auth_type,
+       NULL AS selected_site_id,
+       site_url AS selected_site_url,
+       NULL AS selected_site_name,
+       wordpress_username
+     FROM wordpress_application_password_connections
+     WHERE owner_user_id = ?1
+     LIMIT 1`,
   )
     .bind(ownerUserId)
     .first<{
       selected_site_id: string | null;
       selected_site_url: string | null;
       selected_site_name: string | null;
+      auth_type: "wordpress_com" | "application_password";
+      wordpress_username: string | null;
     }>();
 
   return json(request, env, {
     connected: connection !== null,
+    authType: connection?.auth_type ?? null,
+    wordpressUsername: connection?.wordpress_username ?? null,
     selectedSite: connection
       ? {
           id: connection.selected_site_id,
@@ -151,6 +174,83 @@ export default {
           { error: "接続状態を取得できませんでした" },
           500,
         );
+      }
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/creative-ia/wordpress/application-password"
+    ) {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        const result = await connectWordPressWithApplicationPassword(
+          request,
+          env,
+          ownerUserId,
+        );
+        return json(request, env, result, 201);
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+
+        if (error instanceof WordPressApplicationPasswordError) {
+          if (
+            error.code === "INVALID_INPUT" ||
+            error.code === "UNSAFE_SITE_URL"
+          ) {
+            return json(request, env, { error: "入力内容を確認してください" }, 400);
+          }
+
+          if (error.code === "AUTHENTICATION_FAILED") {
+            return json(
+              request,
+              env,
+              { error: "WordPressの認証情報を確認してください" },
+              422,
+            );
+          }
+
+          if (error.code === "INSUFFICIENT_PERMISSION") {
+            return json(
+              request,
+              env,
+              { error: "このWordPressユーザーには記事作成権限がありません" },
+              403,
+            );
+          }
+        }
+
+        return json(
+          request,
+          env,
+          { error: "WordPressへ接続できませんでした" },
+          502,
+        );
+      }
+    }
+
+    if (
+      request.method === "DELETE" &&
+      url.pathname === "/api/creative-ia/wordpress/connection"
+    ) {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        await env.DB.batch([
+          env.DB.prepare(
+            "DELETE FROM wordpress_connections WHERE owner_user_id = ?1",
+          ).bind(ownerUserId),
+          env.DB.prepare(
+            "DELETE FROM wordpress_application_password_connections WHERE owner_user_id = ?1",
+          ).bind(ownerUserId),
+        ]);
+        return json(request, env, { disconnected: true });
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+
+        return json(request, env, { error: "接続を解除できませんでした" }, 500);
       }
     }
 
@@ -254,7 +354,7 @@ export default {
           }
 
           if (error.code === "WORDPRESS_NOT_CONNECTED") {
-            return json(request, env, { error: "WordPress.comとの接続が必要です" }, 409);
+            return json(request, env, { error: "WordPressとの接続が必要です" }, 409);
           }
 
           if (
@@ -268,7 +368,7 @@ export default {
         return json(
           request,
           env,
-          { error: "WordPress.comへ下書きを保存できませんでした" },
+          { error: "WordPressへ下書きを保存できませんでした" },
           502,
         );
       }

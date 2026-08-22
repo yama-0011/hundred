@@ -1,4 +1,5 @@
-import { decryptAccessToken } from "../security/crypto";
+import { decryptCredential } from "../security/crypto";
+import { createWordPressBasicAuthorization } from "./application-password";
 import type { WordPressOAuthEnv } from "./oauth";
 
 const wordpressApiOrigin = "https://public-api.wordpress.com";
@@ -8,14 +9,19 @@ const maxContentLength = 20_000;
 const idempotencyKeyPattern = /^[A-Za-z0-9_-]{16,100}$/u;
 
 interface WordPressConnectionRow {
+  auth_type: "wordpress_com" | "application_password";
   access_token_ciphertext: string;
   access_token_iv: string;
   selected_site_id: string | null;
+  site_url: string | null;
+  wordpress_username: string | null;
 }
 
 interface WordPressPostResponse {
   ID?: unknown;
   URL?: unknown;
+  id?: unknown;
+  link?: unknown;
   status?: unknown;
 }
 
@@ -137,14 +143,36 @@ export async function createWordPressDraft(
   }
 
   const connection = await env.DB.prepare(
-    `SELECT access_token_ciphertext, access_token_iv, selected_site_id
-       FROM wordpress_connections
-      WHERE owner_user_id = ?1`,
+    `SELECT
+       'wordpress_com' AS auth_type,
+       access_token_ciphertext,
+       access_token_iv,
+       selected_site_id,
+       NULL AS site_url,
+       NULL AS wordpress_username
+     FROM wordpress_connections
+     WHERE owner_user_id = ?1
+     UNION ALL
+     SELECT
+       'application_password' AS auth_type,
+       application_password_ciphertext AS access_token_ciphertext,
+       application_password_iv AS access_token_iv,
+       NULL AS selected_site_id,
+       site_url,
+       wordpress_username
+     FROM wordpress_application_password_connections
+     WHERE owner_user_id = ?1
+     LIMIT 1`,
   )
     .bind(ownerUserId)
     .first<WordPressConnectionRow>();
 
-  if (!connection?.selected_site_id) {
+  if (
+    !connection ||
+    (connection.auth_type === "wordpress_com" && !connection.selected_site_id) ||
+    (connection.auth_type === "application_password" &&
+      (!connection.site_url || !connection.wordpress_username))
+  ) {
     throw new WordPressPostError("WORDPRESS_NOT_CONNECTED");
   }
 
@@ -155,7 +183,12 @@ export async function createWordPressDraft(
      ) VALUES (?1, ?2, ?3, 'pending', ?4)
      ON CONFLICT(owner_user_id, request_key) DO NOTHING`,
   )
-    .bind(ownerUserId, requestKey, requestHash, connection.selected_site_id)
+    .bind(
+      ownerUserId,
+      requestKey,
+      requestHash,
+      connection.selected_site_id ?? connection.site_url,
+    )
     .run();
 
   if (insertResult.meta.changes !== 1) {
@@ -197,19 +230,30 @@ export async function createWordPressDraft(
   }
 
   try {
-    const accessToken = await decryptAccessToken(
+    const credential = await decryptCredential(
       connection.access_token_ciphertext,
       connection.access_token_iv,
       env.TOKEN_ENCRYPTION_KEY,
     );
-    const endpoint = new URL(
-      `/rest/v1/sites/${encodeURIComponent(connection.selected_site_id)}/posts/new`,
-      wordpressApiOrigin,
-    );
+    const isWordPressCom = connection.auth_type === "wordpress_com";
+    const endpoint = isWordPressCom
+      ? new URL(
+          `/rest/v1/sites/${encodeURIComponent(connection.selected_site_id ?? "")}/posts/new`,
+          wordpressApiOrigin,
+        )
+      : new URL(
+          `${new URL(connection.site_url ?? "").pathname.replace(/\/$/u, "")}/wp-json/wp/v2/posts`,
+          connection.site_url ?? undefined,
+        );
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: isWordPressCom
+          ? `Bearer ${credential}`
+          : createWordPressBasicAuthorization(
+              connection.wordpress_username ?? "",
+              credential,
+            ),
         "Content-Type": "application/json",
         Accept: "application/json",
       },
@@ -219,6 +263,7 @@ export async function createWordPressDraft(
         status: "draft",
       }),
       signal: AbortSignal.timeout(requestTimeoutMilliseconds),
+      redirect: "manual",
     });
 
     if (!response.ok) {
@@ -242,14 +287,16 @@ export async function createWordPressDraft(
     const post = (await response.json()) as WordPressPostResponse;
 
     if (
-      (typeof post.ID !== "string" && typeof post.ID !== "number") ||
+      (typeof (isWordPressCom ? post.ID : post.id) !== "string" &&
+        typeof (isWordPressCom ? post.ID : post.id) !== "number") ||
       post.status !== "draft"
     ) {
       throw new WordPressPostError("WORDPRESS_REQUEST_FAILED");
     }
 
-    const postId = String(post.ID);
-    const postUrl = typeof post.URL === "string" ? post.URL : null;
+    const postId = String(isWordPressCom ? post.ID : post.id);
+    const rawPostUrl = isWordPressCom ? post.URL : post.link;
+    const postUrl = typeof rawPostUrl === "string" ? rawPostUrl : null;
 
     await env.DB.prepare(
       `UPDATE wordpress_post_requests

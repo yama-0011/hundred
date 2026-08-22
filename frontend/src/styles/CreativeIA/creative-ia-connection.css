@@ -135,6 +135,70 @@
   gap: 2px;
 }
 
+.creative-ia-connection__connection-method {
+  margin-top: var(--space-4);
+  border: 1px solid rgba(239, 248, 244, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.creative-ia-connection__connection-method > summary {
+  padding: var(--space-4);
+  color: #bfeedd;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.creative-ia-connection__credential-form {
+  display: grid;
+  gap: var(--space-4);
+  padding: 0 var(--space-4) var(--space-4);
+}
+
+.creative-ia-connection__credential-form > div > p {
+  margin: var(--space-2) 0 0;
+  color: #8d9995;
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+}
+
+.creative-ia-connection__credential-form label {
+  display: grid;
+  gap: var(--space-2);
+  color: #aeb8b5;
+  font-size: var(--font-size-sm);
+}
+
+.creative-ia-connection__credential-form input {
+  width: 100%;
+  border: 1px solid rgba(239, 248, 244, 0.14);
+  border-radius: 14px;
+  padding: 12px 14px;
+  color: #f4f7f3;
+  background: rgba(4, 10, 9, 0.3);
+  font: inherit;
+}
+
+.creative-ia-connection__credential-form input:focus {
+  border-color: #82e0c3;
+  outline: 2px solid rgba(130, 224, 195, 0.16);
+}
+
+.creative-ia-connection__credential-form > button {
+  min-height: 48px;
+  border: 0;
+  border-radius: 14px;
+  color: #10201b;
+  background: #82e0c3;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.creative-ia-connection__credential-form > button:disabled {
+  opacity: 0.48;
+  cursor: wait;
+}
+
 .creative-ia-connection__status small,
 .creative-ia-connection__site dt {
   color: #8d9995;
@@ -335,6 +399,17 @@
   color: #dbe4e1;
   border: 1px solid rgba(239, 248, 244, 0.14);
   background: rgba(255, 255, 255, 0.06);
+}
+
+.creative-ia-connection__actions .creative-ia-connection__danger {
+  color: #ffd5d1;
+  border: 1px solid rgba(231, 116, 106, 0.3);
+  background: rgba(201, 79, 68, 0.1);
+}
+
+.creative-ia-connection__actions .creative-ia-connection__danger:hover:not(:disabled),
+.creative-ia-connection__actions .creative-ia-connection__danger:focus-visible:not(:disabled) {
+  background: rgba(201, 79, 68, 0.18);
 }
 
 .creative-ia-connection__footnote {

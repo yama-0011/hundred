@@ -87,14 +87,14 @@ Gemini APIキー、WordPress認証情報、暗号化キー等はブラウザへ�
 
 ## 5. Phase 1の完成目標
 
-Phase 1では、WordPress.com OAuthによる利用者ごとの接続を実装する。開発時は1人のテスト利用者・1つの投稿先サイトで、次のフローを最後まで動かす。製品上は、各Hundred利用者が自分のWordPress.comアカウントを認可し、投稿先を1サイト選択できる構造とする。
+Phase 1では、WordPress.com OAuthと、独自ドメインWordPressのApplication Passwordによる利用者ごとの接続を実装する。開発時は1人のテスト利用者・1つの投稿先サイトで、次のフローを最後まで動かす。製品上は、各Hundred利用者が接続方式を選び、投稿先を1サイト登録できる構造とする。
 
 ```text
 Hundredへサインイン
   ↓
 Creative IAを開く
   ↓
-WordPress.comと接続し、投稿先サイトを選択
+WordPress.comまたは独自ドメインWordPressと接続
   ↓
 記事のテーマ・要点を入力
   ↓
@@ -111,6 +111,7 @@ Phase 1の対象機能:
 
 - Hundred認証の確認
 - WordPress.com OAuth接続
+- 独自ドメインWordPressのApplication Password接続
 - WordPress.comサイト一覧の取得
 - 投稿先サイトの選択と接続状態の確認
 - 記事テーマと要点の入力
@@ -159,7 +160,21 @@ Phase 1の対象媒体とする。
 - 公開済み記事の更新
 - SEOプラグインとの連携
 
-### 6.2 Instagram
+### 6.2 独自ドメインWordPress
+
+WordPress 5.6以降のApplication PasswordとREST APIを使用する。
+
+- HTTPSのサイトURLだけを許可する
+- WordPressユーザー名とApplication Passwordで接続確認する
+- 通常のWordPressログインパスワードは受け付けない
+- Application PasswordはWorker内で暗号化し、D1へ保存する
+- 認証情報をブラウザへ再表示せず、ログとAPIレスポンスへ出力しない
+- 投稿は`POST /wp-json/wp/v2/posts`へ`status=draft`固定で送信する
+- 接続解除時に暗号化済み認証情報を削除する
+
+初期実装では1人のHundred利用者につき、WordPress.comまたは独自ドメインWordPressのどちらか1接続とする。新しい接続が成功した時点で以前の接続情報を削除する。
+
+### 6.3 Instagram
 
 Phase 1では対象外とする。WordPress記事と同じテーマから、Instagram向け文章を生成する機能を将来追加する。
 
@@ -340,8 +355,12 @@ Phase 1では、D1による本格的なマスタ管理を必須としない。�
 - 投稿先サイトの選択
 - 接続解除
 - カテゴリー・タグ取得
+- 独自ドメインWordPressのサイトURL・ユーザー名・Application Password登録
+- 接続方式の表示
 
 WordPress.comとの連携にはOAuth 2.0を使用する。通常のWordPress.comログインパスワードやApplication PasswordをCreative IAへ入力させない。
+
+独自ドメインWordPressとの連携には、WordPressが発行したApplication Passwordを使用する。通常のWordPressログインパスワードは受け付けない。接続時に`GET /wp-json/wp/v2/users/me/application-passwords/introspect`でApplication Passwordによる認証であることを確認し、続いて`GET /wp-json/wp/v2/users/me?context=edit`でユーザーを確認する。両方の成功後にApplication Passwordを暗号化して保存する。
 
 OAuth認可後に取得したAccess Tokenは利用者ごとに暗号化してD1へ保存し、Cognito `sub`と関連付ける。WordPress.comのClient IDとClient Secret、およびトークン暗号化用マスターキーはWorkers Secretsへ保存する。
 
@@ -366,6 +385,7 @@ Gemini APIキーそのものをCreative IAのUIへ表示しない。
 | WordPress.com Client Secret | Workers Secrets | ブラウザとD1へ保存しない |
 | トークン暗号化用マスターキー | Workers Secrets | 定期的なローテーションを考慮する |
 | 利用者ごとのWordPress.com Access Token | D1へ暗号化して保存 | Cognito `sub`と関連付ける |
+| 利用者ごとのApplication Password | D1の専用テーブルへ暗号化して保存 | 通常パスワードは禁止。Cognito `sub`と関連付ける |
 | WordPress.com Site ID・URL・サイト名 | D1 | 投稿先として選択した1サイトを保持する |
 | OAuth state・一時情報 | 短期間のサーバー側ストレージ | 1回使用後または期限切れで削除する |
 | 商品・店舗データ | 必要になるまで保留 | 将来D1へ保存する |
@@ -419,6 +439,7 @@ Cloudflare Worker
   ├─ レート制限
   ├─ Gemini Developer API
   ├─ WordPress.com REST API
+  ├─ 独自ドメインWordPress REST API
   └─ D1
 
 Cloudflare Workers Secrets
@@ -429,10 +450,11 @@ Cloudflare Workers Secrets
 Cloudflare D1
   ├─ Cognito sub
   ├─ 暗号化済みWordPress.com Access Token
-  └─ 選択済みWordPress.com Site ID
+  ├─ 選択済みWordPress.com Site ID
+  └─ 暗号化済みApplication Password・サイトURL・WordPressユーザー名
 ```
 
-Phase 1からD1を使用する。D1はWordPress.com接続情報を利用者ごとに保持するために使用し、記事本文の正本にはしない。記事データの保存先はWordPress.comとする。R2はPhase 1では使用しない。
+Phase 1からD1を使用する。D1はWordPress接続情報を利用者ごとに保持するために使用し、記事本文の正本にはしない。記事データの保存先は接続先WordPressとする。R2はPhase 1では使用しない。
 
 ### 13.2 将来の機能拡張
 
@@ -474,6 +496,7 @@ Phase 1の必須テーブル:
 
 - users
 - wordpress_connections
+- wordpress_application_password_connections
 
 将来の候補テーブル:
 
@@ -544,9 +567,10 @@ GET  /api/creative-ia/health
 GET  /api/creative-ia/wordpress/oauth/start
 GET  /api/creative-ia/wordpress/oauth/callback
 GET  /api/creative-ia/wordpress/status
+POST /api/creative-ia/wordpress/application-password
+DELETE /api/creative-ia/wordpress/connection
 GET  /api/creative-ia/wordpress/sites
 PUT  /api/creative-ia/wordpress/site
-DELETE /api/creative-ia/wordpress/connection
 GET  /api/creative-ia/wordpress/categories
 POST /api/creative-ia/generate
 POST /api/creative-ia/wordpress/posts
@@ -573,6 +597,19 @@ OAuth要件:
 - Access Tokenを暗号化してからD1へ保存する
 - 接続解除時は保存済みトークンとサイト情報を削除する
 
+Application Password要件:
+
+- HTTPSのサイトURLだけを許可する
+- IPアドレス、localhost、内部向けホスト名を拒否し、SSRFを防止する
+- 接続確認と投稿では外部リダイレクトを追跡しない
+- Basic認証ヘッダーはWorker内だけで生成する
+- introspect APIで通常のログインパスワードを拒否する
+- Application PasswordをAES-256-GCMで暗号化してD1へ保存する
+- 通常のWordPressログインパスワードを保存しない
+- Application Password、Authorizationヘッダー、外部レスポンス本文をログへ出力しない
+- APIレスポンスへApplication Passwordを含めない
+- 接続解除時に暗号化済みApplication Passwordを削除する
+
 ---
 
 ## 18. 非機能要件
@@ -585,6 +622,7 @@ OAuth要件:
 - WordPress APIはHTTPS接続だけを許可する
 - WordPress.com OAuthの`state`を検証してCSRFを防止する
 - WordPress.com Access Tokenを暗号化してD1へ保存する
+- Application Passwordを専用テーブルへ暗号化して保存する
 - Access Tokenをログ、URL、フロントエンドへ出力しない
 - 入力文字数と生成トークン数に上限を設ける
 - AI出力をサニタイズする

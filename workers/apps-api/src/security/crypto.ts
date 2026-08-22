@@ -54,9 +54,9 @@ export async function hashOAuthState(
   return bytesToBase64Url(new Uint8Array(signature));
 }
 
-/** WordPress.com Access TokenをAES-256-GCMで暗号化する。 */
-export async function encryptAccessToken(
-  accessToken: string,
+/** 外部サービスの認証情報をAES-256-GCMで暗号化する。 */
+export async function encryptCredential(
+  plaintext: string,
   base64Key: string,
 ): Promise<{ ciphertext: string; iv: string }> {
   const keyBytes = base64ToBytes(base64Key);
@@ -76,7 +76,7 @@ export async function encryptAccessToken(
   const ciphertext = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
     key,
-    textEncoder.encode(accessToken),
+    textEncoder.encode(plaintext),
   );
 
   return {
@@ -85,8 +85,8 @@ export async function encryptAccessToken(
   };
 }
 
-/** D1に保存したWordPress.com Access TokenをWorker内だけで復号する。 */
-export async function decryptAccessToken(
+/** D1に保存した外部サービスの認証情報をWorker内だけで復号する。 */
+export async function decryptCredential(
   ciphertext: string,
   encodedIv: string,
   base64Key: string,
@@ -111,11 +111,15 @@ export async function decryptAccessToken(
     key,
     encryptedBytes,
   );
-  const accessToken = textDecoder.decode(plaintext);
+  const secret = textDecoder.decode(plaintext);
 
-  if (!accessToken) {
+  if (!secret) {
     throw new Error("DECRYPTED_TOKEN_EMPTY");
   }
 
-  return accessToken;
+  return secret;
 }
+
+/** WordPress.com OAuth実装との互換用エイリアス。 */
+export const encryptAccessToken = encryptCredential;
+export const decryptAccessToken = decryptCredential;

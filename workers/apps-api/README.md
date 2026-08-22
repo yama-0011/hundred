@@ -1,6 +1,6 @@
 # Hundred Apps API
 
-Hundred上の各アプリで共用するCloudflare Workerです。Creative IAの記事案生成、WordPress.comのOAuth接続および下書き保存を受け付けます。
+Hundred上の各アプリで共用するCloudflare Workerです。Creative IAの記事案生成、WordPress.comのOAuth接続、独自ドメインWordPressのApplication Password接続および下書き保存を受け付けます。
 
 ## Cloudflare Workers Builds
 
@@ -15,6 +15,8 @@ Hundred上の各アプリで共用するCloudflare Workerです。Creative IAの
 - ヘルスチェック: `https://apps-api.yamahit.com/health`
 - WordPress.com OAuthコールバック: `https://hundred-apps-api.oneonewapig.workers.dev/api/creative-ia/wordpress/oauth/callback`
 - WordPress.com下書き保存: `POST /api/creative-ia/wordpress/posts`
+- Application Password接続: `POST /api/creative-ia/wordpress/application-password`
+- WordPress接続解除: `DELETE /api/creative-ia/wordpress/connection`
 - Gemini記事案生成: `POST /api/creative-ia/generate`
 
 ## Cognito認証

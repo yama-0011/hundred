@@ -5,6 +5,8 @@ const creativeIaApiOrigin =
 
 export type CreativeIAWordPressStatus = {
   connected: boolean
+  authType: 'wordpress_com' | 'application_password' | null
+  wordpressUsername: string | null
   selectedSite: {
     id: string | null
     url: string | null
@@ -62,11 +64,41 @@ async function requestCreativeIAApi<T>(
           ? 'RATE_LIMITED'
           : response.status === 503
             ? 'SERVICE_BUSY'
-          : 'API_FAILED',
+            : response.status === 422
+              ? 'WORDPRESS_AUTH_FAILED'
+              : response.status === 403
+                ? 'WORDPRESS_PERMISSION_DENIED'
+                : response.status === 400
+                  ? 'INVALID_INPUT'
+                  : 'API_FAILED',
     )
   }
 
   return (await response.json()) as T
+}
+
+/** 独自ドメインWordPressのApplication Passwordを認証確認後に暗号化保存する。 */
+export function connectCreativeIAWordPressWithApplicationPassword(input: {
+  siteUrl: string
+  username: string
+  applicationPassword: string
+}) {
+  return requestCreativeIAApi<CreativeIAWordPressStatus>(
+    '/api/creative-ia/wordpress/application-password',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  )
+}
+
+/** 現在の利用者に紐づくWordPress認証情報をWorker側から削除する。 */
+export function disconnectCreativeIAWordPress() {
+  return requestCreativeIAApi<{ disconnected: boolean }>(
+    '/api/creative-ia/wordpress/connection',
+    { method: 'DELETE' },
+  )
 }
 
 /** 入力したテーマと要点をGeminiへ送り、編集可能な日本語の記事案を生成する。 */

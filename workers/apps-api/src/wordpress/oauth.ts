@@ -262,8 +262,12 @@ export async function handleWordPressOAuthCallback(
       env.TOKEN_ENCRYPTION_KEY,
     );
 
-    await env.DB.prepare(
-      `INSERT INTO wordpress_connections (
+    await env.DB.batch([
+      env.DB.prepare(
+        "DELETE FROM wordpress_application_password_connections WHERE owner_user_id = ?1",
+      ).bind(stateRow.owner_user_id),
+      env.DB.prepare(
+        `INSERT INTO wordpress_connections (
          owner_user_id,
          access_token_ciphertext,
          access_token_iv,
@@ -280,15 +284,14 @@ export async function handleWordPressOAuthCallback(
          selected_site_name = NULL,
          connected_at = unixepoch(),
          updated_at = unixepoch()`,
-    )
-      .bind(
+      ).bind(
         stateRow.owner_user_id,
         encryptedToken.ciphertext,
         encryptedToken.iv,
         token.blogId,
         token.blogUrl,
-      )
-      .run();
+      ),
+    ]);
 
     return createFrontendRedirect(env, stateRow.return_to, "connected");
   } catch (error) {
