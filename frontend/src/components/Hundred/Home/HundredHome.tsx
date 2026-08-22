@@ -114,6 +114,16 @@ function getAuthErrorMessage(error: unknown) {
   return 'サインインできませんでした。通信状態を確認して、もう一度お試しください。'
 }
 
+/** Cognito内部ユーザー名を表示せず、名前またはメールアドレスから表示名を決定する。 */
+function resolveMemberDisplayName(name?: string, email?: string) {
+  const normalizedName = name?.trim()
+
+  if (normalizedName) return normalizedName
+
+  const emailLocalPart = email?.split('@', 1)[0]?.trim()
+  return emailLocalPart || 'Hundredユーザー'
+}
+
 /** 保存済みの壁紙を読み込み、未保存または不正な値の場合はMistを返す。 */
 function getInitialWallpaper(): WallpaperId {
   try {
@@ -352,7 +362,7 @@ function HundredHome() {
         // プロフィール属性の取得に失敗しても、成立済みの認証セッションは維持する。
         setMemberProfile({
           userId: user.userId,
-          displayName: user.username,
+          displayName: resolveMemberDisplayName(),
           email: 'メールアドレス未取得',
           authProvider: user.username.toLowerCase().startsWith('google_')
             ? 'google'
@@ -373,7 +383,7 @@ function HundredHome() {
 
           setMemberProfile({
             userId: user.userId,
-            displayName: tokenName || user.username,
+            displayName: resolveMemberDisplayName(tokenName, tokenEmail),
             email: tokenEmail || 'メールアドレス未取得',
             authProvider: user.username.toLowerCase().startsWith('google_')
               ? 'google'
@@ -390,7 +400,10 @@ function HundredHome() {
 
           setMemberProfile({
             userId: user.userId,
-            displayName: attributes.name?.trim() || user.username,
+            displayName: resolveMemberDisplayName(
+              attributes.name,
+              attributes.email,
+            ),
             email: attributes.email ?? 'メールアドレス未取得',
             authProvider: user.username.toLowerCase().startsWith('google_')
               ? 'google'
@@ -544,7 +557,10 @@ function HundredHome() {
     setSigningInMethod('google')
 
     try {
-      await signInWithRedirect({ provider: 'Google' })
+      await signInWithRedirect({
+        provider: 'Google',
+        options: { lang: 'ja' },
+      })
     } catch (error) {
       setAuthError(getAuthErrorMessage(error))
       setSigningInMethod(null)
@@ -558,7 +574,7 @@ function HundredHome() {
     setSigningInMethod('email')
 
     try {
-      await signInWithRedirect()
+      await signInWithRedirect({ options: { lang: 'ja' } })
     } catch (error) {
       setAuthError(getAuthErrorMessage(error))
       setSigningInMethod(null)
