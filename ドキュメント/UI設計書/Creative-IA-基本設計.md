@@ -55,7 +55,7 @@ Creative IA専用のログイン画面は作成しない。Hundredで利用し�
 
 ```text
 利用者
-  ↓ Googleサインイン
+  ↓ Googleまたはメールアドレスでサインイン
 Hundred / Amazon Cognito
   ↓ Access Token
 Creative IA Worker
@@ -174,6 +174,43 @@ WordPress 5.6以降のApplication PasswordとREST APIを使用する。
 
 初期実装では1人のHundred利用者につき、WordPress.comまたは独自ドメインWordPressのどちらか1接続とする。新しい接続が成功した時点で以前の接続情報を削除する。
 
+#### 6.2.1 Application Password方式の技術検証結果
+
+2026年8月22日、ローカルに構築したWordPressを使用し、Application Password方式の一連の処理を検証した。
+
+検証構成:
+
+```text
+Hundred / Creative IA
+  ↓ Cognito Access Token
+Cloudflare Worker
+  ↓ HTTPS・Basic認証
+Cloudflare Quick Tunnel
+  ↓ ローカル転送
+ローカルWordPress REST API
+```
+
+確認済みの項目:
+
+- WordPressプロフィール画面で検証専用Application Passwordを発行できる
+- ローカルWordPressの`/wp-json/`が正常に応答する
+- Cloudflare Quick Tunnelの一時HTTPS URLを経由して、WorkerからローカルWordPressへ到達できる
+- WordPressサイトURL、WordPressユーザー名、Application PasswordをCreative IAから登録できる
+- Application Passwordのintrospect APIとユーザーAPIによる認証・権限確認が成功する
+- Geminiで記事案を生成し、利用者が内容を確認・編集できる
+- WordPress REST APIへ`status=draft`で記事を送信し、WordPress側で記事を確認できる
+
+ローカル検証時の制約:
+
+- `.local`ドメインとHTTP URLはCloudflare Workerから直接参照できず、入力値としても許可しない
+- 検証時のみCloudflare Quick Tunnelで一時HTTPS URLを発行し、ローカルWordPressへ転送する
+- Quick Tunnelは開発・検証専用とし、会社WordPressとの本番接続には使用しない
+- Quick TunnelのURLは起動ごとに変わるため、再起動後はCreative IAの接続情報を登録し直す
+- 検証中はローカルWordPressが一時的に外部から到達可能になるため、検証データだけを使用する
+- 検証終了後はCreative IAの接続解除、Application Passwordの失効、Tunnelの停止を行う
+
+本検証では、通常のWordPressログインパスワード、Application Passwordの値、一時Tunnel URLをドキュメント・ソースコード・テストデータへ記録しない。
+
 ### 6.3 Instagram
 
 Phase 1では対象外とする。WordPress記事と同じテーマから、Instagram向け文章を生成する機能を将来追加する。
@@ -206,7 +243,7 @@ Gemini Developer API
 
 利用者はHundredにだけサインインし、Geminiへ個別ログインしない。
 
-GoogleアカウントによるHundredへのサインインと、Gemini APIの利用権・料金は別に扱う。個人向けGeminiプランの契約をCreative IAのAPI利用へ自動適用できることを前提としない。
+GoogleまたはメールアドレスによるHundredへのサインインと、Gemini APIの利用権・料金は別に扱う。個人向けGeminiプランの契約をCreative IAのAPI利用へ自動適用できることを前提としない。
 
 Phase 1の初期モデルは、安定版かつ低コストの`gemini-3.5-flash-lite`とする。モデル名はWorkerの環境変数`GEMINI_MODEL`で切り替え可能にし、UIと記事保存処理を特定モデルへ依存させない。新規Google Cloudプロジェクトでは旧2.5系モデルが404になる場合があるため、現行のFlash-Liteを使用する。
 
@@ -679,19 +716,21 @@ Phase 7: 分析結果を利用した提案・エージェント支援
 
 ## 20. Phase 1の実装順序
 
-1. WordPress.com開発者アプリを登録する
-2. OAuthコールバックURLを決定・登録する
-3. Cloudflare WorkerとD1の最小構成を作成する
-4. WorkerでCognito Access Tokenを検証する
-5. `users`と`wordpress_connections`テーブルを作成する
-6. WordPress.com OAuth開始・コールバックを実装する
-7. Access Tokenの暗号化保存と接続解除を実装する
-8. サイト一覧取得と投稿先1サイトの選択を実装する
-9. WordPress.comへテスト記事を`draft`で保存する
-10. Gemini APIと記事生成APIを実装する（実装済み・本番設定待ち）
-11. Creative IAの入力・編集・プレビュー画面を作成する（実装済み）
-12. 生成からWordPress下書き保存までを結合する（実装済み）
-13. エラー、レート制限、OAuth state、重複投稿防止を確認する
+1. WordPress.com開発者アプリを登録する（完了）
+2. OAuthコールバックURLを決定・登録する（完了）
+3. Cloudflare WorkerとD1の最小構成を作成する（完了）
+4. WorkerでCognito Access Tokenを検証する（完了）
+5. `users`とWordPress接続用テーブルを作成する（完了）
+6. WordPress.com OAuth開始・コールバックを実装する（完了）
+7. Access Tokenの暗号化保存と接続解除を実装する（完了）
+8. サイト一覧取得と投稿先1サイトの選択を実装する（完了）
+9. WordPress.comへテスト記事を`draft`で保存する（検証済み）
+10. 独自ドメインWordPressのApplication Password接続、暗号化保存、接続解除を実装する（完了）
+11. ローカルWordPressを使用してApplication Password接続から`draft`保存までを検証する（検証済み）
+12. Gemini APIと記事生成APIを実装する（実装・検証済み）
+13. Creative IAの入力・編集・プレビュー画面を作成する（実装済み）
+14. 生成から各方式のWordPress下書き保存までを結合する（検証済み）
+15. エラー、レート制限、OAuth state、重複投稿防止を継続確認する
 
 AIや画面を先に完成させず、最初にWordPressへ安全に下書きを保存できることを確認する。
 
@@ -699,17 +738,16 @@ AIや画面を先に完成させず、最初にWordPressへ安全に下書きを
 
 ## 21. 今後確認する事項
 
-### Phase 1開始前に確認する事項
+### Phase 1で継続確認する事項
 
-- WordPress.com開発者アプリの登録方法
-- OAuthコールバックURL
-- WordPress.com OAuthで要求する権限
-- OAuth後のサイト一覧取得API
-- WordPress.comユーザーが複数サイトを持つ場合の選択方法
-- WordPress.com REST APIの投稿先URLとSite IDの扱い
+- 実際に利用予定の会社WordPressが外部からHTTPSで到達可能であること
+- 会社WordPressのバージョンとREST APIの利用可否
+- 利用者のWordPressユーザーに記事を作成・編集する権限があること
+- 会社WordPressでApplication Passwordを発行・失効できること
+- セキュリティプラグイン、WAF、サーバー設定がREST APIのBasic認証を遮断しないこと
 - WordPress側の下書き・承認フロー
 - 利用しているSEOプラグイン
-- Gemini APIキーの本番Secret登録
+- 実環境テストでも公開せず、`draft`として保存されること
 - Gemini無料枠のデータ利用条件を踏まえ、実データを送信する範囲
 
 ### 将来確認する事項

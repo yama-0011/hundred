@@ -107,11 +107,11 @@ function getAuthErrorMessage(error: unknown) {
     }
 
     if (import.meta.env.DEV && error.message.trim()) {
-      return `Googleでサインインできませんでした。（開発情報: ${error.name}: ${error.message}）`
+      return `サインインできませんでした。（開発情報: ${error.name}: ${error.message}）`
     }
   }
 
-  return 'Googleでサインインできませんでした。通信状態を確認して、もう一度お試しください。'
+  return 'サインインできませんでした。通信状態を確認して、もう一度お試しください。'
 }
 
 /** 保存済みの壁紙を読み込み、未保存または不正な値の場合はMistを返す。 */
@@ -312,7 +312,9 @@ function HundredHome() {
   const [memberProfile, setMemberProfile] =
     useState<HundredMemberProfile | null>(null)
   const [isAuthChecking, setIsAuthChecking] = useState(true)
-  const [isSigningIn, setIsSigningIn] = useState(false)
+  const [signingInMethod, setSigningInMethod] = useState<
+    'google' | 'email' | null
+  >(null)
   const [authError, setAuthError] = useState<string | null>(null)
   const [isWallpaperDialogOpen, setIsWallpaperDialogOpen] = useState(false)
   const [isSoundDialogOpen, setIsSoundDialogOpen] = useState(false)
@@ -352,6 +354,9 @@ function HundredHome() {
           userId: user.userId,
           displayName: user.username,
           email: 'メールアドレス未取得',
+          authProvider: user.username.toLowerCase().startsWith('google_')
+            ? 'google'
+            : 'email',
         })
         setProfileSession('member')
         setAuthError(null)
@@ -370,6 +375,9 @@ function HundredHome() {
             userId: user.userId,
             displayName: tokenName || user.username,
             email: tokenEmail || 'メールアドレス未取得',
+            authProvider: user.username.toLowerCase().startsWith('google_')
+              ? 'google'
+              : 'email',
           })
         } catch {
           // IDトークンを参照できない場合は、Cognito内部名の仮表示を維持する。
@@ -384,6 +392,9 @@ function HundredHome() {
             userId: user.userId,
             displayName: attributes.name?.trim() || user.username,
             email: attributes.email ?? 'メールアドレス未取得',
+            authProvider: user.username.toLowerCase().startsWith('google_')
+              ? 'google'
+              : 'email',
           })
         } catch {
           // 認証済みであれば、属性は未取得表示のままHomeを利用できるようにする。
@@ -399,7 +410,7 @@ function HundredHome() {
       } finally {
         if (isActive) {
           setIsAuthChecking(false)
-          setIsSigningIn(false)
+          setSigningInMethod(null)
         }
       }
     }
@@ -417,14 +428,14 @@ function HundredHome() {
       if (payload.event === 'signedOut') {
         setMemberProfile(null)
         setProfileSession(null)
-        setIsSigningIn(false)
+        setSigningInMethod(null)
         return
       }
 
       if (payload.event === 'signInWithRedirect_failure') {
         setAuthError(getAuthErrorMessage(payload.data.error))
         setIsAuthChecking(false)
-        setIsSigningIn(false)
+        setSigningInMethod(null)
       }
     })
 
@@ -530,13 +541,27 @@ function HundredHome() {
   const handleGoogleSignIn = async () => {
     getCursorSoundPlayer().prepare()
     setAuthError(null)
-    setIsSigningIn(true)
+    setSigningInMethod('google')
 
     try {
       await signInWithRedirect({ provider: 'Google' })
     } catch (error) {
       setAuthError(getAuthErrorMessage(error))
-      setIsSigningIn(false)
+      setSigningInMethod(null)
+    }
+  }
+
+  /** Cognito User Poolのマネージドログインへ移動する。 */
+  const handleEmailSignIn = async () => {
+    getCursorSoundPlayer().prepare()
+    setAuthError(null)
+    setSigningInMethod('email')
+
+    try {
+      await signInWithRedirect()
+    } catch (error) {
+      setAuthError(getAuthErrorMessage(error))
+      setSigningInMethod(null)
     }
   }
 
@@ -652,9 +677,10 @@ function HundredHome() {
       <HundredSignInScreen
         wallpaper={selectedWallpaper}
         isCheckingSession={isAuthChecking}
-        isSigningIn={isSigningIn}
+        signingInMethod={signingInMethod}
         authError={authError}
         onGoogleSignIn={() => void handleGoogleSignIn()}
+        onEmailSignIn={() => void handleEmailSignIn()}
         onGuestSignIn={handleGuestSignIn}
       />
     )
@@ -948,6 +974,7 @@ function HundredHome() {
           session={profileSession}
           memberProfile={memberProfile}
           onGoogleSignIn={() => void handleGoogleSignIn()}
+          onEmailSignIn={() => void handleEmailSignIn()}
           onSignOut={() => void handleSignOut()}
           onClose={() => setIsProfileDialogOpen(false)}
         />

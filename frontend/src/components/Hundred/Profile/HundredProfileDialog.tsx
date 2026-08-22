@@ -2,12 +2,12 @@ import '../../../styles/Hundred/hundred-profile-dialog.css'
 
 /**
  * 概要:
- * Hundred Homeのプロフィール・認証モックダイアログを表示する。
+ * Hundred Homeのプロフィール・認証ダイアログを表示する。
  *
  * 責務:
  * - サインイン状態に応じた認証操作を表示する
  * - 連携アカウント一覧とアカウント詳細を表示する
- * - Googleサインイン、サインアウト、閉じる操作を親へ通知する
+ * - Google・メールサインイン、サインアウト、閉じる操作を親へ通知する
  */
 
 export type HundredProfileSession = 'member' | 'guest'
@@ -16,12 +16,14 @@ export type HundredMemberProfile = {
   userId: string
   displayName: string
   email: string
+  authProvider: 'google' | 'email'
 }
 
 type HundredProfileDialogProps = {
   session: HundredProfileSession
   memberProfile: HundredMemberProfile | null
   onGoogleSignIn: () => void
+  onEmailSignIn: () => void
   onSignOut: () => void
   onClose: () => void
 }
@@ -34,6 +36,7 @@ function HundredProfileDialog({
   session,
   memberProfile,
   onGoogleSignIn,
+  onEmailSignIn,
   onSignOut,
   onClose,
 }: HundredProfileDialogProps) {
@@ -41,6 +44,7 @@ function HundredProfileDialog({
   const displayName = memberProfile?.displayName ?? 'Hundredユーザー'
   const email = memberProfile?.email ?? '未取得'
   const memberId = memberProfile?.userId ?? '未取得'
+  const authProvider = memberProfile?.authProvider ?? 'email'
   const avatarLabel = displayName.trim().charAt(0).toUpperCase() || 'H'
 
   /**
@@ -115,6 +119,9 @@ function HundredProfileDialog({
               >
                 Googleアカウントで続ける
               </button>
+              <button type="button" onClick={onEmailSignIn}>
+                メールアドレスで続ける
+              </button>
               <button type="button" onClick={onSignOut}>
                 ゲスト利用を終了
               </button>
@@ -132,10 +139,12 @@ function HundredProfileDialog({
           {isMember ? (
             <div className="hundred-linked-account">
               <span className="hundred-linked-account__icon" aria-hidden="true">
-                G
+                {authProvider === 'google' ? 'G' : '@'}
               </span>
               <span className="hundred-linked-account__copy">
-                <strong>Google</strong>
+                <strong>
+                  {authProvider === 'google' ? 'Google' : 'メールアドレス'}
+                </strong>
                 <small>{email}</small>
               </span>
               <span className="hundred-linked-account__status">接続済み</span>

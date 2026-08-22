@@ -20,9 +20,10 @@ import '../../../styles/Hundred/hundred-sign-in.css'
 type HundredSignInScreenProps = {
   wallpaper: WallpaperId
   isCheckingSession: boolean
-  isSigningIn: boolean
+  signingInMethod: 'google' | 'email' | null
   authError: string | null
   onGoogleSignIn: () => void
+  onEmailSignIn: () => void
   onGuestSignIn: () => void
 }
 
@@ -33,12 +34,14 @@ type HundredSignInScreenProps = {
 function HundredSignInScreen({
   wallpaper,
   isCheckingSession,
-  isSigningIn,
+  signingInMethod,
   authError,
   onGoogleSignIn,
+  onEmailSignIn,
   onGuestSignIn,
 }: HundredSignInScreenProps) {
   const wallpaperTheme = getWallpaperTheme(wallpaper)
+  const isSigningIn = signingInMethod !== null
 
   return (
     <main
@@ -86,9 +89,17 @@ function HundredSignInScreen({
                 </strong>
                 <small>Googleで本人確認してHundredを利用</small>
               </button>
-              <button type="button" disabled>
-                <strong>メールアドレスで続ける</strong>
-                <small>メール認証は現在準備中です</small>
+              <button
+                type="button"
+                onClick={onEmailSignIn}
+                disabled={isSigningIn}
+              >
+                <strong>
+                  {signingInMethod === 'email'
+                    ? 'メール認証へ移動しています'
+                    : 'メールアドレスで続ける'}
+                </strong>
+                <small>サインイン、アカウント作成、パスワード再設定</small>
               </button>
               <button
                 type="button"
@@ -109,7 +120,7 @@ function HundredSignInScreen({
         )}
 
         <p className="hundred-sign-in__notice">
-          Googleから取得する情報は、名前、メールアドレス、プロフィール画像です。
+          認証はAmazon Cognitoで安全に処理されます。Hundredがパスワードを保存することはありません。
         </p>
       </section>
     </main>

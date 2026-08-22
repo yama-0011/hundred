@@ -1,17 +1,18 @@
-# Hundred Amazon Cognito・Google認証構築手順
+# Hundred Amazon Cognito・Google／メール認証構築手順
 
 ## 1. 目的
 
-Hundredの静的フロントエンドへAmazon Cognitoによる認証を追加し、Googleアカウントで安全にサインインできるようにする。
+Hundredの静的フロントエンドへAmazon Cognitoによる認証を追加し、Googleアカウントまたはメールアドレスで安全にサインインできるようにする。
 
 - HundredはCloudflare Pagesで常時配信する
 - 認証基盤にはAmazon Cognito User Poolsを使用する
 - Google認証はGoogle Auth PlatformとCognitoを連携して提供する
+- メール認証はCognito User Pool Directoryのマネージドログインで提供する
 - HundredのフロントエンドはOAuth 2.0 Authorization Code Flow with PKCEを使用する
 - AWS上のRecord Hubが停止していても、Hundredへのサインインは利用できる構成にする
-- Googleアカウントを持たない利用者向けのメール認証は、後続フェーズで追加する
+- HundredはGoogleパスワード、Cognitoユーザーのパスワードを保存しない
 
-この文書は、2026年8月に実施したGoogle認証の構築内容を記録したものである。
+この文書は、2026年8月に実施したGoogle認証とメール認証の構築内容を記録したものである。
 
 ---
 
@@ -25,8 +26,11 @@ yamahit.com
 Cloudflare Pages / Hundred
   ↓ Authorization Code + PKCE
 Amazon Cognito User Pool
-  ↓ OAuth 2.0
-Google
+  ├─ Google OAuth 2.0
+  └─ Cognito User Pool Directory
+       ├─ メールアドレス・パスワード
+       ├─ メール確認
+       └─ パスワード再設定
   ↓ 認証結果
 Amazon Cognito
   ↓ ID・Access・Refresh Token
@@ -38,7 +42,7 @@ Cloudflare Pages、Cognito、Googleの役割は次のとおり。
 | サービス | 役割 |
 |---|---|
 | Cloudflare Pages | Hundredの静的ファイルを常時配信する |
-| Amazon Cognito | Hundredのユーザー、認証セッション、トークンを管理する |
+| Amazon Cognito | Hundredのユーザー、メール認証、認証セッション、トークンを管理する |
 | Google Auth Platform | Googleアカウントによる本人確認を行う |
 | AWS Record Hub環境 | 認証後に必要となる各AppのAPIを提供する。停止中でもHundredの認証には影響しない |
 
@@ -73,7 +77,7 @@ User Pool ID、App Client ID、Cognitoドメインは、ブラウザへ配布さ
 
 OAuthのURLは完全一致で検証される。スキーム、ホスト名、ポート番号、パス、末尾のスラッシュを勝手に変更しない。
 
-ローカル確認には`http://localhost:5173`を使用する。`http://127.0.0.1:5173`はCognitoの登録URLとオリジンが一致しないため、Googleサインインの確認には使用しない。
+ローカル確認には`http://localhost:5173`を使用する。`http://127.0.0.1:5173`はCognitoの登録URLとオリジンが一致しないため、Cognitoサインインの確認には使用しない。
 
 ### 3.3 Google Auth Platform
 
@@ -271,7 +275,7 @@ OAuthコールバックの処理に必要なリスナーも有効にする。
 /auth/callback
 ```
 
-Google認証後はこのルートでCognitoの認証コードを受け取り、Amplifyがトークンへ交換する。完了後は`/`へ戻す。
+Googleまたはメール認証後はこのルートでCognitoの認証コードを受け取り、Amplifyがトークンへ交換する。完了後は`/`へ戻す。
 
 Cloudflare PagesでSPAのルートを直接再読み込みする場合も、`/auth/callback`から`index.html`を表示できることを確認する。
 
@@ -281,7 +285,8 @@ Cloudflare PagesでSPAのルートを直接再読み込みする場合も、`/au
 
 | API | 用途 |
 |---|---|
-| `signInWithRedirect` | Cognitoを経由してGoogleへ移動する |
+| `signInWithRedirect({ provider: 'Google' })` | Cognitoを経由してGoogleへ移動する |
+| `signInWithRedirect()` | Cognito User Poolのメール認証画面へ移動する |
 | `getCurrentUser` | Cognitoのログイン済みユーザーを確認する |
 | `fetchAuthSession` | IDトークンから表示名とメールアドレスを取得する |
 | `fetchUserAttributes` | Cognitoの最新ユーザー属性を取得する |
@@ -289,6 +294,8 @@ Cloudflare PagesでSPAのルートを直接再読み込みする場合も、`/au
 | `Hub.listen('auth')` | サインイン、サインアウト、トークン更新を検知する |
 
 表示名とメールアドレスはIDトークンの`name`、`email`クレームから取得し、取得できる場合はCognito User Attributesの値で更新する。
+
+メール認証のサインイン、アカウント作成、メール確認、パスワード再設定はCognitoのマネージドログインで行う。Hundredの画面ではメールアドレスやパスワードを直接入力・保存しない。Google認証とメール認証は同じ`/auth/callback`へ戻り、以降のセッション処理を共用する。
 
 ### 9.6 ユーザーID
 
@@ -331,13 +338,25 @@ http://localhost:5173
 8. 表示名、メールアドレス、メンバーIDが表示されることを確認する
 9. Cognitoの「ユーザー」に`Google_...`または`google_...`の外部プロバイダーユーザーが作成されていることを確認する
 
-### 10.3 セッション復元
+### 10.3 メールアドレスでの初回サインイン
+
+1. 「メールアドレスで続ける」を選択する
+2. Cognitoのマネージドログインが表示されることを確認する
+3. 未登録の場合は「アカウントを作成」からメールアドレスとパスワードを登録する
+4. Cognitoから届いた確認メールでアカウントを確認する
+5. メールアドレスとパスワードでサインインする
+6. `/auth/callback`を経由してHundredのホームへ戻ることを確認する
+7. プロフィールの連携アカウントが「メールアドレス」と表示されることを確認する
+8. 表示名、メールアドレス、メンバーIDを確認する
+9. 「パスワードを忘れた場合」から再設定メールを受け取れることを確認する
+
+### 10.4 セッション復元
 
 1. ログインした状態でページを再読み込みする
 2. Google認証をやり直さず、Hundredのホームへ入れることを確認する
 3. ブラウザを閉じて再度開いた場合も、Refresh Tokenの有効期間内ならセッションが復元されることを確認する
 
-### 10.4 サインアウト
+### 10.5 サインアウト
 
 1. プロフィール画面を開く
 2. 「サインアウト」を選択する
@@ -429,11 +448,14 @@ npm audit --omit=dev
 
 - `https://yamahit.com`からGoogleへ遷移する
 - Google認証後に`https://yamahit.com/auth/callback`へ戻る
+- `https://yamahit.com`からCognitoのメール認証へ遷移する
+- メール認証後に`https://yamahit.com/auth/callback`へ戻る
+- メールアドレスの確認とパスワード再設定を実行できる
 - Hundredのホームが表示される
 - 表示名、メールアドレス、メンバーIDが表示される
 - ページ再読み込み後もログイン状態を復元できる
 - サインアウトできる
-- AWSのRecord Hub環境を停止しても、HundredへのGoogleサインインが利用できる
+- AWSのRecord Hub環境を停止しても、HundredへのGoogle・メールサインインが利用できる
 
 ---
 
@@ -462,32 +484,16 @@ Amazon Cognitoの料金は、利用プラン、月間アクティブユーザー
 
 ---
 
-## 15. 次のフェーズ
+## 15. メール認証の運用要件
 
-Googleアカウントを持たない利用者向けに、メールアドレス認証を追加する。
-
-想定する構成:
-
-```text
-Hundred
-  ↓
-Cloudflare Turnstile
-  ↓ 検証成功
-Cloudflare Worker
-  ↓ レート制限
-Amazon Cognito / メールOTP
-  ↓
-Amazon SES
-```
-
-追加時の要件:
-
-- TurnstileトークンをWorker側で必ず検証する
-- メールアドレス単位、IP単位、時間単位でレート制限する
-- レート制限はフロントエンドだけに実装しない
-- メールアドレスの存在有無を推測できるエラー表示を避ける
+- Googleアカウントを持たない利用者向けに、メールアドレスとパスワードによる認証を提供する
+- サインイン、アカウント作成、メール確認、パスワード再設定はCognitoのマネージドログインで処理する
+- Hundredはパスワードを受け取らず、ソースコード、ログ、ブラウザ保存領域へ記録しない
+- Cognito User Poolでは自己サインアップ、メール属性の確認、アカウント復旧を有効にする
+- メールアドレスの存在有無を推測しにくいエラー表示を使用する
 - Googleログインを第一選択として維持する
-- 送信回数、失敗数、ブロック数を監視できるようにする
+- Cognitoの送信制限、APIクォータ、失敗状況を監視する
+- 独自のTurnstileやWorkerレート制限が必要になった場合は、Cognito直結のマネージドログインとは分離して追加設計する
 
 ---
 
