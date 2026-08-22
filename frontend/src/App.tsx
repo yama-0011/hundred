@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom'
 import CreativeIAConnectionPage from './pages/CreativeIA/CreativeIAConnectionPage'
+import CreativeIAWorkspacePage from './pages/CreativeIA/CreativeIAWorkspacePage'
 import HundredHomePage from './pages/Hundred/HundredHomePage'
 
 /**
@@ -14,7 +15,11 @@ function App() {
     <Routes>
       <Route path="/" element={<HundredHomePage />} />
       <Route path="/auth/callback" element={<HundredHomePage />} />
-      <Route path="/creative-ia" element={<CreativeIAConnectionPage />} />
+      <Route path="/creative-ia" element={<CreativeIAWorkspacePage />} />
+      <Route
+        path="/creative-ia/settings/wordpress"
+        element={<CreativeIAConnectionPage />}
+      />
     </Routes>
   )
 }

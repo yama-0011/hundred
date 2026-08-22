@@ -266,10 +266,10 @@ function CreativeIAConnectionPage() {
       <div className="creative-ia-connection__glow" aria-hidden="true" />
 
       <header className="creative-ia-connection__header">
-        <Link to="/" aria-label="Hundredのホームに戻る">
-          ← ホーム
+        <Link to="/creative-ia" aria-label="Creative IAの設定に戻る">
+          ← Creative IA
         </Link>
-        <span>Creative IA</span>
+        <span>WordPress設定</span>
       </header>
 
       <section
