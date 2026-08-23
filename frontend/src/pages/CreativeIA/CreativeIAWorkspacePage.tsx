@@ -1874,13 +1874,12 @@ function ReferenceProductList({
           ariaLabel="商品一覧"
           columns={[
             { key: 'name', label: '商品名' },
-            { key: 'brand', label: 'ブランド' },
             { key: 'category', label: 'カテゴリ' },
             { key: 'source', label: '情報元URL' },
             { key: 'updated', label: '最終更新' },
             { key: 'ai', label: 'AI利用' },
           ]}
-          columnTemplate="minmax(220px, 1.35fr) minmax(120px, .75fr) minmax(120px, .75fr) minmax(160px, 1fr) 132px 90px"
+          columnTemplate="minmax(240px, 1.45fr) minmax(140px, .8fr) minmax(200px, 1.15fr) 132px 90px"
           rows={products.map((product) => ({
             id: product.id,
             ariaLabel: `「${product.name}」の詳細を開く`,
@@ -1891,7 +1890,6 @@ function ReferenceProductList({
                   <small>{product.description || '説明未入力'}</small>
                 </span>
               ),
-              brand: product.brand || '—',
               category: product.category || '—',
               source: formatSourceUrl(product.sourceUrl),
               updated: <FormattedDate value={product.updatedAt} />,
@@ -1952,12 +1950,11 @@ function ReferenceServiceList({
           columns={[
             { key: 'name', label: 'サービス名' },
             { key: 'category', label: 'カテゴリ' },
-            { key: 'price', label: '価格' },
             { key: 'source', label: '情報元URL' },
             { key: 'updated', label: '最終更新' },
             { key: 'ai', label: 'AI利用' },
           ]}
-          columnTemplate="minmax(220px, 1.35fr) minmax(120px, .75fr) minmax(120px, .75fr) minmax(160px, 1fr) 132px 90px"
+          columnTemplate="minmax(240px, 1.45fr) minmax(140px, .8fr) minmax(200px, 1.15fr) 132px 90px"
           rows={services.map((service) => ({
             id: service.id,
             ariaLabel: `「${service.name}」の詳細を開く`,
@@ -1969,8 +1966,16 @@ function ReferenceServiceList({
                 </span>
               ),
               category: service.category || '—',
-              price: service.price || '—',
-              source: formatSourceUrl(service.sourceUrl),
+              source: service.sourceUrl ? (
+                <a
+                  href={service.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {formatSourceUrl(service.sourceUrl)} ↗
+                </a>
+              ) : '—',
               updated: <FormattedDate value={service.updatedAt} />,
               ai: (
                 <StatusBadge tone={service.aiEnabled ? 'saved' : 'neutral'}>
