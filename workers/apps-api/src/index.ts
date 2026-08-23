@@ -8,6 +8,10 @@ import {
 } from "./ai/generate";
 import type { GeminiEnv } from "./ai/gemini";
 import {
+  CreativeIAConversationError,
+  respondToCreativeIAChat,
+} from "./ai/conversation";
+import {
   createWordPressAuthorizationUrl,
   handleWordPressOAuthCallback,
   type WordPressOAuthEnv,
@@ -648,6 +652,49 @@ export default {
         }
 
         return json(request, env, { error: "会話を保存できませんでした" }, 500);
+      }
+    }
+
+    const chatRespondMatch = url.pathname.match(
+      /^\/api\/creative-ia\/chats\/([0-9a-f-]+)\/respond$/iu,
+    );
+    if (chatRespondMatch && request.method === "POST") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(
+          request,
+          env,
+          await respondToCreativeIAChat(env, ownerUserId, chatRespondMatch[1]),
+        );
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+
+        if (error instanceof CreativeIAConversationError) {
+          const status =
+            error.code === "NOT_FOUND"
+              ? 404
+              : error.code === "INVALID_INPUT"
+                ? 400
+                : error.code === "RATE_LIMITED"
+                  ? 429
+                  : error.code === "PROVIDER_BUSY"
+                    ? 503
+                    : 502;
+          const messages = {
+            NOT_FOUND: "Chatが見つかりません",
+            INVALID_INPUT: "会話内容を確認してください",
+            RATE_LIMITED:
+              "AI利用回数の上限に達しました。時間をおいてお試しください",
+            PROVIDER_BUSY:
+              "Geminiが混雑しています。時間をおいてお試しください",
+            GENERATION_FAILED: "AIの応答を取得できませんでした",
+          } as const;
+          return json(request, env, { error: messages[error.code] }, status);
+        }
+
+        return json(request, env, { error: "AIの応答を取得できませんでした" }, 502);
       }
     }
 

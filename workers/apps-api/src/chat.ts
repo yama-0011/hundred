@@ -48,6 +48,19 @@ interface SavedDraft {
   duplicate: boolean;
 }
 
+export interface CreativeIAConversationContext {
+  messages: Array<{ role: ChatRole; text: string }>;
+  article: {
+    title: string;
+    content: string;
+    excerpt: string;
+    warnings: string[];
+    usedReferences: UsedReference[];
+  } | null;
+  productionMemos: ProductionMemo[];
+  appliedRuleIds: string[];
+}
+
 export class CreativeIAChatError extends Error {
   constructor(
     readonly code:
@@ -228,6 +241,51 @@ async function getOwnedChat(
   )
     .bind(chatId, ownerUserId)
     .first<ChatRow>();
+}
+
+/** Geminiへ渡す直近の会話と現在の記事状態を、所有者条件付きで取得する。 */
+export async function getCreativeIAConversationContext(
+  env: CreativeIAChatEnv,
+  ownerUserId: string,
+  chatId: string,
+): Promise<CreativeIAConversationContext> {
+  const chat = await getOwnedChat(env, ownerUserId, chatId);
+  if (!chat) throw new CreativeIAChatError("NOT_FOUND");
+
+  const result = await env.DB.prepare(
+    `SELECT id, chat_id, role, content, created_at
+       FROM creative_ia_chat_messages
+      WHERE chat_id = ?1 AND owner_user_id = ?2
+      ORDER BY created_at DESC
+      LIMIT 30`,
+  )
+    .bind(chatId, ownerUserId)
+    .all<MessageRow>();
+  const hasArticle = Boolean(chat.article_title || chat.article_content);
+
+  return {
+    messages: result.results.reverse().map((message) => ({
+      role: message.role,
+      text: message.content,
+    })),
+    article: hasArticle
+      ? {
+          title: chat.article_title,
+          content: chat.article_content,
+          excerpt: chat.article_excerpt,
+          warnings: parseJson<string[]>(chat.article_warnings_json, []),
+          usedReferences: parseJson<UsedReference[]>(
+            chat.article_references_json,
+            [],
+          ),
+        }
+      : null,
+    productionMemos: parseJson<ProductionMemo[]>(
+      chat.production_memos_json,
+      [],
+    ),
+    appliedRuleIds: parseJson<string[]>(chat.applied_rule_ids_json, []),
+  };
 }
 
 /** 認証利用者が所有するChatと会話を更新順で取得する。 */

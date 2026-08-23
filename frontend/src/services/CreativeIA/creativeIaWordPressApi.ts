@@ -30,6 +30,12 @@ export type CreativeIAGeneratedArticle = {
   usedReferences: CreativeIAUsedReference[]
 }
 
+export type CreativeIAAssistantResponse = {
+  action: 'chat' | 'clarify' | 'update_article'
+  message: string
+  article: CreativeIAGeneratedArticle | null
+}
+
 export type CreativeIAUsedReference = {
   id: string
   category: 'product' | 'service' | 'organization' | 'contact'
@@ -258,6 +264,14 @@ export function appendCreativeIAChatMessage(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(message),
     },
+  )
+}
+
+/** D1へ保存済みの会話を基に、通常会話・確認質問・記事更新の応答を取得する。 */
+export function respondCreativeIAChat(chatId: string) {
+  return requestCreativeIAApi<CreativeIAAssistantResponse>(
+    `/api/creative-ia/chats/${encodeURIComponent(chatId)}/respond`,
+    { method: 'POST' },
   )
 }
 

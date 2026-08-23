@@ -21,7 +21,7 @@ import {
   deleteCreativeIAReferenceContact,
   deleteCreativeIAReferenceOrganization,
   deleteCreativeIAReferenceService,
-  generateCreativeIAArticle,
+  respondCreativeIAChat,
   getCreativeIAChats,
   getCreativeIAReferenceProducts,
   getCreativeIAReferenceContacts,
@@ -266,7 +266,6 @@ function CreativeIAWorkspacePage() {
     const normalizedRequest = request.trim()
     if (!normalizedRequest || isGenerating || !activeChat) return
     const targetChatId = activeChat.id
-    const isRevision = activeChat.article !== null
     const userMessage = createMessage('user', normalizedRequest)
     const chatBeforeGeneration: ChatSession = {
       ...activeChat,
@@ -275,7 +274,7 @@ function CreativeIAWorkspacePage() {
           ? normalizedRequest.slice(0, 34)
           : activeChat.title,
       messages: [...activeChat.messages, userMessage],
-      savedDraft: null,
+      savedDraft: activeChat.savedDraft,
       updatedAt: Date.now(),
     }
 
@@ -291,64 +290,22 @@ function CreativeIAWorkspacePage() {
         appendCreativeIAChatMessage(targetChatId, userMessage),
         updateCreativeIAChat(chatBeforeGeneration),
       ])
-      const productionMemoText = activeChat.productionMemos
-        .filter((memo) => memo.label.trim() || memo.value.trim())
-        .map((memo) => `${memo.label.trim() || '項目'}: ${memo.value.trim()}`)
-        .join('\n')
-      const appliedRuleText = referenceAIRules
-        .filter((rule) => activeChat.appliedRuleIds.includes(rule.id))
-        .map((rule) => rule.label)
-        .join('\n')
-      const articleGuidance = [
-        productionMemoText && `制作メモ:\n${productionMemoText}`,
-        appliedRuleText && `適用ルール:\n${appliedRuleText}`,
-      ]
-        .filter(Boolean)
-        .join('\n\n')
-      const result = await generateCreativeIAArticle({
-        topic: isRevision
-          ? activeChat.draftTitle.slice(0, 200) || '作成中の記事の修正'
-          : normalizedRequest.slice(0, 200),
-        keyPoints: isRevision
-          ? [
-              `現在の記事概要: ${activeChat.article?.excerpt ?? ''}`,
-              `利用者の修正依頼: ${normalizedRequest}`,
-              articleGuidance,
-            ]
-              .join('\n')
-              .slice(0, 2000)
-          : [normalizedRequest.slice(200), articleGuidance]
-              .filter(Boolean)
-              .join('\n\n')
-              .slice(0, 2000),
-        audience: '',
-        tone: 'friendly',
-        referenceIds:
-          activeChat.article?.usedReferences.map((reference) => reference.id) ??
-          [],
-      })
-      const referencedNames = result.usedReferences.map(
-        (reference) => reference.name,
-      )
-      const assistantMessage = createMessage(
-        'assistant',
-        isRevision
-          ? `${
-              referencedNames.length > 0
-                ? `「${referencedNames.join('」「')}」の登録情報を参照して、`
-                : ''
-            }修正内容を反映しました。記事案をもう一度確認してください。`
-          : `${
-              referencedNames.length > 0
-                ? `「${referencedNames.join('」「')}」の登録情報を参照して、`
-                : ''
-            }記事案を作成しました。記事案を確認してください。直したいところは、このまま会話で伝えられます。`,
-      )
+      const result = await respondCreativeIAChat(targetChatId)
+      const assistantMessage = createMessage('assistant', result.message)
+      const updatedArticle =
+        result.action === 'update_article' && result.article
+          ? result.article
+          : chatBeforeGeneration.article
       const updatedChat: ChatSession = {
         ...chatBeforeGeneration,
-        article: result,
-        draftTitle: result.title,
-        draftContent: result.content,
+        article: updatedArticle,
+        draftTitle: result.article?.title ?? chatBeforeGeneration.draftTitle,
+        draftContent:
+          result.article?.content ?? chatBeforeGeneration.draftContent,
+        savedDraft:
+          result.action === 'update_article'
+            ? null
+            : chatBeforeGeneration.savedDraft,
         messages: [...chatBeforeGeneration.messages, assistantMessage],
         updatedAt: Date.now(),
       }
@@ -359,8 +316,10 @@ function CreativeIAWorkspacePage() {
       ]).catch(() => {
         setChatError('生成した記事案をD1へ保存できませんでした。')
       })
-      setArtifactView('article')
-      setIsArtifactOpen(true)
+      if (result.action === 'update_article' && result.article) {
+        setArtifactView('article')
+        setIsArtifactOpen(true)
+      }
       draftRequestKeyRef.current = null
     } catch (error) {
       const code = error instanceof Error ? error.message : ''
@@ -368,10 +327,10 @@ function CreativeIAWorkspacePage() {
         code === 'AUTH_REQUIRED'
           ? 'Hundredへサインインし直してからお試しください。'
           : code === 'RATE_LIMITED'
-            ? '生成回数の上限に達しました。時間をおいてお試しください。'
+            ? 'AI利用回数の上限に達しました。時間をおいてお試しください。'
             : code === 'SERVICE_BUSY'
               ? 'AIが混雑しています。時間をおいてもう一度お試しください。'
-              : '記事案を生成できませんでした。入力内容は保持されています。'
+              : 'AIの応答を取得できませんでした。入力内容は保持されています。'
       setGenerationError(message)
       setComposer(normalizedRequest)
     } finally {
