@@ -9,6 +9,7 @@ import {
 } from "./gemini";
 import type { GeneratedArticle } from "./provider";
 import { resolveReferenceContext } from "./reference-context";
+import { resolveCreativeIAApplicationGuide } from "./application-guide";
 
 const minuteLimit = 10;
 const dailyLimit = 200;
@@ -96,6 +97,8 @@ export async function respondToCreativeIAChat(
     .filter((memo) => memo.label.trim() || memo.value.trim())
     .map((memo) => `${memo.label.trim() || "項目"}: ${memo.value.trim()}`)
     .join("\n");
+  const applicationGuideContext =
+    resolveCreativeIAApplicationGuide(latestUserMessage);
   const model = env.GEMINI_MODEL?.trim() || "gemini-3.5-flash-lite";
   const requestId = crypto.randomUUID();
 
@@ -118,6 +121,7 @@ export async function respondToCreativeIAChat(
         : null,
       productionMemoContext,
       referenceContext: resolvedReferences.context,
+      applicationGuideContext,
     });
     await env.DB.prepare(
       `UPDATE generation_requests

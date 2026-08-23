@@ -3,6 +3,13 @@
   "name": "hundred-apps-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-20",
+  "rules": [
+    {
+      "type": "Text",
+      "globs": ["**/*.md"],
+      "fallthrough": true
+    }
+  ],
   "workers_dev": true,
   "vars": {
     "APP_ORIGIN": "https://yamahit.com",
