@@ -1421,6 +1421,9 @@ function ReferencesView() {
   const [view, setView] = useState<
     'overview' | 'products' | 'create' | 'detail' | 'edit'
   >('overview')
+  const [activeReferenceTab, setActiveReferenceTab] = useState<
+    'materials' | 'rules'
+  >('materials')
   const [products, setProducts] = useState<CreativeIAReferenceProduct[]>([])
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -1577,16 +1580,36 @@ function ReferencesView() {
       <p className="creative-ia__page-lead">
         AIが記事を作るときに参照する素材と、守るべきルールを分けて管理します。
       </p>
-      <div className="creative-ia__reference-groups">
-        <section>
-          <header>
-            <span>01</span>
-            <div>
-              <h2>コンテンツ素材</h2>
-              <p>記事へ書く事実や素材</p>
-            </div>
-          </header>
-          <ul>
+      <div className="creative-ia__reference-tabs" role="tablist" aria-label="参照データの種類">
+        <button
+          id="reference-materials-tab"
+          type="button"
+          role="tab"
+          aria-selected={activeReferenceTab === 'materials'}
+          aria-controls="reference-materials-panel"
+          onClick={() => setActiveReferenceTab('materials')}
+        >
+          コンテンツ素材
+        </button>
+        <button
+          id="reference-rules-tab"
+          type="button"
+          role="tab"
+          aria-selected={activeReferenceTab === 'rules'}
+          aria-controls="reference-rules-panel"
+          onClick={() => setActiveReferenceTab('rules')}
+        >
+          AIルール
+        </button>
+      </div>
+      <div className="creative-ia__reference-panel">
+        {activeReferenceTab === 'materials' ? (
+          <ul
+            id="reference-materials-panel"
+            role="tabpanel"
+            aria-labelledby="reference-materials-tab"
+            className="creative-ia__reference-list"
+          >
             <li>
               <button type="button" onClick={() => setView('products')}>
                 <span>商品</span>
@@ -1598,23 +1621,20 @@ function ReferencesView() {
             <li><span>写真</span><small>準備中</small></li>
             <li><span>会社・店舗</span><small>準備中</small></li>
           </ul>
-        </section>
-        <section>
-          <header>
-            <span>02</span>
-            <div>
-              <h2>AIルール</h2>
-              <p>書き方と安全性の基準</p>
-            </div>
-          </header>
-          <ul>
+        ) : (
+          <ul
+            id="reference-rules-panel"
+            role="tabpanel"
+            aria-labelledby="reference-rules-tab"
+            className="creative-ia__reference-list"
+          >
             <li><span>想定読者</span><small>準備中</small></li>
             <li><span>表記ルール</span><small>準備中</small></li>
             <li><span>使用可能な事実</span><small>準備中</small></li>
             <li><span>禁止表現</span><small>準備中</small></li>
             <li><span>AIへの送信ルール</span><small>準備中</small></li>
           </ul>
-        </section>
+        )}
       </div>
     </section>
   )
