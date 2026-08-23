@@ -11,16 +11,22 @@ import { Link } from 'react-router-dom'
 import {
   appendCreativeIAChatMessage,
   createCreativeIAChat,
+  createCreativeIAReferenceProduct,
   createCreativeIAWordPressDraft,
   deleteCreativeIAChat,
+  deleteCreativeIAReferenceProduct,
   generateCreativeIAArticle,
   getCreativeIAChats,
+  getCreativeIAReferenceProducts,
   getCreativeIAWordPressStatus,
   updateCreativeIAChat,
+  updateCreativeIAReferenceProduct,
   type CreativeIAChat,
   type CreativeIAChatMessage,
   type CreativeIAGeneratedArticle,
   type CreativeIAProductionMemo,
+  type CreativeIAReferenceProduct,
+  type CreativeIAReferenceProductInput,
   type CreativeIAWordPressDraft,
   type CreativeIAWordPressStatus,
 } from '../../services/CreativeIA/creativeIaWordPressApi'
@@ -1412,6 +1418,154 @@ function ContentView({
 }
 
 function ReferencesView() {
+  const [view, setView] = useState<
+    'overview' | 'products' | 'create' | 'detail' | 'edit'
+  >('overview')
+  const [products, setProducts] = useState<CreativeIAReferenceProduct[]>([])
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isPending, setIsPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [isDeleteConfirming, setIsDeleteConfirming] = useState(false)
+  const selectedProduct = products.find(
+    (product) => product.id === selectedProductId,
+  )
+
+  useEffect(() => {
+    let active = true
+    void getCreativeIAReferenceProducts()
+      .then((result) => {
+        if (!active) return
+        setProducts(result.products)
+        setError(null)
+      })
+      .catch((requestError) => {
+        if (!active) return
+        setError(
+          requestError instanceof Error && requestError.message === 'AUTH_REQUIRED'
+            ? 'Hundredへサインインし直してください。'
+            : '商品一覧を読み込めませんでした。',
+        )
+      })
+      .finally(() => {
+        if (active) setIsLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const openProduct = (productId: string) => {
+    setSelectedProductId(productId)
+    setIsDeleteConfirming(false)
+    setError(null)
+    setView('detail')
+  }
+
+  const handleSaveProduct = async (input: CreativeIAReferenceProductInput) => {
+    if (isPending) return
+    setIsPending(true)
+    setError(null)
+
+    try {
+      const product =
+        view === 'edit' && selectedProduct
+          ? await updateCreativeIAReferenceProduct(selectedProduct.id, input)
+          : await createCreativeIAReferenceProduct(input)
+      setProducts((current) => {
+        const others = current.filter((item) => item.id !== product.id)
+        return [product, ...others]
+      })
+      setSelectedProductId(product.id)
+      setView('detail')
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error && requestError.message === 'AUTH_REQUIRED'
+          ? 'Hundredへサインインし直してください。'
+          : requestError instanceof Error &&
+              requestError.message === 'INVALID_INPUT'
+            ? '入力内容を確認してください。'
+            : '商品を保存できませんでした。',
+      )
+    } finally {
+      setIsPending(false)
+    }
+  }
+
+  const handleDeleteProduct = async () => {
+    if (!selectedProduct || isPending) return
+    setIsPending(true)
+    setError(null)
+
+    try {
+      await deleteCreativeIAReferenceProduct(selectedProduct.id)
+      setProducts((current) =>
+        current.filter((product) => product.id !== selectedProduct.id),
+      )
+      setSelectedProductId(null)
+      setIsDeleteConfirming(false)
+      setView('products')
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error && requestError.message === 'AUTH_REQUIRED'
+          ? 'Hundredへサインインし直してください。'
+          : '商品を削除できませんでした。',
+      )
+    } finally {
+      setIsPending(false)
+    }
+  }
+
+  if (view === 'products') {
+    return (
+      <ReferenceProductList
+        products={products}
+        isLoading={isLoading}
+        error={error}
+        onBack={() => setView('overview')}
+        onCreate={() => {
+          setSelectedProductId(null)
+          setError(null)
+          setView('create')
+        }}
+        onOpen={openProduct}
+      />
+    )
+  }
+
+  if (view === 'create' || view === 'edit') {
+    return (
+      <ProductEditor
+        key={view === 'edit' ? selectedProduct?.id : 'new-product'}
+        product={view === 'edit' ? selectedProduct : undefined}
+        isPending={isPending}
+        error={error}
+        onCancel={() => setView(selectedProduct ? 'detail' : 'products')}
+        onSave={(input) => void handleSaveProduct(input)}
+      />
+    )
+  }
+
+  if (view === 'detail' && selectedProduct) {
+    return (
+      <ProductDetail
+        product={selectedProduct}
+        isPending={isPending}
+        isDeleteConfirming={isDeleteConfirming}
+        error={error}
+        onBack={() => setView('products')}
+        onEdit={() => {
+          setError(null)
+          setView('edit')
+        }}
+        onDeleteRequest={() => setIsDeleteConfirming(true)}
+        onDeleteCancel={() => setIsDeleteConfirming(false)}
+        onDelete={() => void handleDeleteProduct()}
+      />
+    )
+  }
+
   return (
     <section className="creative-ia__page" aria-labelledby="references-title">
       <header className="creative-ia__section-header">
@@ -1433,10 +1587,16 @@ function ReferencesView() {
             </div>
           </header>
           <ul>
-            <li>商品</li>
-            <li>サービス</li>
-            <li>写真</li>
-            <li>会社・店舗</li>
+            <li>
+              <button type="button" onClick={() => setView('products')}>
+                <span>商品</span>
+                <small>{products.length}件</small>
+                <span aria-hidden="true">→</span>
+              </button>
+            </li>
+            <li><span>サービス</span><small>準備中</small></li>
+            <li><span>写真</span><small>準備中</small></li>
+            <li><span>会社・店舗</span><small>準備中</small></li>
           </ul>
         </section>
         <section>
@@ -1448,16 +1608,363 @@ function ReferencesView() {
             </div>
           </header>
           <ul>
-            <li>想定読者</li>
-            <li>表記ルール</li>
-            <li>使用可能な事実</li>
-            <li>禁止表現</li>
-            <li>AIへの送信ルール</li>
+            <li><span>想定読者</span><small>準備中</small></li>
+            <li><span>表記ルール</span><small>準備中</small></li>
+            <li><span>使用可能な事実</span><small>準備中</small></li>
+            <li><span>禁止表現</span><small>準備中</small></li>
+            <li><span>AIへの送信ルール</span><small>準備中</small></li>
           </ul>
         </section>
       </div>
     </section>
   )
+}
+
+function ReferenceProductList({
+  products,
+  isLoading,
+  error,
+  onBack,
+  onCreate,
+  onOpen,
+}: {
+  products: CreativeIAReferenceProduct[]
+  isLoading: boolean
+  error: string | null
+  onBack: () => void
+  onCreate: () => void
+  onOpen: (productId: string) => void
+}) {
+  return (
+    <section className="creative-ia__page creative-ia__reference-page" aria-labelledby="products-title">
+      <button className="creative-ia__page-back" type="button" onClick={onBack}>
+        <span aria-hidden="true">←</span> 参照データ
+      </button>
+      <header className="creative-ia__collection-header">
+        <div>
+          <p>References</p>
+          <h1 id="products-title">商品</h1>
+          <span>記事やSNSコンテンツで再利用する商品情報を管理します。</span>
+        </div>
+        <button type="button" onClick={onCreate}>＋ 商品を登録</button>
+      </header>
+      <div className="creative-ia__collection-meta">
+        <span>{products.length}件</span>
+        {products.length > 0 && <small>更新日時が新しい順に表示しています。</small>}
+      </div>
+
+      {error && <p className="creative-ia__chat-error" role="alert">{error}</p>}
+      {isLoading ? (
+        <div className="creative-ia__empty-state"><p>商品を読み込んでいます。</p></div>
+      ) : products.length === 0 ? (
+        <div className="creative-ia__empty-state">
+          <span aria-hidden="true">✦</span>
+          <h2>最初の商品を登録しましょう</h2>
+          <p>商品名だけでも登録できます。必要な情報はあとから追加できます。</p>
+          <button type="button" onClick={onCreate}>商品を登録</button>
+        </div>
+      ) : (
+        <WorkspaceList
+          ariaLabel="商品一覧"
+          columns={[
+            { key: 'name', label: '商品名' },
+            { key: 'brand', label: 'ブランド' },
+            { key: 'category', label: 'カテゴリ' },
+            { key: 'source', label: '情報元URL' },
+            { key: 'updated', label: '最終更新' },
+            { key: 'ai', label: 'AI利用' },
+          ]}
+          columnTemplate="minmax(220px, 1.35fr) minmax(120px, .75fr) minmax(120px, .75fr) minmax(160px, 1fr) 132px 90px"
+          rows={products.map((product) => ({
+            id: product.id,
+            ariaLabel: `「${product.name}」の詳細を開く`,
+            cells: {
+              name: (
+                <span className="creative-ia__collection-primary">
+                  <strong>{product.name}</strong>
+                  <small>{product.description || '説明未入力'}</small>
+                </span>
+              ),
+              brand: product.brand || '—',
+              category: product.category || '—',
+              source: formatSourceUrl(product.sourceUrl),
+              updated: <FormattedDate value={product.updatedAt} />,
+              ai: (
+                <StatusBadge tone={product.aiEnabled ? 'saved' : 'neutral'}>
+                  {product.aiEnabled ? '利用する' : '利用しない'}
+                </StatusBadge>
+              ),
+            },
+            onOpen: () => onOpen(product.id),
+          }))}
+        />
+      )}
+    </section>
+  )
+}
+
+function ProductDetail({
+  product,
+  isPending,
+  isDeleteConfirming,
+  error,
+  onBack,
+  onEdit,
+  onDeleteRequest,
+  onDeleteCancel,
+  onDelete,
+}: {
+  product: CreativeIAReferenceProduct
+  isPending: boolean
+  isDeleteConfirming: boolean
+  error: string | null
+  onBack: () => void
+  onEdit: () => void
+  onDeleteRequest: () => void
+  onDeleteCancel: () => void
+  onDelete: () => void
+}) {
+  const fields = [
+    ['ブランド', product.brand],
+    ['カテゴリ', product.category],
+    ['価格', product.price],
+    ['容量', product.capacity],
+    ['商品説明', product.description],
+    ['特徴', product.features],
+    ['成分・仕様', product.specifications],
+    ['使用方法', product.usage],
+    ['注意事項', product.cautions],
+    ['AIへ渡す補足情報', product.aiNotes],
+  ].filter(([, value]) => value)
+
+  return (
+    <section className="creative-ia__page creative-ia__reference-page" aria-labelledby="product-detail-title">
+      <button className="creative-ia__page-back" type="button" onClick={onBack}>
+        <span aria-hidden="true">←</span> 商品一覧
+      </button>
+      <header className="creative-ia__reference-detail-header">
+        <div>
+          <p>Product</p>
+          <h1 id="product-detail-title">{product.name}</h1>
+          <span>商品情報の確認と、AIで利用する内容を管理します。</span>
+        </div>
+        <div>
+          <button type="button" onClick={onEdit}>編集</button>
+          <button type="button" data-danger="true" onClick={onDeleteRequest}>削除</button>
+        </div>
+      </header>
+
+      {error && <p className="creative-ia__chat-error" role="alert">{error}</p>}
+      {isDeleteConfirming && (
+        <div className="creative-ia__delete-confirm" role="alert">
+          <span>この商品を削除します。元に戻すことはできません。</span>
+          <div>
+            <button type="button" onClick={onDeleteCancel} disabled={isPending}>キャンセル</button>
+            <button type="button" onClick={onDelete} disabled={isPending}>
+              {isPending ? '削除中' : '削除する'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="creative-ia__reference-detail-grid">
+        <section>
+          <span>AI利用</span>
+          <StatusBadge tone={product.aiEnabled ? 'saved' : 'neutral'}>
+            {product.aiEnabled ? '利用する' : '利用しない'}
+          </StatusBadge>
+        </section>
+        <section>
+          <span>最終更新</span>
+          <FormattedDate value={product.updatedAt} />
+        </section>
+        {product.sourceUrl && (
+          <section>
+            <span>情報元URL</span>
+            <a href={product.sourceUrl} target="_blank" rel="noreferrer">
+              {formatSourceUrl(product.sourceUrl)} ↗
+            </a>
+          </section>
+        )}
+      </div>
+
+      <dl className="creative-ia__reference-fields">
+        {fields.length > 0 ? (
+          fields.map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))
+        ) : (
+          <div><dt>商品情報</dt><dd>詳細情報はまだ登録されていません。</dd></div>
+        )}
+      </dl>
+    </section>
+  )
+}
+
+function ProductEditor({
+  product,
+  isPending,
+  error,
+  onCancel,
+  onSave,
+}: {
+  product?: CreativeIAReferenceProduct
+  isPending: boolean
+  error: string | null
+  onCancel: () => void
+  onSave: (input: CreativeIAReferenceProductInput) => void
+}) {
+  const [form, setForm] = useState<CreativeIAReferenceProductInput>(() => ({
+    name: product?.name ?? '',
+    brand: product?.brand ?? '',
+    category: product?.category ?? '',
+    sourceUrl: product?.sourceUrl ?? null,
+    description: product?.description ?? '',
+    features: product?.features ?? '',
+    price: product?.price ?? '',
+    capacity: product?.capacity ?? '',
+    specifications: product?.specifications ?? '',
+    usage: product?.usage ?? '',
+    cautions: product?.cautions ?? '',
+    aiNotes: product?.aiNotes ?? '',
+    aiEnabled: product?.aiEnabled ?? true,
+  }))
+  const updateField = <Key extends keyof CreativeIAReferenceProductInput>(
+    key: Key,
+    value: CreativeIAReferenceProductInput[Key],
+  ) => setForm((current) => ({ ...current, [key]: value }))
+
+  return (
+    <section className="creative-ia__page creative-ia__reference-page" aria-labelledby="product-editor-title">
+      <button className="creative-ia__page-back" type="button" onClick={onCancel}>
+        <span aria-hidden="true">←</span> {product ? '商品詳細' : '商品一覧'}
+      </button>
+      <header className="creative-ia__section-header">
+        <div>
+          <p>Product</p>
+          <h1 id="product-editor-title">{product ? '商品を編集' : '商品を登録'}</h1>
+          <span>商品名だけで保存できます。必要な情報はあとから追加できます。</span>
+        </div>
+      </header>
+
+      <form
+        className="creative-ia__reference-form"
+        onSubmit={(event) => {
+          event.preventDefault()
+          onSave({ ...form, sourceUrl: form.sourceUrl || null })
+        }}
+      >
+        {error && <p className="creative-ia__chat-error" role="alert">{error}</p>}
+        <div className="creative-ia__reference-form-grid">
+          <label>
+            <span>商品名 <small>必須</small></span>
+            <input
+              value={form.name}
+              maxLength={200}
+              required
+              onChange={(event) => updateField('name', event.target.value)}
+            />
+          </label>
+          <label>
+            <span>ブランド</span>
+            <input
+              value={form.brand}
+              maxLength={200}
+              onChange={(event) => updateField('brand', event.target.value)}
+            />
+          </label>
+          <label>
+            <span>カテゴリ</span>
+            <input
+              value={form.category}
+              maxLength={200}
+              placeholder="例：ヘアケア"
+              onChange={(event) => updateField('category', event.target.value)}
+            />
+          </label>
+          <label className="creative-ia__reference-form-wide">
+            <span>商品URL</span>
+            <input
+              type="url"
+              value={form.sourceUrl ?? ''}
+              maxLength={2000}
+              placeholder="https://example.com/product"
+              onChange={(event) => updateField('sourceUrl', event.target.value)}
+            />
+            <small>URLからの商品情報取得は今後対応予定です。</small>
+          </label>
+          <label className="creative-ia__reference-form-wide">
+            <span>商品説明</span>
+            <textarea
+              value={form.description}
+              rows={4}
+              maxLength={10000}
+              onChange={(event) => updateField('description', event.target.value)}
+            />
+          </label>
+        </div>
+
+        <details className="creative-ia__reference-form-details">
+          <summary>詳細情報を追加</summary>
+          <div className="creative-ia__reference-form-grid">
+            <label><span>価格</span><input value={form.price} maxLength={200} onChange={(event) => updateField('price', event.target.value)} /></label>
+            <label><span>容量</span><input value={form.capacity} maxLength={200} onChange={(event) => updateField('capacity', event.target.value)} /></label>
+            <ProductTextarea label="特徴" value={form.features} onChange={(value) => updateField('features', value)} />
+            <ProductTextarea label="成分・仕様" value={form.specifications} onChange={(value) => updateField('specifications', value)} />
+            <ProductTextarea label="使用方法" value={form.usage} onChange={(value) => updateField('usage', value)} />
+            <ProductTextarea label="注意事項" value={form.cautions} onChange={(value) => updateField('cautions', value)} />
+            <ProductTextarea label="AIへ渡す補足情報" value={form.aiNotes} onChange={(value) => updateField('aiNotes', value)} />
+          </div>
+        </details>
+
+        <label className="creative-ia__reference-ai-toggle">
+          <input
+            type="checkbox"
+            checked={form.aiEnabled}
+            onChange={(event) => updateField('aiEnabled', event.target.checked)}
+          />
+          <span><strong>AIで利用する</strong><small>Chatやコンテンツ生成の参照候補に含めます。</small></span>
+        </label>
+
+        <footer>
+          <button type="button" onClick={onCancel} disabled={isPending}>キャンセル</button>
+          <button type="submit" disabled={isPending || !form.name.trim()}>
+            {isPending ? '保存中' : product ? '変更を保存' : '商品を登録'}
+          </button>
+        </footer>
+      </form>
+    </section>
+  )
+}
+
+function ProductTextarea({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <label className="creative-ia__reference-form-wide">
+      <span>{label}</span>
+      <textarea value={value} rows={3} maxLength={20000} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  )
+}
+
+function formatSourceUrl(sourceUrl: string | null) {
+  if (!sourceUrl) return '—'
+  try {
+    const url = new URL(sourceUrl)
+    return `${url.hostname}${url.pathname === '/' ? '' : url.pathname}`
+  } catch {
+    return sourceUrl
+  }
 }
 
 function SettingsView({

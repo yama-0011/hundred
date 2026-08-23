@@ -56,6 +56,30 @@ export type CreativeIAChat = {
   updatedAt: number
 }
 
+export type CreativeIAReferenceProduct = {
+  id: string
+  name: string
+  brand: string
+  category: string
+  sourceUrl: string | null
+  description: string
+  features: string
+  price: string
+  capacity: string
+  specifications: string
+  usage: string
+  cautions: string
+  aiNotes: string
+  aiEnabled: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+export type CreativeIAReferenceProductInput = Omit<
+  CreativeIAReferenceProduct,
+  'id' | 'createdAt' | 'updatedAt'
+>
+
 /** HundredのCognitoセッションからWorkerへ送信するAccess Tokenを取得する。 */
 async function getCreativeIAAccessToken() {
   const session = await fetchAuthSession()
@@ -97,6 +121,8 @@ async function requestCreativeIAApi<T>(
               ? 'WORDPRESS_PERMISSION_DENIED'
               : response.status === 409
                 ? 'CONFLICT'
+                : response.status === 404
+                  ? 'NOT_FOUND'
               : response.status === 400
                   ? 'INVALID_INPUT'
                   : 'API_FAILED',
@@ -163,6 +189,51 @@ export function appendCreativeIAChatMessage(
 export function deleteCreativeIAChat(chatId: string) {
   return requestCreativeIAApi<{ deleted: boolean }>(
     `/api/creative-ia/chats/${encodeURIComponent(chatId)}`,
+    { method: 'DELETE' },
+  )
+}
+
+/** D1に保存された商品参照データを取得する。 */
+export function getCreativeIAReferenceProducts() {
+  return requestCreativeIAApi<{
+    products: CreativeIAReferenceProduct[]
+    count: number
+  }>('/api/creative-ia/references/products')
+}
+
+/** 商品参照データをD1へ登録する。 */
+export function createCreativeIAReferenceProduct(
+  product: CreativeIAReferenceProductInput,
+) {
+  return requestCreativeIAApi<CreativeIAReferenceProduct>(
+    '/api/creative-ia/references/products',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(product),
+    },
+  )
+}
+
+/** 商品参照データを更新する。 */
+export function updateCreativeIAReferenceProduct(
+  productId: string,
+  product: CreativeIAReferenceProductInput,
+) {
+  return requestCreativeIAApi<CreativeIAReferenceProduct>(
+    `/api/creative-ia/references/products/${encodeURIComponent(productId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(product),
+    },
+  )
+}
+
+/** 商品参照データを削除する。 */
+export function deleteCreativeIAReferenceProduct(productId: string) {
+  return requestCreativeIAApi<{ deleted: boolean }>(
+    `/api/creative-ia/references/products/${encodeURIComponent(productId)}`,
     { method: 'DELETE' },
   )
 }

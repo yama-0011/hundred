@@ -28,6 +28,14 @@ import {
   listCreativeIAChats,
   updateCreativeIAChat,
 } from "./chat";
+import {
+  createCreativeIAReferenceProduct,
+  CreativeIAReferenceProductError,
+  deleteCreativeIAReferenceProduct,
+  getCreativeIAReferenceProduct,
+  listCreativeIAReferenceProducts,
+  updateCreativeIAReferenceProduct,
+} from "./reference-products";
 
 interface Env extends WordPressOAuthEnv, GeminiEnv {
   COGNITO_USER_POOL_ID: string;
@@ -82,6 +90,33 @@ function handleOptions(request: Request, env: Env): Response {
     status: 204,
     headers: getCorsHeaders(request, env),
   });
+}
+
+function handleReferenceProductError(
+  request: Request,
+  env: Env,
+  error: unknown,
+  fallbackMessage: string,
+): Response {
+  if (error instanceof CognitoAuthenticationError) {
+    return json(request, env, { error: "認証が必要です" }, 401);
+  }
+
+  if (error instanceof CreativeIAReferenceProductError) {
+    return json(
+      request,
+      env,
+      {
+        error:
+          error.code === "NOT_FOUND"
+            ? "商品が見つかりません"
+            : "入力内容を確認してください",
+      },
+      error.code === "NOT_FOUND" ? 404 : 400,
+    );
+  }
+
+  return json(request, env, { error: fallbackMessage }, 500);
 }
 
 async function handleWordPressStatus(
@@ -198,6 +233,119 @@ export default {
         }
 
         return json(request, env, { error: "Chat一覧を取得できませんでした" }, 500);
+      }
+    }
+
+    if (
+      request.method === "GET" &&
+      url.pathname === "/api/creative-ia/references/products"
+    ) {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(
+          request,
+          env,
+          await listCreativeIAReferenceProducts(env, ownerUserId),
+        );
+      } catch (error) {
+        return handleReferenceProductError(
+          request,
+          env,
+          error,
+          "商品一覧を取得できませんでした",
+        );
+      }
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/creative-ia/references/products"
+    ) {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(
+          request,
+          env,
+          await createCreativeIAReferenceProduct(request, env, ownerUserId),
+          201,
+        );
+      } catch (error) {
+        return handleReferenceProductError(
+          request,
+          env,
+          error,
+          "商品を登録できませんでした",
+        );
+      }
+    }
+
+    const productMatch = url.pathname.match(
+      /^\/api\/creative-ia\/references\/products\/([0-9a-f-]+)$/iu,
+    );
+    if (productMatch && request.method === "GET") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(
+          request,
+          env,
+          await getCreativeIAReferenceProduct(
+            env,
+            ownerUserId,
+            productMatch[1],
+          ),
+        );
+      } catch (error) {
+        return handleReferenceProductError(
+          request,
+          env,
+          error,
+          "商品を取得できませんでした",
+        );
+      }
+    }
+
+    if (productMatch && request.method === "PATCH") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(
+          request,
+          env,
+          await updateCreativeIAReferenceProduct(
+            request,
+            env,
+            ownerUserId,
+            productMatch[1],
+          ),
+        );
+      } catch (error) {
+        return handleReferenceProductError(
+          request,
+          env,
+          error,
+          "商品を更新できませんでした",
+        );
+      }
+    }
+
+    if (productMatch && request.method === "DELETE") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(
+          request,
+          env,
+          await deleteCreativeIAReferenceProduct(
+            env,
+            ownerUserId,
+            productMatch[1],
+          ),
+        );
+      } catch (error) {
+        return handleReferenceProductError(
+          request,
+          env,
+          error,
+          "商品を削除できませんでした",
+        );
       }
     }
 

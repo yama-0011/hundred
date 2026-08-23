@@ -1115,8 +1115,337 @@
 }
 
 .creative-ia__reference-groups li {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
   padding: 13px 0;
   border-top: 1px solid var(--cia-border);
+}
+
+.creative-ia__reference-groups li > small {
+  color: var(--cia-muted);
+  font-size: 0.66rem;
+}
+
+.creative-ia__reference-groups li > button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  color: var(--cia-text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.creative-ia__reference-groups li > button small {
+  color: var(--cia-muted);
+  font-size: 0.68rem;
+}
+
+.creative-ia__reference-groups li > button > span:last-child {
+  color: var(--cia-accent);
+}
+
+.creative-ia__page-back {
+  min-height: 36px;
+  margin: -24px 0 24px;
+  padding: 0;
+  border: 0;
+  color: var(--cia-muted);
+  background: transparent;
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.creative-ia__page-back:hover,
+.creative-ia__page-back:focus-visible {
+  color: var(--cia-text);
+}
+
+.creative-ia__reference-detail-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+}
+
+.creative-ia__reference-detail-header p {
+  margin: 0 0 6px;
+  color: var(--cia-accent);
+  font-size: 0.72rem;
+  font-weight: 760;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.creative-ia__reference-detail-header h1 {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-weight: 610;
+  letter-spacing: -0.05em;
+}
+
+.creative-ia__reference-detail-header > div:first-child > span {
+  display: block;
+  margin-top: 10px;
+  color: var(--cia-muted);
+  font-size: 0.82rem;
+}
+
+.creative-ia__reference-detail-header > div:last-child {
+  display: flex;
+  gap: 8px;
+}
+
+.creative-ia__reference-detail-header button {
+  min-height: 40px;
+  padding: 0 15px;
+  border: 1px solid var(--cia-border-strong);
+  border-radius: 12px;
+  color: var(--cia-text);
+  background: var(--cia-surface-soft);
+  cursor: pointer;
+}
+
+.creative-ia__reference-detail-header button[data-danger="true"] {
+  color: var(--cia-danger);
+}
+
+.creative-ia__delete-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 28px;
+  padding: 15px 17px;
+  border: 1px solid color-mix(in srgb, var(--cia-danger) 28%, transparent);
+  border-radius: 14px;
+  color: var(--cia-danger);
+  background: var(--cia-danger-bg);
+  font-size: 0.76rem;
+}
+
+.creative-ia__delete-confirm > div {
+  display: flex;
+  gap: 8px;
+}
+
+.creative-ia__delete-confirm button {
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--cia-border-strong);
+  border-radius: 10px;
+  color: inherit;
+  background: var(--cia-surface-soft);
+  cursor: pointer;
+}
+
+.creative-ia__reference-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 38px;
+}
+
+.creative-ia__reference-detail-grid > section {
+  min-height: 94px;
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  padding: 17px 18px;
+  border: 1px solid var(--cia-border);
+  border-radius: 16px;
+  background: var(--cia-surface-raised);
+}
+
+.creative-ia__reference-detail-grid > section > span:first-child {
+  color: var(--cia-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.creative-ia__reference-detail-grid time,
+.creative-ia__reference-detail-grid a {
+  color: var(--cia-text);
+  font-size: 0.78rem;
+}
+
+.creative-ia__reference-fields {
+  display: grid;
+  margin: 20px 0 0;
+  border-top: 1px solid var(--cia-border);
+}
+
+.creative-ia__reference-fields > div {
+  display: grid;
+  grid-template-columns: minmax(130px, 220px) minmax(0, 1fr);
+  gap: 28px;
+  padding: 20px 4px;
+  border-bottom: 1px solid var(--cia-border);
+}
+
+.creative-ia__reference-fields dt {
+  color: var(--cia-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.creative-ia__reference-fields dd {
+  margin: 0;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+.creative-ia__reference-form {
+  display: grid;
+  gap: 24px;
+  margin-top: 38px;
+}
+
+.creative-ia__reference-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.creative-ia__reference-form label {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.creative-ia__reference-form label > span {
+  color: var(--cia-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.creative-ia__reference-form label > span small {
+  margin-left: 5px;
+  color: var(--cia-accent);
+  font-size: 0.6rem;
+}
+
+.creative-ia__reference-form label > small {
+  color: var(--cia-muted);
+  font-size: 0.64rem;
+}
+
+.creative-ia__reference-form input:not([type="checkbox"]),
+.creative-ia__reference-form textarea {
+  width: 100%;
+  border: 1px solid var(--cia-border-strong);
+  border-radius: 13px;
+  color: var(--cia-text);
+  background: var(--cia-surface-raised);
+  outline: none;
+}
+
+.creative-ia__reference-form input:not([type="checkbox"]) {
+  min-height: 44px;
+  padding: 0 13px;
+}
+
+.creative-ia__reference-form textarea {
+  resize: vertical;
+  min-height: 96px;
+  padding: 12px 13px;
+  line-height: 1.65;
+}
+
+.creative-ia__reference-form input:focus,
+.creative-ia__reference-form textarea:focus {
+  border-color: var(--cia-accent);
+}
+
+.creative-ia__reference-form-wide {
+  grid-column: 1 / -1;
+}
+
+.creative-ia__reference-form-details {
+  border: 1px solid var(--cia-border);
+  border-radius: 18px;
+  background: var(--cia-surface-soft);
+}
+
+.creative-ia__reference-form-details summary {
+  padding: 17px 19px;
+  color: var(--cia-text);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.creative-ia__reference-form-details > div {
+  padding: 3px 19px 20px;
+}
+
+.creative-ia__reference-ai-toggle {
+  display: flex !important;
+  align-items: center;
+  grid-template-columns: none;
+  gap: 12px !important;
+  padding: 17px 19px;
+  border: 1px solid var(--cia-border);
+  border-radius: 16px;
+  background: var(--cia-surface-raised);
+  cursor: pointer;
+}
+
+.creative-ia__reference-ai-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--cia-accent);
+}
+
+.creative-ia__reference-ai-toggle > span {
+  display: grid;
+  gap: 3px;
+}
+
+.creative-ia__reference-ai-toggle strong {
+  color: var(--cia-text);
+}
+
+.creative-ia__reference-ai-toggle small {
+  color: var(--cia-muted);
+  font-weight: 400;
+}
+
+.creative-ia__reference-form footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.creative-ia__reference-form footer button {
+  min-height: 44px;
+  padding: 0 17px;
+  border: 1px solid var(--cia-border-strong);
+  border-radius: 13px;
+  color: var(--cia-text);
+  background: var(--cia-surface-soft);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.creative-ia__reference-form footer button[type="submit"] {
+  border-color: transparent;
+  color: var(--cia-accent-ink);
+  background: var(--cia-accent);
+}
+
+.creative-ia__reference-form footer button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .creative-ia__settings-list {
@@ -1372,6 +1701,53 @@
     grid-column: 2;
     grid-row: 1 / span 2;
     align-self: stretch;
+  }
+
+  .creative-ia__page-back {
+    margin: 0 0 18px;
+  }
+
+  .creative-ia__reference-detail-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .creative-ia__reference-detail-header > div:last-child {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .creative-ia__delete-confirm {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .creative-ia__delete-confirm > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .creative-ia__reference-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .creative-ia__reference-fields > div {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .creative-ia__reference-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .creative-ia__reference-form-wide {
+    grid-column: auto;
+  }
+
+  .creative-ia__reference-form footer {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .creative-ia__bottom-navigation {
