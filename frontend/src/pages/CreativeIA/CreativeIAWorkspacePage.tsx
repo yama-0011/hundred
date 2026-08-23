@@ -3,15 +3,24 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type FormEvent,
   type ReactNode,
 } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  appendCreativeIAChatMessage,
+  createCreativeIAChat,
   createCreativeIAWordPressDraft,
+  deleteCreativeIAChat,
   generateCreativeIAArticle,
+  getCreativeIAChats,
   getCreativeIAWordPressStatus,
+  updateCreativeIAChat,
+  type CreativeIAChat,
+  type CreativeIAChatMessage,
   type CreativeIAGeneratedArticle,
+  type CreativeIAProductionMemo,
   type CreativeIAWordPressDraft,
   type CreativeIAWordPressStatus,
 } from '../../services/CreativeIA/creativeIaWordPressApi'
@@ -19,10 +28,18 @@ import '../../styles/CreativeIA/creative-ia-workspace.css'
 
 type CreativeIASection = 'create' | 'content' | 'references' | 'settings'
 type CreativeIATheme = 'auto' | 'light' | 'dark'
-type Message = {
+type ArtifactView = 'article' | 'memo' | 'rules'
+type Message = CreativeIAChatMessage
+type ProductionMemo = CreativeIAProductionMemo
+type ReferenceAIRule = {
   id: string
-  role: 'assistant' | 'user'
-  text: string
+  label: string
+  description?: string
+}
+type ChatSession = CreativeIAChat
+type ChatState = {
+  chats: ChatSession[]
+  activeChatId: string | null
 }
 
 const navigationItems: Array<{
@@ -58,6 +75,10 @@ const quickPrompts = [
   { label: '相談', prompt: '何を発信すればよいか相談したい' },
 ]
 
+// 参照データ機能の実装後は「02 AIルール」をAPIから取得する。
+// 現時点で固定ルールは埋め込まず、記事ごとの選択UIだけ用意する。
+const referenceAIRules: ReferenceAIRule[] = []
+
 function PathIcon({ path }: { path: string }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -67,7 +88,11 @@ function PathIcon({ path }: { path: string }) {
 }
 
 function createMessage(role: Message['role'], text: string): Message {
-  return { id: crypto.randomUUID(), role, text }
+  return { id: crypto.randomUUID(), role, text, createdAt: Date.now() }
+}
+
+function createInitialChatState(): ChatState {
+  return { chats: [], activeChatId: null }
 }
 
 function getStoredTheme(): CreativeIATheme {
@@ -80,17 +105,13 @@ function CreativeIAWorkspacePage() {
   const [activeSection, setActiveSection] =
     useState<CreativeIASection>('create')
   const [theme, setTheme] = useState<CreativeIATheme>(getStoredTheme)
-  const [messages, setMessages] = useState<Message[]>([
-    createMessage(
-      'assistant',
-      '今日は何を作りますか？ 作りたい内容をそのまま話してください。',
-    ),
-  ])
+  const [chatState, setChatState] =
+    useState<ChatState>(createInitialChatState)
+  const [isChatsLoading, setIsChatsLoading] = useState(true)
+  const [isChatMutationPending, setIsChatMutationPending] = useState(false)
+  const [chatError, setChatError] = useState<string | null>(null)
+  const [chatLimit, setChatLimit] = useState(10)
   const [composer, setComposer] = useState('')
-  const [article, setArticle] =
-    useState<CreativeIAGeneratedArticle | null>(null)
-  const [draftTitle, setDraftTitle] = useState('')
-  const [draftContent, setDraftContent] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [generationError, setGenerationError] = useState<string | null>(null)
   const [connection, setConnection] =
@@ -98,15 +119,71 @@ function CreativeIAWorkspacePage() {
   const [isConnectionLoading, setIsConnectionLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [savedDraft, setSavedDraft] =
-    useState<CreativeIAWordPressDraft | null>(null)
   const [isArtifactOpen, setIsArtifactOpen] = useState(false)
+  const [artifactView, setArtifactView] = useState<ArtifactView>('article')
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const draftRequestKeyRef = useRef<string | null>(null)
   const messageEndRef = useRef<HTMLDivElement | null>(null)
+  const chatStateRef = useRef(chatState)
+  const chatSaveTimersRef = useRef(new Map<string, number>())
+  const activeChat = chatState.activeChatId
+    ? chatState.chats.find((chat) => chat.id === chatState.activeChatId)
+    : undefined
+
+  const updateChat = (
+    chatId: string,
+    updater: (chat: ChatSession) => ChatSession,
+  ) => {
+    setChatState((current) => ({
+      ...current,
+      chats: current.chats.map((chat) =>
+        chat.id === chatId ? updater(chat) : chat,
+      ),
+    }))
+  }
 
   useEffect(() => {
     window.localStorage.setItem('creative-ia-theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    chatStateRef.current = chatState
+  }, [chatState])
+
+  useEffect(() => {
+    const timers = chatSaveTimersRef.current
+    return () => {
+      for (const timer of timers.values()) window.clearTimeout(timer)
+      timers.clear()
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+
+    void getCreativeIAChats()
+      .then((result) => {
+        if (!active) return
+        setChatState({ chats: result.chats, activeChatId: null })
+        setChatLimit(result.limit)
+        setChatError(null)
+      })
+      .catch((error) => {
+        if (!active) return
+        setChatError(
+          error instanceof Error && error.message === 'AUTH_REQUIRED'
+            ? 'Hundredへサインインし直してください。'
+            : 'Chat一覧を読み込めませんでした。',
+        )
+      })
+      .finally(() => {
+        if (active) setIsChatsLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -129,7 +206,24 @@ function CreativeIAWorkspacePage() {
 
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isGenerating])
+  }, [activeChat?.messages, isGenerating])
+
+  const scheduleChatSave = (chatId: string) => {
+    const currentTimer = chatSaveTimersRef.current.get(chatId)
+    if (currentTimer) window.clearTimeout(currentTimer)
+
+    const timer = window.setTimeout(() => {
+      chatSaveTimersRef.current.delete(chatId)
+      const chat = chatStateRef.current.chats.find((item) => item.id === chatId)
+      if (!chat) return
+
+      void updateCreativeIAChat(chat).catch(() => {
+        setChatError('Chatの変更を保存できませんでした。')
+      })
+    }, 700)
+
+    chatSaveTimersRef.current.set(chatId, timer)
+  }
 
   const selectedSiteLabel = useMemo(
     () =>
@@ -139,51 +233,97 @@ function CreativeIAWorkspacePage() {
     [connection],
   )
 
+  const openArtifact = (view: ArtifactView) => {
+    setArtifactView(view)
+    setIsArtifactOpen(true)
+  }
+
   const handleGenerate = async (request: string) => {
     const normalizedRequest = request.trim()
-    if (!normalizedRequest || isGenerating) return
-    const isRevision = article !== null
+    if (!normalizedRequest || isGenerating || !activeChat) return
+    const targetChatId = activeChat.id
+    const isRevision = activeChat.article !== null
+    const userMessage = createMessage('user', normalizedRequest)
+    const chatBeforeGeneration: ChatSession = {
+      ...activeChat,
+      title:
+        activeChat.title === '新しいChat'
+          ? normalizedRequest.slice(0, 34)
+          : activeChat.title,
+      messages: [...activeChat.messages, userMessage],
+      savedDraft: null,
+      updatedAt: Date.now(),
+    }
 
-    setMessages((current) => [
-      ...current,
-      createMessage('user', normalizedRequest),
-    ])
+    updateChat(targetChatId, () => chatBeforeGeneration)
     setComposer('')
     setGenerationError(null)
-    setSavedDraft(null)
+    setChatError(null)
     setSaveError(null)
     setIsGenerating(true)
 
     try {
+      await Promise.all([
+        appendCreativeIAChatMessage(targetChatId, userMessage),
+        updateCreativeIAChat(chatBeforeGeneration),
+      ])
+      const productionMemoText = activeChat.productionMemos
+        .filter((memo) => memo.label.trim() || memo.value.trim())
+        .map((memo) => `${memo.label.trim() || '項目'}: ${memo.value.trim()}`)
+        .join('\n')
+      const appliedRuleText = referenceAIRules
+        .filter((rule) => activeChat.appliedRuleIds.includes(rule.id))
+        .map((rule) => rule.label)
+        .join('\n')
+      const articleGuidance = [
+        productionMemoText && `制作メモ:\n${productionMemoText}`,
+        appliedRuleText && `適用ルール:\n${appliedRuleText}`,
+      ]
+        .filter(Boolean)
+        .join('\n\n')
       const result = await generateCreativeIAArticle({
         topic: isRevision
-          ? draftTitle.slice(0, 200) || '作成中の記事の修正'
+          ? activeChat.draftTitle.slice(0, 200) || '作成中の記事の修正'
           : normalizedRequest.slice(0, 200),
         keyPoints: isRevision
           ? [
-              `現在の記事概要: ${article.excerpt}`,
+              `現在の記事概要: ${activeChat.article?.excerpt ?? ''}`,
               `利用者の修正依頼: ${normalizedRequest}`,
+              articleGuidance,
             ]
               .join('\n')
               .slice(0, 2000)
-          : normalizedRequest.slice(200, 2200),
+          : [normalizedRequest.slice(200), articleGuidance]
+              .filter(Boolean)
+              .join('\n\n')
+              .slice(0, 2000),
         audience: '',
         tone: 'friendly',
       })
-      setArticle(result)
-      setDraftTitle(result.title)
-      setDraftContent(result.content)
+      const assistantMessage = createMessage(
+        'assistant',
+        isRevision
+          ? '修正内容を反映しました。記事案をもう一度確認してください。'
+          : '記事案を作成しました。記事案を確認してください。直したいところは、このまま会話で伝えられます。',
+      )
+      const updatedChat: ChatSession = {
+        ...chatBeforeGeneration,
+        article: result,
+        draftTitle: result.title,
+        draftContent: result.content,
+        messages: [...chatBeforeGeneration.messages, assistantMessage],
+        updatedAt: Date.now(),
+      }
+      updateChat(targetChatId, () => updatedChat)
+      void Promise.all([
+        appendCreativeIAChatMessage(targetChatId, assistantMessage),
+        updateCreativeIAChat(updatedChat),
+      ]).catch(() => {
+        setChatError('生成した記事案をD1へ保存できませんでした。')
+      })
+      setArtifactView('article')
       setIsArtifactOpen(true)
       draftRequestKeyRef.current = null
-      setMessages((current) => [
-        ...current,
-        createMessage(
-          'assistant',
-          isRevision
-            ? '修正内容を反映しました。右側の記事案をもう一度確認してください。'
-            : '記事案を作成しました。右側の記事案を確認してください。直したいところは、このまま会話で伝えられます。',
-        ),
-      ])
     } catch (error) {
       const code = error instanceof Error ? error.message : ''
       const message =
@@ -207,23 +347,28 @@ function CreativeIAWorkspacePage() {
   }
 
   const handleSave = async () => {
-    if (!connection?.connected) {
+    if (!connection?.connected || !activeChat) {
       setSaveError('保存するには、設定からWordPressへ接続してください。')
       return
     }
 
     setIsSaving(true)
     setSaveError(null)
-    setSavedDraft(null)
+    updateChat(activeChat.id, (chat) => ({ ...chat, savedDraft: null }))
 
     try {
       const requestKey = draftRequestKeyRef.current ?? crypto.randomUUID()
       draftRequestKeyRef.current = requestKey
       const result = await createCreativeIAWordPressDraft(
-        { title: draftTitle, content: draftContent },
+        { title: activeChat.draftTitle, content: activeChat.draftContent },
         requestKey,
       )
-      setSavedDraft(result)
+      updateChat(activeChat.id, (chat) => ({
+        ...chat,
+        savedDraft: result,
+        updatedAt: Date.now(),
+      }))
+      scheduleChatSave(activeChat.id)
       draftRequestKeyRef.current = null
     } catch (error) {
       setSaveError(
@@ -239,10 +384,84 @@ function CreativeIAWorkspacePage() {
   const handleSectionChange = (section: CreativeIASection) => {
     setActiveSection(section)
     setIsArtifactOpen(false)
+    if (section === 'create') {
+      setChatState((current) => ({ ...current, activeChatId: null }))
+    }
+  }
+
+  const handleNewChat = async () => {
+    if (isChatMutationPending) return
+    setIsChatMutationPending(true)
+    setChatError(null)
+
+    try {
+      const chat = await createCreativeIAChat()
+      setChatState((current) => ({
+        chats: [chat, ...current.chats],
+        activeChatId: chat.id,
+      }))
+      setComposer('')
+      setGenerationError(null)
+      setSaveError(null)
+      setIsArtifactOpen(false)
+      setArtifactView('article')
+      draftRequestKeyRef.current = null
+    } catch (error) {
+      setChatError(
+        error instanceof Error && error.message === 'CONFLICT'
+          ? `Chatの上限は${chatLimit}件です。不要なChatを削除してください。`
+          : 'Chatを作成できませんでした。',
+      )
+    } finally {
+      setIsChatMutationPending(false)
+    }
+  }
+
+  const handleSelectChat = (chatId: string) => {
+    setChatState((current) => ({ ...current, activeChatId: chatId }))
+    setComposer('')
+    setGenerationError(null)
+    setChatError(null)
+    setSaveError(null)
+    setIsArtifactOpen(false)
+    setArtifactView('article')
+    draftRequestKeyRef.current = null
+  }
+
+  const handleDeleteChat = async (chatId: string) => {
+    if (isChatMutationPending) return
+    setIsChatMutationPending(true)
+    setChatError(null)
+
+    try {
+      await deleteCreativeIAChat(chatId)
+      const timer = chatSaveTimersRef.current.get(chatId)
+      if (timer) window.clearTimeout(timer)
+      chatSaveTimersRef.current.delete(chatId)
+      setChatState((current) => ({
+        chats: current.chats.filter((chat) => chat.id !== chatId),
+        activeChatId:
+          current.activeChatId === chatId ? null : current.activeChatId,
+      }))
+      setComposer('')
+      setGenerationError(null)
+      setSaveError(null)
+      setIsArtifactOpen(false)
+      setArtifactView('article')
+      draftRequestKeyRef.current = null
+    } catch {
+      setChatError('Chatを削除できませんでした。')
+    } finally {
+      setIsChatMutationPending(false)
+    }
   }
 
   return (
-    <main className="creative-ia" data-theme={theme}>
+    <main
+      className="creative-ia"
+      data-theme={theme}
+      data-sidebar-collapsed={isSidebarCollapsed}
+    >
       <header className="creative-ia__mobile-header">
         <Link to="/" aria-label="Hundredへ戻る">
           <span aria-hidden="true">←</span> Hundred
@@ -281,31 +500,67 @@ function CreativeIAWorkspacePage() {
         </Link>
       </aside>
 
+      <button
+        className="creative-ia__sidebar-toggle"
+        type="button"
+        aria-label={
+          isSidebarCollapsed ? 'サイドバーを表示' : 'サイドバーを隠す'
+        }
+        onClick={() => setIsSidebarCollapsed((current) => !current)}
+      >
+        <PathIcon
+          path={
+            isSidebarCollapsed
+              ? 'M9 6l6 6-6 6'
+              : 'M15 6l-6 6 6 6'
+          }
+        />
+      </button>
+
       <div className="creative-ia__workspace">
-        {activeSection === 'create' && (
+        {activeSection === 'create' && !activeChat && (
+          <ChatOverview
+            chats={chatState.chats}
+            activeChatId={chatState.activeChatId}
+            isLoading={isChatsLoading}
+            isPending={isChatMutationPending}
+            error={chatError}
+            limit={chatLimit}
+            onNewChat={() => void handleNewChat()}
+            onSelectChat={handleSelectChat}
+            onDeleteChat={(chatId) => void handleDeleteChat(chatId)}
+          />
+        )}
+
+        {activeSection === 'create' && activeChat && (
           <CreateView
-            messages={messages}
+            messages={activeChat.messages}
             composer={composer}
-            article={article}
+            article={activeChat.article}
             isGenerating={isGenerating}
             error={generationError}
+            persistenceError={chatError}
             messageEndRef={messageEndRef}
             onComposerChange={setComposer}
             onSubmit={handleSubmit}
             onQuickPrompt={setComposer}
-            onOpenArtifact={() => setIsArtifactOpen(true)}
+            onOpenArtifact={openArtifact}
+            onBackToChats={() => {
+              setChatState((current) => ({ ...current, activeChatId: null }))
+              setIsArtifactOpen(false)
+              setChatError(null)
+            }}
           />
         )}
 
         {activeSection === 'content' && (
           <ContentView
-            article={article}
-            title={draftTitle}
-            content={draftContent}
-            savedDraft={savedDraft}
-            onOpen={() => {
+            chats={chatState.chats}
+            destination={selectedSiteLabel}
+            onOpen={(chatId) => {
+              handleSelectChat(chatId)
               setActiveSection('create')
-              setIsArtifactOpen(true)
+              openArtifact('article')
             }}
           />
         )}
@@ -323,23 +578,61 @@ function CreativeIAWorkspacePage() {
         )}
       </div>
 
-      {activeSection === 'create' && article && (
+      {activeSection === 'create' && activeChat && (
         <ArtifactPanel
           open={isArtifactOpen}
-          title={draftTitle}
-          content={draftContent}
-          warnings={article.warnings}
+          view={artifactView}
+          hasArticle={activeChat.article !== null}
+          title={activeChat.draftTitle}
+          content={activeChat.draftContent}
+          warnings={activeChat.article?.warnings ?? []}
+          productionMemos={activeChat.productionMemos}
+          availableRules={referenceAIRules}
+          appliedRuleIds={activeChat.appliedRuleIds}
           isSaving={isSaving}
           connection={connection}
           saveError={saveError}
-          savedDraft={savedDraft}
+          savedDraft={activeChat.savedDraft}
           onClose={() => setIsArtifactOpen(false)}
+          onViewChange={setArtifactView}
+          onProductionMemosChange={(productionMemos) => {
+            updateChat(activeChat.id, (chat) => ({
+              ...chat,
+              productionMemos,
+              savedDraft: null,
+              updatedAt: Date.now(),
+            }))
+            scheduleChatSave(activeChat.id)
+            draftRequestKeyRef.current = null
+          }}
+          onAppliedRuleIdsChange={(appliedRuleIds) => {
+            updateChat(activeChat.id, (chat) => ({
+              ...chat,
+              appliedRuleIds,
+              savedDraft: null,
+              updatedAt: Date.now(),
+            }))
+            scheduleChatSave(activeChat.id)
+            draftRequestKeyRef.current = null
+          }}
           onTitleChange={(value) => {
-            setDraftTitle(value)
+            updateChat(activeChat.id, (chat) => ({
+              ...chat,
+              draftTitle: value,
+              savedDraft: null,
+              updatedAt: Date.now(),
+            }))
+            scheduleChatSave(activeChat.id)
             draftRequestKeyRef.current = null
           }}
           onContentChange={(value) => {
-            setDraftContent(value)
+            updateChat(activeChat.id, (chat) => ({
+              ...chat,
+              draftContent: value,
+              savedDraft: null,
+              updatedAt: Date.now(),
+            }))
+            scheduleChatSave(activeChat.id)
             draftRequestKeyRef.current = null
           }}
           onSave={() => void handleSave()}
@@ -368,46 +661,308 @@ function CreativeIAWorkspacePage() {
   )
 }
 
+function ChatOverview({
+  chats,
+  activeChatId,
+  isLoading,
+  isPending,
+  error,
+  limit,
+  onNewChat,
+  onSelectChat,
+  onDeleteChat,
+}: {
+  chats: ChatSession[]
+  activeChatId: string | null
+  isLoading: boolean
+  isPending: boolean
+  error: string | null
+  limit: number
+  onNewChat: () => void
+  onSelectChat: (chatId: string) => void
+  onDeleteChat: (chatId: string) => void
+}) {
+  const sortedChats = useMemo(
+    () => [...chats].sort((left, right) => right.updatedAt - left.updatedAt),
+    [chats],
+  )
+
+  return (
+    <section className="creative-ia__chat-overview" aria-labelledby="chat-overview-title">
+      <header className="creative-ia__collection-header">
+        <div>
+          <p>Create</p>
+          <h1 id="chat-overview-title">Chat</h1>
+          <span>作成中の記事を選ぶか、新しいChatを始めます。</span>
+        </div>
+        <button
+          type="button"
+          onClick={onNewChat}
+          disabled={isPending || chats.length >= limit}
+        >
+          ＋ 新しいChat
+        </button>
+      </header>
+
+      <div className="creative-ia__collection-meta">
+        <span>{chats.length} / {limit} Chat</span>
+        {chats.length > 0 && <small>左へスライドすると削除できます。</small>}
+      </div>
+
+      {error && <p className="creative-ia__chat-error" role="alert">{error}</p>}
+
+      {isLoading ? (
+        <div className="creative-ia__empty-state">
+          <p>Chatを読み込んでいます。</p>
+        </div>
+      ) : chats.length === 0 ? (
+        <div className="creative-ia__empty-state">
+          <span aria-hidden="true">✦</span>
+          <h2>最初のChatを始めましょう</h2>
+          <p>AIに情報を渡しながら、1つの記事を育てていけます。</p>
+          <button type="button" onClick={onNewChat} disabled={isPending}>
+            新しいChatを作成
+          </button>
+        </div>
+      ) : (
+        <WorkspaceList
+          ariaLabel="Chat一覧"
+          columns={[
+            { key: 'title', label: 'Chatタイトル' },
+            { key: 'article', label: '関連している記事' },
+            { key: 'updated', label: '最終更新' },
+            { key: 'status', label: '状態' },
+          ]}
+          columnTemplate="minmax(220px, 1.35fr) minmax(220px, 1.2fr) 132px 108px"
+          rows={sortedChats.map((chat) => ({
+            id: chat.id,
+            ariaLabel: `「${chat.title}」を開く`,
+            active: activeChatId === chat.id,
+            cells: {
+              title: (
+                <span className="creative-ia__collection-primary">
+                  <strong>{chat.title}</strong>
+                  <small>{chat.messages.at(-1)?.text ?? '会話を始めましょう'}</small>
+                </span>
+              ),
+              article: chat.draftTitle || chat.article?.title || '記事未作成',
+              updated: <FormattedDate value={chat.updatedAt} />,
+              status: (
+                <StatusBadge tone={chat.savedDraft ? 'saved' : 'editing'}>
+                  {chat.savedDraft
+                    ? '保存済み'
+                    : chat.article
+                      ? '作成中'
+                      : '会話中'}
+                </StatusBadge>
+              ),
+            },
+            onOpen: () => onSelectChat(chat.id),
+            onDelete: () => onDeleteChat(chat.id),
+            deleteLabel: `「${chat.title}」を削除`,
+          }))}
+          disabled={isPending}
+        />
+      )}
+    </section>
+  )
+}
+
+type WorkspaceListColumn = {
+  key: string
+  label: string
+}
+
+type WorkspaceListRow = {
+  id: string
+  ariaLabel: string
+  active?: boolean
+  cells: Record<string, ReactNode>
+  onOpen: () => void
+  onDelete?: () => void
+  deleteLabel?: string
+}
+
+function WorkspaceList({
+  ariaLabel,
+  columns,
+  columnTemplate,
+  rows,
+  disabled = false,
+}: {
+  ariaLabel: string
+  columns: WorkspaceListColumn[]
+  columnTemplate: string
+  rows: WorkspaceListRow[]
+  disabled?: boolean
+}) {
+  const [openRowId, setOpenRowId] = useState<string | null>(null)
+  const pointerStartRef = useRef<{ rowId: string; x: number } | null>(null)
+  const listStyle = {
+    '--cia-list-columns': columnTemplate,
+  } as CSSProperties
+
+  return (
+    <div className="creative-ia__collection-list" style={listStyle} role="list" aria-label={ariaLabel}>
+      <div className="creative-ia__collection-list-header" aria-hidden="true">
+        {columns.map((column) => (
+          <span key={column.key}>{column.label}</span>
+        ))}
+        <span />
+      </div>
+      <div className="creative-ia__collection-list-body">
+        {rows.map((row) => (
+          <div
+            key={row.id}
+            className="creative-ia__collection-row"
+            data-reveal-delete={openRowId === row.id}
+            data-deletable={Boolean(row.onDelete)}
+            role="listitem"
+          >
+            {row.onDelete && (
+              <button
+                className="creative-ia__collection-delete"
+                type="button"
+                disabled={disabled}
+                onClick={() => {
+                  setOpenRowId(null)
+                  row.onDelete?.()
+                }}
+                aria-label={row.deleteLabel ?? '削除'}
+              >
+                削除
+              </button>
+            )}
+            <button
+              className="creative-ia__collection-row-main"
+              type="button"
+              data-active={row.active}
+              aria-label={row.ariaLabel}
+              onPointerDown={(event) => {
+                if (!row.onDelete) return
+                pointerStartRef.current = { rowId: row.id, x: event.clientX }
+              }}
+              onPointerUp={(event) => {
+                const start = pointerStartRef.current
+                pointerStartRef.current = null
+                if (!row.onDelete || !start || start.rowId !== row.id) return
+
+                const distance = event.clientX - start.x
+                if (distance < -36) setOpenRowId(row.id)
+                if (distance > 24) setOpenRowId(null)
+              }}
+              onClick={() => {
+                if (openRowId === row.id) {
+                  setOpenRowId(null)
+                  return
+                }
+                row.onOpen()
+              }}
+            >
+              {columns.map((column) => (
+                <span
+                  key={column.key}
+                  className={`creative-ia__collection-cell creative-ia__collection-cell--${column.key}`}
+                  data-label={column.label}
+                >
+                  {row.cells[column.key]}
+                </span>
+              ))}
+              <span className="creative-ia__collection-arrow" aria-hidden="true">→</span>
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function StatusBadge({
+  tone,
+  children,
+}: {
+  tone: 'saved' | 'editing' | 'error' | 'neutral'
+  children: ReactNode
+}) {
+  return <span className="creative-ia__status-badge" data-tone={tone}>{children}</span>
+}
+
+function FormattedDate({ value }: { value: number }) {
+  return (
+    <time dateTime={new Date(value).toISOString()}>
+      {new Intl.DateTimeFormat('ja-JP', {
+        month: 'numeric',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(value)}
+    </time>
+  )
+}
+
 function CreateView({
   messages,
   composer,
   article,
   isGenerating,
   error,
+  persistenceError,
   messageEndRef,
   onComposerChange,
   onSubmit,
   onQuickPrompt,
   onOpenArtifact,
+  onBackToChats,
 }: {
   messages: Message[]
   composer: string
   article: CreativeIAGeneratedArticle | null
   isGenerating: boolean
   error: string | null
+  persistenceError: string | null
   messageEndRef: React.RefObject<HTMLDivElement | null>
   onComposerChange: (value: string) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   onQuickPrompt: (prompt: string) => void
-  onOpenArtifact: () => void
+  onOpenArtifact: (view: ArtifactView) => void
+  onBackToChats: () => void
 }) {
   return (
-    <section className="creative-ia__create" aria-labelledby="create-title">
-      <header className="creative-ia__section-header">
-        <div>
-          <p>作成</p>
-          <h1 id="create-title">AIと一緒に作る</h1>
-        </div>
-        {article && (
+    <section className="creative-ia__create" aria-label="作成">
+      <div className="creative-ia__create-toolbar">
+        <button
+          className="creative-ia__back-to-chats"
+          type="button"
+          onClick={onBackToChats}
+        >
+          <span aria-hidden="true">←</span> Chat一覧に戻る
+        </button>
+        <div className="creative-ia__artifact-toggles">
+          {article && (
+            <button
+              className="creative-ia__artifact-toggle"
+              type="button"
+              onClick={() => onOpenArtifact('article')}
+            >
+              記事案を見る
+            </button>
+          )}
           <button
             className="creative-ia__artifact-toggle"
             type="button"
-            onClick={onOpenArtifact}
+            onClick={() => onOpenArtifact('memo')}
           >
-            記事案を見る
+            制作メモ
           </button>
-        )}
-      </header>
+          <button
+            className="creative-ia__artifact-toggle"
+            type="button"
+            onClick={() => onOpenArtifact('rules')}
+          >
+            適用ルール
+          </button>
+        </div>
+      </div>
 
       <div className="creative-ia__conversation" aria-live="polite">
         {messages.map((message, index) => (
@@ -457,6 +1012,7 @@ function CreateView({
       </div>
 
       <form className="creative-ia__composer" onSubmit={onSubmit}>
+        {persistenceError && <p role="alert">{persistenceError}</p>}
         {error && <p role="alert">{error}</p>}
         <div>
           <label htmlFor="creative-ia-prompt">AIに相談する</label>
@@ -467,12 +1023,6 @@ function CreateView({
             maxLength={2000}
             placeholder="例：このトリートメントを紹介する記事を書きたい"
             onChange={(event) => onComposerChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault()
-                event.currentTarget.form?.requestSubmit()
-              }
-            }}
           />
           <button
             type="submit"
@@ -482,7 +1032,7 @@ function CreateView({
             <PathIcon path="M5 12h14 M13 6l6 6-6 6" />
           </button>
         </div>
-        <small>Enterで送信・Shift + Enterで改行</small>
+        <small>Enterは改行になります。右側の送信ボタンで送信します。</small>
       </form>
     </section>
   )
@@ -490,28 +1040,44 @@ function CreateView({
 
 function ArtifactPanel({
   open,
+  view,
+  hasArticle,
   title,
   content,
   warnings,
+  productionMemos,
+  availableRules,
+  appliedRuleIds,
   isSaving,
   connection,
   saveError,
   savedDraft,
   onClose,
+  onViewChange,
+  onProductionMemosChange,
+  onAppliedRuleIdsChange,
   onTitleChange,
   onContentChange,
   onSave,
   onOpenSettings,
 }: {
   open: boolean
+  view: ArtifactView
+  hasArticle: boolean
   title: string
   content: string
   warnings: string[]
+  productionMemos: ProductionMemo[]
+  availableRules: ReferenceAIRule[]
+  appliedRuleIds: string[]
   isSaving: boolean
   connection: CreativeIAWordPressStatus | null
   saveError: string | null
   savedDraft: CreativeIAWordPressDraft | null
   onClose: () => void
+  onViewChange: (view: ArtifactView) => void
+  onProductionMemosChange: (memos: ProductionMemo[]) => void
+  onAppliedRuleIdsChange: (ruleIds: string[]) => void
   onTitleChange: (value: string) => void
   onContentChange: (value: string) => void
   onSave: () => void
@@ -521,109 +1087,319 @@ function ArtifactPanel({
     <aside
       className="creative-ia__artifact"
       data-open={open}
-      aria-label="現在の記事案"
+      aria-label="記事制作パネル"
     >
-      <header>
-        <div>
-          <p>現在の成果物</p>
-          <h2>記事案</h2>
-        </div>
-        <button type="button" onClick={onClose} aria-label="記事案を閉じる">
+      <div className="creative-ia__artifact-body">
+        <button type="button" onClick={onClose} aria-label="パネルを閉じる">
           ×
         </button>
-      </header>
-
-      <div className="creative-ia__artifact-body">
-        <label>
-          <span>タイトル</span>
-          <input
-            value={title}
-            maxLength={200}
-            onChange={(event) => onTitleChange(event.target.value)}
-          />
-        </label>
-
-        {warnings.length > 0 && (
-          <div className="creative-ia__artifact-warning">
-            <strong>確認してください</strong>
-            <ul>
-              {warnings.map((warning) => (
-                <li key={warning}>{warning}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <label className="creative-ia__article-content">
-          <span>本文</span>
-          <textarea
-            value={content}
-            maxLength={20000}
-            onChange={(event) => onContentChange(event.target.value)}
-          />
-        </label>
-      </div>
-
-      <footer>
-        {saveError && <p role="alert">{saveError}</p>}
-        {savedDraft && (
-          <p className="creative-ia__save-success" role="status">
-            下書きを保存しました。
-            {savedDraft.postUrl && (
-              <a href={savedDraft.postUrl} target="_blank" rel="noreferrer">
-                WordPressで確認
-              </a>
-            )}
-          </p>
-        )}
-        {connection?.connected ? (
+        <div className="creative-ia__artifact-tabs" role="tablist" aria-label="記事制作">
           <button
             type="button"
-            disabled={isSaving || !title.trim() || !content.trim()}
-            onClick={onSave}
+            role="tab"
+            aria-selected={view === 'article'}
+            disabled={!hasArticle}
+            onClick={() => onViewChange('article')}
           >
-            {isSaving ? '保存中' : 'WordPressへ下書き保存'}
+            記事案
           </button>
-        ) : (
-          <button type="button" onClick={onOpenSettings}>
-            WordPressを接続
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'memo'}
+            onClick={() => onViewChange('memo')}
+          >
+            制作メモ
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'rules'}
+            onClick={() => onViewChange('rules')}
+          >
+            適用ルール
+          </button>
+        </div>
+
+        {view === 'article' && hasArticle && (
+          <>
+            <label>
+              <span>タイトル</span>
+              <input
+                value={title}
+                maxLength={200}
+                onChange={(event) => onTitleChange(event.target.value)}
+              />
+            </label>
+
+            {warnings.length > 0 && (
+              <div className="creative-ia__artifact-warning">
+                <strong>確認してください</strong>
+                <ul>
+                  {warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <label className="creative-ia__article-content">
+              <span>本文</span>
+              <textarea
+                value={content}
+                maxLength={20000}
+                onChange={(event) => onContentChange(event.target.value)}
+              />
+            </label>
+          </>
         )}
-      </footer>
+
+        {view === 'memo' && (
+          <ProductionMemoEditor
+            memos={productionMemos}
+            onChange={onProductionMemosChange}
+          />
+        )}
+
+        {view === 'rules' && (
+          <AppliedRulesEditor
+            rules={availableRules}
+            appliedRuleIds={appliedRuleIds}
+            onChange={onAppliedRuleIdsChange}
+          />
+        )}
+      </div>
+
+      {view === 'article' && hasArticle && (
+        <footer>
+          {saveError && <p role="alert">{saveError}</p>}
+          {savedDraft && (
+            <p className="creative-ia__save-success" role="status">
+              下書きを保存しました。
+              {savedDraft.postUrl && (
+                <a href={savedDraft.postUrl} target="_blank" rel="noreferrer">
+                  WordPressで確認
+                </a>
+              )}
+            </p>
+          )}
+          {connection?.connected ? (
+            <button
+              type="button"
+              disabled={isSaving || !title.trim() || !content.trim()}
+              onClick={onSave}
+            >
+              {isSaving ? '保存中' : 'WordPressへ下書き保存'}
+            </button>
+          ) : (
+            <button type="button" onClick={onOpenSettings}>
+              WordPressを接続
+            </button>
+          )}
+        </footer>
+      )}
     </aside>
   )
 }
 
+function ProductionMemoEditor({
+  memos,
+  onChange,
+}: {
+  memos: ProductionMemo[]
+  onChange: (memos: ProductionMemo[]) => void
+}) {
+  const updateMemo = (
+    memoId: string,
+    field: 'label' | 'value',
+    value: string,
+  ) => {
+    onChange(
+      memos.map((memo) =>
+        memo.id === memoId ? { ...memo, [field]: value } : memo,
+      ),
+    )
+  }
+
+  return (
+    <section className="creative-ia__artifact-section" aria-labelledby="production-memo-title">
+      <header>
+        <div>
+          <h2 id="production-memo-title">制作メモ</h2>
+          <p>今回の記事だけで使う情報や要望を記録します。</p>
+        </div>
+      </header>
+
+      {memos.length === 0 ? (
+        <div className="creative-ia__artifact-empty">
+          <p>まだ制作メモはありません。</p>
+          <small>想定読者や掲載したい情報など、必要な項目を自由に追加できます。</small>
+        </div>
+      ) : (
+        <div className="creative-ia__memo-list">
+          {memos.map((memo, index) => (
+            <div className="creative-ia__memo-row" key={memo.id}>
+              <label>
+                <span className="creative-ia__visually-hidden">項目名</span>
+                <input
+                  value={memo.label}
+                  maxLength={80}
+                  placeholder="項目名"
+                  aria-label={`制作メモ${index + 1}の項目名`}
+                  onChange={(event) => updateMemo(memo.id, 'label', event.target.value)}
+                />
+              </label>
+              <label>
+                <span className="creative-ia__visually-hidden">内容</span>
+                <textarea
+                  value={memo.value}
+                  maxLength={2000}
+                  rows={2}
+                  placeholder="内容"
+                  aria-label={`制作メモ${index + 1}の内容`}
+                  onChange={(event) => updateMemo(memo.id, 'value', event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                aria-label={`制作メモ${index + 1}を削除`}
+                onClick={() => onChange(memos.filter((item) => item.id !== memo.id))}
+              >
+                削除
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button
+        className="creative-ia__add-item"
+        type="button"
+        onClick={() =>
+          onChange([
+            ...memos,
+            { id: crypto.randomUUID(), label: '', value: '' },
+          ])
+        }
+      >
+        ＋ 項目を追加
+      </button>
+    </section>
+  )
+}
+
+function AppliedRulesEditor({
+  rules,
+  appliedRuleIds,
+  onChange,
+}: {
+  rules: ReferenceAIRule[]
+  appliedRuleIds: string[]
+  onChange: (ruleIds: string[]) => void
+}) {
+  return (
+    <section className="creative-ia__artifact-section" aria-labelledby="applied-rules-title">
+      <header>
+        <div>
+          <h2 id="applied-rules-title">適用ルール</h2>
+          <p>参照データの「02 AIルール」から、今回の記事で使うルールを選びます。</p>
+        </div>
+      </header>
+
+      {rules.length === 0 ? (
+        <div className="creative-ia__artifact-empty">
+          <p>選択できるAIルールはまだありません。</p>
+          <small>参照データ機能の実装後、登録したルールがここに表示されます。</small>
+        </div>
+      ) : (
+        <div className="creative-ia__rule-list">
+          {rules.map((rule) => {
+            const checked = appliedRuleIds.includes(rule.id)
+            return (
+              <label key={rule.id}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() =>
+                    onChange(
+                      checked
+                        ? appliedRuleIds.filter((id) => id !== rule.id)
+                        : [...appliedRuleIds, rule.id],
+                    )
+                  }
+                />
+                <span>
+                  <strong>{rule.label}</strong>
+                  {rule.description && <small>{rule.description}</small>}
+                </span>
+              </label>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function ContentView({
-  article,
-  title,
-  content,
-  savedDraft,
+  chats,
+  destination,
   onOpen,
 }: {
-  article: CreativeIAGeneratedArticle | null
-  title: string
-  content: string
-  savedDraft: CreativeIAWordPressDraft | null
-  onOpen: () => void
+  chats: ChatSession[]
+  destination: string
+  onOpen: (chatId: string) => void
 }) {
+  const contentChats = useMemo(
+    () =>
+      chats
+        .filter((chat) => chat.article !== null)
+        .sort((left, right) => right.updatedAt - left.updatedAt),
+    [chats],
+  )
+
   return (
     <section className="creative-ia__page" aria-labelledby="content-title">
       <header className="creative-ia__section-header">
         <div>
           <p>Content</p>
           <h1 id="content-title">下書き</h1>
+          <span>作成した記事案とWordPressへの保存状態を確認できます。</span>
         </div>
       </header>
-      {article ? (
-        <button className="creative-ia__content-card" type="button" onClick={onOpen}>
-          <span data-status={savedDraft ? 'saved' : 'editing'}>
-            {savedDraft ? 'WordPress下書き' : '編集中'}
-          </span>
-          <strong>{title || 'タイトル未入力'}</strong>
-          <p>{content.slice(0, 110)}</p>
-          <small>現在のセッション</small>
-        </button>
+      {contentChats.length > 0 ? (
+        <WorkspaceList
+          ariaLabel="下書き一覧"
+          columns={[
+            { key: 'title', label: 'タイトル' },
+            { key: 'destination', label: '投稿先' },
+            { key: 'updated', label: '最終更新' },
+            { key: 'status', label: '保存状態' },
+            { key: 'error', label: 'エラー' },
+          ]}
+          columnTemplate="minmax(260px, 1.55fr) minmax(140px, .8fr) 132px 108px 84px"
+          rows={contentChats.map((chat) => ({
+            id: chat.id,
+            ariaLabel: `「${chat.draftTitle || chat.title}」を開く`,
+            cells: {
+              title: (
+                <span className="creative-ia__collection-primary">
+                  <strong>{chat.draftTitle || 'タイトル未入力'}</strong>
+                  <small>{chat.title}</small>
+                </span>
+              ),
+              destination,
+              updated: <FormattedDate value={chat.updatedAt} />,
+              status: (
+                <StatusBadge tone={chat.savedDraft ? 'saved' : 'editing'}>
+                  {chat.savedDraft ? '保存済み' : '未保存'}
+                </StatusBadge>
+              ),
+              error: <span className="creative-ia__no-error">なし</span>,
+            },
+            onOpen: () => onOpen(chat.id),
+          }))}
+        />
       ) : (
         <div className="creative-ia__empty-state">
           <span aria-hidden="true">✦</span>

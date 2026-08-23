@@ -20,6 +20,14 @@ import {
   connectWordPressWithApplicationPassword,
   WordPressApplicationPasswordError,
 } from "./wordpress/application-password";
+import {
+  appendCreativeIAChatMessage,
+  createCreativeIAChat,
+  CreativeIAChatError,
+  deleteCreativeIAChat,
+  listCreativeIAChats,
+  updateCreativeIAChat,
+} from "./chat";
 
 interface Env extends WordPressOAuthEnv, GeminiEnv {
   COGNITO_USER_POOL_ID: string;
@@ -42,7 +50,7 @@ function getCorsHeaders(request: Request, env: Env): HeadersInit {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Headers":
       "Authorization, Content-Type, Idempotency-Key",
-    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     Vary: "Origin",
   };
 }
@@ -174,6 +182,166 @@ export default {
           { error: "接続状態を取得できませんでした" },
           500,
         );
+      }
+    }
+
+    if (
+      request.method === "GET" &&
+      url.pathname === "/api/creative-ia/chats"
+    ) {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await listCreativeIAChats(env, ownerUserId));
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+
+        return json(request, env, { error: "Chat一覧を取得できませんでした" }, 500);
+      }
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/creative-ia/chats"
+    ) {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(
+          request,
+          env,
+          await createCreativeIAChat(env, ownerUserId),
+          201,
+        );
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+
+        if (
+          error instanceof CreativeIAChatError &&
+          error.code === "CHAT_LIMIT_REACHED"
+        ) {
+          return json(
+            request,
+            env,
+            { error: "Chatの上限は10件です" },
+            409,
+          );
+        }
+
+        return json(request, env, { error: "Chatを作成できませんでした" }, 500);
+      }
+    }
+
+    const chatMatch = url.pathname.match(
+      /^\/api\/creative-ia\/chats\/([0-9a-f-]+)$/iu,
+    );
+    if (chatMatch && request.method === "PATCH") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(
+          request,
+          env,
+          await updateCreativeIAChat(
+            request,
+            env,
+            ownerUserId,
+            chatMatch[1],
+          ),
+        );
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+
+        if (error instanceof CreativeIAChatError) {
+          return json(
+            request,
+            env,
+            {
+              error:
+                error.code === "NOT_FOUND"
+                  ? "Chatが見つかりません"
+                  : "入力内容を確認してください",
+            },
+            error.code === "NOT_FOUND" ? 404 : 400,
+          );
+        }
+
+        return json(request, env, { error: "Chatを保存できませんでした" }, 500);
+      }
+    }
+
+    const chatMessageMatch = url.pathname.match(
+      /^\/api\/creative-ia\/chats\/([0-9a-f-]+)\/messages$/iu,
+    );
+    if (chatMessageMatch && request.method === "POST") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(
+          request,
+          env,
+          await appendCreativeIAChatMessage(
+            request,
+            env,
+            ownerUserId,
+            chatMessageMatch[1],
+          ),
+          201,
+        );
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+
+        if (error instanceof CreativeIAChatError) {
+          const status =
+            error.code === "NOT_FOUND"
+              ? 404
+              : error.code === "MESSAGE_LIMIT_REACHED"
+                ? 409
+                : 400;
+          return json(
+            request,
+            env,
+            {
+              error:
+                error.code === "MESSAGE_LIMIT_REACHED"
+                  ? "1つのChatに保存できる会話の上限に達しました"
+                  : error.code === "NOT_FOUND"
+                    ? "Chatが見つかりません"
+                    : "入力内容を確認してください",
+            },
+            status,
+          );
+        }
+
+        return json(request, env, { error: "会話を保存できませんでした" }, 500);
+      }
+    }
+
+    if (chatMatch && request.method === "DELETE") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(
+          request,
+          env,
+          await deleteCreativeIAChat(env, ownerUserId, chatMatch[1]),
+        );
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+
+        if (
+          error instanceof CreativeIAChatError &&
+          error.code === "NOT_FOUND"
+        ) {
+          return json(request, env, { error: "Chatが見つかりません" }, 404);
+        }
+
+        return json(request, env, { error: "Chatを削除できませんでした" }, 500);
       }
     }
 

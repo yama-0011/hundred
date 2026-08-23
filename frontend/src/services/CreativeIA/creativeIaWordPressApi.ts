@@ -29,6 +29,33 @@ export type CreativeIAGeneratedArticle = {
   model: string
 }
 
+export type CreativeIAChatMessage = {
+  id: string
+  role: 'assistant' | 'user'
+  text: string
+  createdAt?: number
+}
+
+export type CreativeIAProductionMemo = {
+  id: string
+  label: string
+  value: string
+}
+
+export type CreativeIAChat = {
+  id: string
+  title: string
+  messages: CreativeIAChatMessage[]
+  article: CreativeIAGeneratedArticle | null
+  draftTitle: string
+  draftContent: string
+  savedDraft: CreativeIAWordPressDraft | null
+  productionMemos: CreativeIAProductionMemo[]
+  appliedRuleIds: string[]
+  createdAt?: number
+  updatedAt: number
+}
+
 /** HundredのCognitoセッションからWorkerへ送信するAccess Tokenを取得する。 */
 async function getCreativeIAAccessToken() {
   const session = await fetchAuthSession()
@@ -67,14 +94,77 @@ async function requestCreativeIAApi<T>(
             : response.status === 422
               ? 'WORDPRESS_AUTH_FAILED'
               : response.status === 403
-                ? 'WORDPRESS_PERMISSION_DENIED'
-                : response.status === 400
+              ? 'WORDPRESS_PERMISSION_DENIED'
+              : response.status === 409
+                ? 'CONFLICT'
+              : response.status === 400
                   ? 'INVALID_INPUT'
                   : 'API_FAILED',
     )
   }
 
   return (await response.json()) as T
+}
+
+/** D1に永続保存された現在の利用者のChatを取得する。 */
+export function getCreativeIAChats() {
+  return requestCreativeIAApi<{ chats: CreativeIAChat[]; limit: number }>(
+    '/api/creative-ia/chats',
+  )
+}
+
+/** 新しいChatをD1へ作成する。 */
+export function createCreativeIAChat() {
+  return requestCreativeIAApi<CreativeIAChat>('/api/creative-ia/chats', {
+    method: 'POST',
+  })
+}
+
+/** Chatの記事・制作メモ・適用ルールの現在状態をD1へ保存する。 */
+export function updateCreativeIAChat(chat: CreativeIAChat) {
+  return requestCreativeIAApi<{ updated: boolean }>(
+    `/api/creative-ia/chats/${encodeURIComponent(chat.id)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: chat.title,
+        article: chat.article
+          ? {
+              ...chat.article,
+              title: chat.draftTitle,
+              content: chat.draftContent,
+            }
+          : null,
+        productionMemos: chat.productionMemos,
+        appliedRuleIds: chat.appliedRuleIds,
+        savedDraft: chat.savedDraft,
+      }),
+    },
+  )
+}
+
+/** Chatの会話をD1へ追記する。 */
+export function appendCreativeIAChatMessage(
+  chatId: string,
+  message: CreativeIAChatMessage,
+) {
+  return requestCreativeIAApi<{ created: boolean; createdAt: number }>(
+    `/api/creative-ia/chats/${encodeURIComponent(chatId)}/messages`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(message),
+    },
+  )
+}
+
+/** Chatと子メッセージをD1から削除する。 */
+export function deleteCreativeIAChat(chatId: string) {
+  return requestCreativeIAApi<{ deleted: boolean }>(
+    `/api/creative-ia/chats/${encodeURIComponent(chatId)}`,
+    { method: 'DELETE' },
+  )
 }
 
 /** 独自ドメインWordPressのApplication Passwordを認証確認後に暗号化保存する。 */
