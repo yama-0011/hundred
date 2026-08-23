@@ -32,7 +32,7 @@ export type CreativeIAGeneratedArticle = {
 
 export type CreativeIAUsedReference = {
   id: string
-  category: 'product' | 'service'
+  category: 'product' | 'service' | 'organization' | 'contact'
   name: string
   updatedAt: number
 }
@@ -109,6 +109,51 @@ export type CreativeIAReferenceService = {
 export type CreativeIAReferenceServiceInput = Omit<
   CreativeIAReferenceService,
   'id' | 'createdAt' | 'updatedAt'
+>
+
+export type CreativeIAReferenceOrganization = {
+  id: string
+  name: string
+  organizationType: 'company' | 'store'
+  parentCompanyId: string | null
+  parentCompanyName: string | null
+  sourceUrl: string | null
+  description: string
+  address: string
+  phone: string
+  businessHours: string
+  features: string
+  aiNotes: string
+  aiEnabled: boolean
+  createdAt: number
+  updatedAt: number
+  stores?: { id: string; name: string }[]
+  contacts?: { id: string; name: string }[]
+}
+
+export type CreativeIAReferenceOrganizationInput = Omit<
+  CreativeIAReferenceOrganization,
+  'id' | 'createdAt' | 'updatedAt' | 'parentCompanyName' | 'stores' | 'contacts'
+>
+
+export type CreativeIAReferenceContact = {
+  id: string
+  name: string
+  organizationId: string
+  organizationName: string
+  department: string
+  role: string
+  description: string
+  specialties: string
+  aiNotes: string
+  aiEnabled: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+export type CreativeIAReferenceContactInput = Omit<
+  CreativeIAReferenceContact,
+  'id' | 'createdAt' | 'updatedAt' | 'organizationName'
 >
 
 /** HundredのCognitoセッションからWorkerへ送信するAccess Tokenを取得する。 */
@@ -308,6 +353,44 @@ export function deleteCreativeIAReferenceService(serviceId: string) {
     `/api/creative-ia/references/services/${encodeURIComponent(serviceId)}`,
     { method: 'DELETE' },
   )
+}
+
+export function getCreativeIAReferenceOrganizations() {
+  return requestCreativeIAApi<{ organizations: CreativeIAReferenceOrganization[]; count: number }>(
+    '/api/creative-ia/references/organizations',
+  )
+}
+export function createCreativeIAReferenceOrganization(input: CreativeIAReferenceOrganizationInput) {
+  return requestCreativeIAApi<CreativeIAReferenceOrganization>('/api/creative-ia/references/organizations', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
+  })
+}
+export function updateCreativeIAReferenceOrganization(id: string, input: CreativeIAReferenceOrganizationInput) {
+  return requestCreativeIAApi<CreativeIAReferenceOrganization>(`/api/creative-ia/references/organizations/${encodeURIComponent(id)}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
+  })
+}
+export function deleteCreativeIAReferenceOrganization(id: string) {
+  return requestCreativeIAApi<{ deleted: boolean }>(`/api/creative-ia/references/organizations/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+export function getCreativeIAReferenceContacts() {
+  return requestCreativeIAApi<{ contacts: CreativeIAReferenceContact[]; count: number }>(
+    '/api/creative-ia/references/contacts',
+  )
+}
+export function createCreativeIAReferenceContact(input: CreativeIAReferenceContactInput) {
+  return requestCreativeIAApi<CreativeIAReferenceContact>('/api/creative-ia/references/contacts', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
+  })
+}
+export function updateCreativeIAReferenceContact(id: string, input: CreativeIAReferenceContactInput) {
+  return requestCreativeIAApi<CreativeIAReferenceContact>(`/api/creative-ia/references/contacts/${encodeURIComponent(id)}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
+  })
+}
+export function deleteCreativeIAReferenceContact(id: string) {
+  return requestCreativeIAApi<{ deleted: boolean }>(`/api/creative-ia/references/contacts/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
 /** 独自ドメインWordPressのApplication Passwordを認証確認後に暗号化保存する。 */

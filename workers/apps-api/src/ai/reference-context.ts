@@ -1,6 +1,6 @@
 import type { UsedReference } from "./provider";
 
-type ReferenceCategory = "product" | "service";
+type ReferenceCategory = "product" | "service" | "organization" | "contact";
 const maxReferenceItems = 5;
 const maxReferenceContextLength = 24_000;
 
@@ -13,6 +13,7 @@ interface ReferenceItemRow {
   ai_notes: string;
   updated_at: number;
   category: ReferenceCategory;
+  parent_name: string | null;
 }
 
 interface ProductAttributes {
@@ -27,6 +28,13 @@ interface ProductAttributes {
   duration?: unknown;
   target?: unknown;
   process?: unknown;
+  organizationType?: unknown;
+  address?: unknown;
+  phone?: unknown;
+  businessHours?: unknown;
+  department?: unknown;
+  role?: unknown;
+  specialties?: unknown;
 }
 
 export interface ResolvedReferenceContext {
@@ -101,6 +109,30 @@ function formatService(row: ReferenceItemRow): string {
     .join("\n");
 }
 
+function formatOrganization(row: ReferenceItemRow): string {
+  const attributes = parseAttributes(row.attributes_json);
+  const type = attributes.organizationType === "store" ? "店舗" : "会社";
+  const fields: Array<[string, string]> = [
+    ["名称", row.name], ["種別", type], ["所属会社", row.parent_name ?? ""],
+    ["説明", row.description.trim()], ["所在地", optionalText(attributes.address)],
+    ["電話番号", optionalText(attributes.phone)], ["営業時間", optionalText(attributes.businessHours)],
+    ["特徴", optionalText(attributes.features)], ["AI向け補足", row.ai_notes.trim()],
+    ["情報元URL", row.source_url ?? ""],
+  ];
+  return fields.filter(([, value]) => value).map(([label, value]) => `${label}: ${value}`).join("\n");
+}
+
+function formatContact(row: ReferenceItemRow): string {
+  const attributes = parseAttributes(row.attributes_json);
+  const fields: Array<[string, string]> = [
+    ["担当者名", row.name], ["所属先", row.parent_name ?? ""],
+    ["部署", optionalText(attributes.department)], ["役職", optionalText(attributes.role)],
+    ["紹介文", row.description.trim()], ["専門分野・担当業務", optionalText(attributes.specialties)],
+    ["AI向け補足", row.ai_notes.trim()],
+  ];
+  return fields.filter(([, value]) => value).map(([label, value]) => `${label}: ${value}`).join("\n");
+}
+
 /**
  * 認証利用者のAI利用可能な参照データから、明示済みIDと依頼文中の名称を解決する。
  * 参照データ自体はフロントエンドから受け取らず、必ずD1の所有者条件で取得する。
@@ -112,13 +144,14 @@ export async function resolveReferenceContext(
   existingReferenceIds: string[],
 ): Promise<ResolvedReferenceContext> {
   const result = await db.prepare(
-    `SELECT id, name, source_url, description, attributes_json,
-            ai_notes, updated_at, category
-       FROM creative_ia_reference_items
-      WHERE owner_user_id = ?1
-        AND category IN ('product', 'service')
-        AND ai_enabled = 1
-      ORDER BY updated_at DESC`,
+    `SELECT item.id, item.name, item.source_url, item.description, item.attributes_json,
+            item.ai_notes, item.updated_at, item.category, parent.name AS parent_name
+       FROM creative_ia_reference_items item
+       LEFT JOIN creative_ia_reference_items parent ON parent.id = item.parent_reference_id
+      WHERE item.owner_user_id = ?1
+        AND item.category IN ('product', 'service', 'organization', 'contact')
+        AND item.ai_enabled = 1
+      ORDER BY item.updated_at DESC`,
   )
     .bind(ownerUserId)
     .all<ReferenceItemRow>();
@@ -164,9 +197,14 @@ export async function resolveReferenceContext(
   let currentLength = 0;
 
   for (const reference of limited) {
-    const block = reference.category === "service"
-      ? `[サービス]\n${formatService(reference)}`
-      : `[商品]\n${formatProduct(reference)}`;
+    const [label, body] = reference.category === "service"
+      ? ["サービス", formatService(reference)]
+      : reference.category === "organization"
+        ? ["会社・店舗", formatOrganization(reference)]
+        : reference.category === "contact"
+          ? ["担当者", formatContact(reference)]
+          : ["商品", formatProduct(reference)];
+    const block = `[${label}]\n${body}`;
     const remaining = maxReferenceContextLength - currentLength;
     if (remaining <= 0) break;
     blocks.push(block.slice(0, remaining));

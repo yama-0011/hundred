@@ -1395,6 +1395,7 @@
 }
 
 .creative-ia__reference-form input:not([type="checkbox"]),
+.creative-ia__reference-form select,
 .creative-ia__reference-form textarea {
   width: 100%;
   border: 1px solid var(--cia-border-strong);
@@ -1409,6 +1410,11 @@
   padding: 0 13px;
 }
 
+.creative-ia__reference-form select {
+  min-height: 44px;
+  padding: 0 13px;
+}
+
 .creative-ia__reference-form textarea {
   resize: vertical;
   min-height: 96px;
@@ -1417,6 +1423,7 @@
 }
 
 .creative-ia__reference-form input:focus,
+.creative-ia__reference-form select:focus,
 .creative-ia__reference-form textarea:focus {
   border-color: var(--cia-accent);
 }

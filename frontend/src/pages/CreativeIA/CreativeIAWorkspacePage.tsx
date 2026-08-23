@@ -12,18 +12,26 @@ import {
   appendCreativeIAChatMessage,
   createCreativeIAChat,
   createCreativeIAReferenceProduct,
+  createCreativeIAReferenceContact,
+  createCreativeIAReferenceOrganization,
   createCreativeIAReferenceService,
   createCreativeIAWordPressDraft,
   deleteCreativeIAChat,
   deleteCreativeIAReferenceProduct,
+  deleteCreativeIAReferenceContact,
+  deleteCreativeIAReferenceOrganization,
   deleteCreativeIAReferenceService,
   generateCreativeIAArticle,
   getCreativeIAChats,
   getCreativeIAReferenceProducts,
+  getCreativeIAReferenceContacts,
+  getCreativeIAReferenceOrganizations,
   getCreativeIAReferenceServices,
   getCreativeIAWordPressStatus,
   updateCreativeIAChat,
   updateCreativeIAReferenceProduct,
+  updateCreativeIAReferenceContact,
+  updateCreativeIAReferenceOrganization,
   updateCreativeIAReferenceService,
   type CreativeIAChat,
   type CreativeIAChatMessage,
@@ -31,6 +39,10 @@ import {
   type CreativeIAProductionMemo,
   type CreativeIAReferenceProduct,
   type CreativeIAReferenceProductInput,
+  type CreativeIAReferenceContact,
+  type CreativeIAReferenceContactInput,
+  type CreativeIAReferenceOrganization,
+  type CreativeIAReferenceOrganizationInput,
   type CreativeIAReferenceService,
   type CreativeIAReferenceServiceInput,
   type CreativeIAWordPressDraft,
@@ -1462,16 +1474,30 @@ function ReferencesView() {
     | 'service-create'
     | 'service-detail'
     | 'service-edit'
+    | 'organizations'
+    | 'organization-create'
+    | 'organization-detail'
+    | 'organization-edit'
+    | 'contacts'
+    | 'contact-create'
+    | 'contact-detail'
+    | 'contact-edit'
   >('overview')
   const [activeReferenceTab, setActiveReferenceTab] = useState<
     'materials' | 'rules'
   >('materials')
   const [products, setProducts] = useState<CreativeIAReferenceProduct[]>([])
   const [services, setServices] = useState<CreativeIAReferenceService[]>([])
+  const [organizations, setOrganizations] = useState<CreativeIAReferenceOrganization[]>([])
+  const [contacts, setContacts] = useState<CreativeIAReferenceContact[]>([])
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null)
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(null)
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isServicesLoading, setIsServicesLoading] = useState(true)
+  const [isOrganizationsLoading, setIsOrganizationsLoading] = useState(true)
+  const [isContactsLoading, setIsContactsLoading] = useState(true)
   const [isPending, setIsPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isDeleteConfirming, setIsDeleteConfirming] = useState(false)
@@ -1480,6 +1506,12 @@ function ReferencesView() {
   )
   const selectedService = services.find(
     (service) => service.id === selectedServiceId,
+  )
+  const selectedOrganization = organizations.find(
+    (organization) => organization.id === selectedOrganizationId,
+  )
+  const selectedContact = contacts.find(
+    (contact) => contact.id === selectedContactId,
   )
 
   useEffect(() => {
@@ -1505,6 +1537,33 @@ function ReferencesView() {
     return () => {
       active = false
     }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    void Promise.all([
+      getCreativeIAReferenceOrganizations(),
+      getCreativeIAReferenceContacts(),
+    ])
+      .then(([organizationResult, contactResult]) => {
+        if (!active) return
+        setOrganizations(organizationResult.organizations)
+        setContacts(contactResult.contacts)
+      })
+      .catch((requestError) => {
+        if (!active) return
+        setError(
+          requestError instanceof Error && requestError.message === 'AUTH_REQUIRED'
+            ? 'Hundredへサインインし直してください。'
+            : '会社・店舗と担当者を読み込めませんでした。',
+        )
+      })
+      .finally(() => {
+        if (!active) return
+        setIsOrganizationsLoading(false)
+        setIsContactsLoading(false)
+      })
+    return () => { active = false }
   }, [])
 
   useEffect(() => {
@@ -1649,6 +1708,70 @@ function ReferencesView() {
     }
   }
 
+  const openOrganization = (id: string) => {
+    setSelectedOrganizationId(id); setIsDeleteConfirming(false); setError(null); setView('organization-detail')
+  }
+  const handleSaveOrganization = async (input: CreativeIAReferenceOrganizationInput) => {
+    if (isPending) return
+    setIsPending(true); setError(null)
+    try {
+      const organization = view === 'organization-edit' && selectedOrganization
+        ? await updateCreativeIAReferenceOrganization(selectedOrganization.id, input)
+        : await createCreativeIAReferenceOrganization(input)
+      setOrganizations((current) => [organization, ...current.filter((item) => item.id !== organization.id)])
+      setContacts((current) => current.map((contact) =>
+        contact.organizationId === organization.id
+          ? { ...contact, organizationName: organization.name }
+          : contact,
+      ))
+      setSelectedOrganizationId(organization.id); setView('organization-detail')
+    } catch (requestError) {
+      setError(requestError instanceof Error && requestError.message === 'INVALID_INPUT'
+        ? '種別と所属会社を含む入力内容を確認してください。'
+        : '会社・店舗を保存できませんでした。')
+    } finally { setIsPending(false) }
+  }
+  const handleDeleteOrganization = async () => {
+    if (!selectedOrganization || isPending) return
+    setIsPending(true); setError(null)
+    try {
+      await deleteCreativeIAReferenceOrganization(selectedOrganization.id)
+      setOrganizations((current) => current.filter((item) => item.id !== selectedOrganization.id))
+      setSelectedOrganizationId(null); setIsDeleteConfirming(false); setView('organizations')
+    } catch (requestError) {
+      setError(requestError instanceof Error && requestError.message === 'CONFLICT'
+        ? '紐づく店舗または担当者を削除・変更してから削除してください。'
+        : '会社・店舗を削除できませんでした。')
+    } finally { setIsPending(false) }
+  }
+
+  const openContact = (id: string) => {
+    setSelectedContactId(id); setIsDeleteConfirming(false); setError(null); setView('contact-detail')
+  }
+  const handleSaveContact = async (input: CreativeIAReferenceContactInput) => {
+    if (isPending) return
+    setIsPending(true); setError(null)
+    try {
+      const contact = view === 'contact-edit' && selectedContact
+        ? await updateCreativeIAReferenceContact(selectedContact.id, input)
+        : await createCreativeIAReferenceContact(input)
+      setContacts((current) => [contact, ...current.filter((item) => item.id !== contact.id)])
+      setSelectedContactId(contact.id); setView('contact-detail')
+    } catch {
+      setError('担当者を保存できませんでした。所属先を確認してください。')
+    } finally { setIsPending(false) }
+  }
+  const handleDeleteContact = async () => {
+    if (!selectedContact || isPending) return
+    setIsPending(true); setError(null)
+    try {
+      await deleteCreativeIAReferenceContact(selectedContact.id)
+      setContacts((current) => current.filter((item) => item.id !== selectedContact.id))
+      setSelectedContactId(null); setIsDeleteConfirming(false); setView('contacts')
+    } catch { setError('担当者を削除できませんでした。') }
+    finally { setIsPending(false) }
+  }
+
   if (view === 'products') {
     return (
       <ReferenceProductList
@@ -1749,6 +1872,14 @@ function ReferencesView() {
     )
   }
 
+  if (view === 'organizations') return <ReferenceOrganizationList organizations={organizations} isLoading={isOrganizationsLoading} error={error} onBack={() => setView('overview')} onCreate={() => { setSelectedOrganizationId(null); setError(null); setView('organization-create') }} onOpen={openOrganization} />
+  if (view === 'organization-create' || view === 'organization-edit') return <OrganizationEditor key={view === 'organization-edit' ? selectedOrganization?.id : 'new-organization'} organization={view === 'organization-edit' ? selectedOrganization : undefined} organizations={organizations} isPending={isPending} error={error} onCancel={() => setView(selectedOrganization ? 'organization-detail' : 'organizations')} onSave={(input) => void handleSaveOrganization(input)} />
+  if (view === 'organization-detail' && selectedOrganization) return <OrganizationDetail organization={selectedOrganization} contacts={contacts.filter((contact) => contact.organizationId === selectedOrganization.id)} stores={organizations.filter((item) => item.parentCompanyId === selectedOrganization.id)} isPending={isPending} isDeleteConfirming={isDeleteConfirming} error={error} onBack={() => setView('organizations')} onEdit={() => { setError(null); setView('organization-edit') }} onDeleteRequest={() => setIsDeleteConfirming(true)} onDeleteCancel={() => setIsDeleteConfirming(false)} onDelete={() => void handleDeleteOrganization()} />
+
+  if (view === 'contacts') return <ReferenceContactList contacts={contacts} isLoading={isContactsLoading} error={error} onBack={() => setView('overview')} onCreate={() => { setSelectedContactId(null); setError(null); setView('contact-create') }} onOpen={openContact} />
+  if (view === 'contact-create' || view === 'contact-edit') return <ContactEditor key={view === 'contact-edit' ? selectedContact?.id : 'new-contact'} contact={view === 'contact-edit' ? selectedContact : undefined} organizations={organizations} isPending={isPending} error={error} onCancel={() => setView(selectedContact ? 'contact-detail' : 'contacts')} onSave={(input) => void handleSaveContact(input)} />
+  if (view === 'contact-detail' && selectedContact) return <ContactDetail contact={selectedContact} isPending={isPending} isDeleteConfirming={isDeleteConfirming} error={error} onBack={() => setView('contacts')} onEdit={() => { setError(null); setView('contact-edit') }} onDeleteRequest={() => setIsDeleteConfirming(true)} onDeleteCancel={() => setIsDeleteConfirming(false)} onDelete={() => void handleDeleteContact()} />
+
   return (
     <section className="creative-ia__page" aria-labelledby="references-title">
       <header className="creative-ia__section-header">
@@ -1805,7 +1936,16 @@ function ReferencesView() {
               </button>
             </li>
             <li><span>写真</span><small>準備中</small></li>
-            <li><span>会社・店舗</span><small>準備中</small></li>
+            <li>
+              <button type="button" onClick={() => setView('organizations')}>
+                <span>会社・店舗</span><small>{organizations.length}件</small><span aria-hidden="true">→</span>
+              </button>
+            </li>
+            <li>
+              <button type="button" onClick={() => setView('contacts')}>
+                <span>担当者</span><small>{contacts.length}件</small><span aria-hidden="true">→</span>
+              </button>
+            </li>
           </ul>
         ) : (
           <ul
@@ -2149,6 +2289,75 @@ function ServiceEditor({ service, isPending, error, onCancel, onSave }: {
       </form>
     </section>
   )
+}
+
+function ReferenceOrganizationList({ organizations, isLoading, error, onBack, onCreate, onOpen }: {
+  organizations: CreativeIAReferenceOrganization[]; isLoading: boolean; error: string | null
+  onBack: () => void; onCreate: () => void; onOpen: (id: string) => void
+}) {
+  return (
+    <section className="creative-ia__page creative-ia__reference-page" aria-labelledby="organizations-title">
+      <button className="creative-ia__page-back" type="button" onClick={onBack}><span aria-hidden="true">←</span> 参照データ</button>
+      <header className="creative-ia__collection-header"><div><p>References</p><h1 id="organizations-title">会社・店舗</h1><span>会社と、会社に所属する複数の店舗情報を管理します。</span></div><button type="button" onClick={onCreate}>＋ 会社・店舗を登録</button></header>
+      <div className="creative-ia__collection-meta"><span>{organizations.length}件</span>{organizations.length > 0 && <small>更新日時が新しい順に表示しています。</small>}</div>
+      {error && <p className="creative-ia__chat-error" role="alert">{error}</p>}
+      {isLoading ? <div className="creative-ia__empty-state"><p>会社・店舗を読み込んでいます。</p></div> : organizations.length === 0 ? (
+        <div className="creative-ia__empty-state"><span aria-hidden="true">✦</span><h2>最初の会社を登録しましょう</h2><p>会社を登録すると、所属店舗や担当者を紐づけられます。</p><button type="button" onClick={onCreate}>会社・店舗を登録</button></div>
+      ) : <WorkspaceList ariaLabel="会社・店舗一覧" columns={[{key:'name',label:'名称'},{key:'type',label:'種別'},{key:'parent',label:'所属会社'},{key:'address',label:'所在地'},{key:'updated',label:'最終更新'},{key:'ai',label:'AI利用'}]} columnTemplate="minmax(220px,1.3fr) 90px minmax(150px,.9fr) minmax(180px,1fr) 132px 90px" rows={organizations.map((item) => ({ id:item.id, ariaLabel:`「${item.name}」の詳細を開く`, cells:{
+        name:<span className="creative-ia__collection-primary"><strong>{item.name}</strong><small>{item.description || '説明未入力'}</small></span>,
+        type:item.organizationType === 'company' ? '会社' : '店舗', parent:item.parentCompanyName || '—', address:item.address || '—', updated:<FormattedDate value={item.updatedAt} />, ai:<StatusBadge tone={item.aiEnabled ? 'saved' : 'neutral'}>{item.aiEnabled ? '利用する' : '利用しない'}</StatusBadge>,
+      }, onOpen:() => onOpen(item.id) }))} />}
+    </section>
+  )
+}
+
+function OrganizationDetail({ organization, contacts, stores, isPending, isDeleteConfirming, error, onBack, onEdit, onDeleteRequest, onDeleteCancel, onDelete }: {
+  organization: CreativeIAReferenceOrganization; contacts: CreativeIAReferenceContact[]; stores: CreativeIAReferenceOrganization[]
+  isPending:boolean; isDeleteConfirming:boolean; error:string|null; onBack:()=>void; onEdit:()=>void; onDeleteRequest:()=>void; onDeleteCancel:()=>void; onDelete:()=>void
+}) {
+  const fields = [['種別',organization.organizationType === 'company' ? '会社' : '店舗'],['所属会社',organization.parentCompanyName ?? ''],['所在地',organization.address],['電話番号',organization.phone],['営業時間',organization.businessHours],['説明',organization.description],['特徴',organization.features],['AIへ渡す補足情報',organization.aiNotes]].filter(([,value])=>value)
+  return <section className="creative-ia__page creative-ia__reference-page" aria-labelledby="organization-detail-title">
+    <button className="creative-ia__page-back" type="button" onClick={onBack}><span aria-hidden="true">←</span> 会社・店舗一覧</button>
+    <header className="creative-ia__reference-detail-header"><div><p>Organization</p><h1 id="organization-detail-title">{organization.name}</h1><span>会社・店舗情報と紐づくデータを管理します。</span></div><div><button type="button" onClick={onEdit}>編集</button><button type="button" data-danger="true" onClick={onDeleteRequest}>削除</button></div></header>
+    {error && <p className="creative-ia__chat-error" role="alert">{error}</p>}
+    {isDeleteConfirming && <div className="creative-ia__delete-confirm" role="alert"><span>この会社・店舗を削除します。紐づく店舗や担当者がある場合は削除できません。</span><div><button type="button" onClick={onDeleteCancel} disabled={isPending}>キャンセル</button><button type="button" onClick={onDelete} disabled={isPending}>{isPending?'削除中':'削除する'}</button></div></div>}
+    <div className="creative-ia__reference-detail-grid"><section><span>AI利用</span><StatusBadge tone={organization.aiEnabled?'saved':'neutral'}>{organization.aiEnabled?'利用する':'利用しない'}</StatusBadge></section><section><span>最終更新</span><FormattedDate value={organization.updatedAt}/></section>{organization.sourceUrl&&<section><span>情報元URL</span><a href={organization.sourceUrl} target="_blank" rel="noreferrer">{formatSourceUrl(organization.sourceUrl)} ↗</a></section>}</div>
+    <dl className="creative-ia__reference-fields">{fields.map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+    {(stores.length > 0 || contacts.length > 0) && <dl className="creative-ia__reference-fields">{stores.length>0&&<div><dt>所属店舗</dt><dd>{stores.map((item)=>item.name).join('、')}</dd></div>}{contacts.length>0&&<div><dt>担当者</dt><dd>{contacts.map((item)=>item.name).join('、')}</dd></div>}</dl>}
+  </section>
+}
+
+function OrganizationEditor({ organization, organizations, isPending, error, onCancel, onSave }: {
+  organization?:CreativeIAReferenceOrganization; organizations:CreativeIAReferenceOrganization[]; isPending:boolean; error:string|null; onCancel:()=>void; onSave:(input:CreativeIAReferenceOrganizationInput)=>void
+}) {
+  const [form,setForm]=useState<CreativeIAReferenceOrganizationInput>(()=>({name:organization?.name??'',organizationType:organization?.organizationType??'company',parentCompanyId:organization?.parentCompanyId??null,sourceUrl:organization?.sourceUrl??null,description:organization?.description??'',address:organization?.address??'',phone:organization?.phone??'',businessHours:organization?.businessHours??'',features:organization?.features??'',aiNotes:organization?.aiNotes??'',aiEnabled:organization?.aiEnabled??true}))
+  const update=<K extends keyof CreativeIAReferenceOrganizationInput>(key:K,value:CreativeIAReferenceOrganizationInput[K])=>setForm((current)=>({...current,[key]:value}))
+  const companies=organizations.filter((item)=>item.organizationType==='company'&&item.id!==organization?.id)
+  return <section className="creative-ia__page creative-ia__reference-page" aria-labelledby="organization-editor-title"><button className="creative-ia__page-back" type="button" onClick={onCancel}><span aria-hidden="true">←</span> {organization?'会社・店舗詳細':'会社・店舗一覧'}</button><header className="creative-ia__section-header"><div><p>Organization</p><h1 id="organization-editor-title">{organization?'会社・店舗を編集':'会社・店舗を登録'}</h1><span>店舗を登録する場合は、所属会社を選択します。</span></div></header>
+    <form className="creative-ia__reference-form" onSubmit={(event)=>{event.preventDefault();onSave({...form,parentCompanyId:form.organizationType==='store'?form.parentCompanyId:null,sourceUrl:form.sourceUrl||null})}}>{error&&<p className="creative-ia__chat-error" role="alert">{error}</p>}<div className="creative-ia__reference-form-grid">
+      <label><span>種別 <small>必須</small></span><select value={form.organizationType} onChange={(event)=>update('organizationType',event.target.value as 'company'|'store')}><option value="company">会社</option><option value="store">店舗</option></select></label>
+      <label><span>名称 <small>必須</small></span><input required maxLength={200} value={form.name} onChange={(event)=>update('name',event.target.value)}/></label>
+      {form.organizationType==='store'&&<label><span>所属会社 <small>必須</small></span><select required value={form.parentCompanyId??''} onChange={(event)=>update('parentCompanyId',event.target.value||null)}><option value="">選択してください</option>{companies.map((company)=><option key={company.id} value={company.id}>{company.name}</option>)}</select></label>}
+      <label className="creative-ia__reference-form-wide"><span>WebサイトURL</span><input type="url" maxLength={2000} value={form.sourceUrl??''} onChange={(event)=>update('sourceUrl',event.target.value)}/></label>
+      <label className="creative-ia__reference-form-wide"><span>説明</span><textarea rows={4} maxLength={10000} value={form.description} onChange={(event)=>update('description',event.target.value)}/></label>
+    </div><details className="creative-ia__reference-form-details"><summary>詳細情報を追加</summary><div className="creative-ia__reference-form-grid"><label className="creative-ia__reference-form-wide"><span>所在地</span><input maxLength={1000} value={form.address} onChange={(event)=>update('address',event.target.value)}/></label><label><span>電話番号</span><input maxLength={200} value={form.phone} onChange={(event)=>update('phone',event.target.value)}/></label><label><span>営業時間</span><input maxLength={2000} value={form.businessHours} onChange={(event)=>update('businessHours',event.target.value)}/></label><ReferenceTextarea label="特徴" value={form.features} onChange={(value)=>update('features',value)}/><ReferenceTextarea label="AIへ渡す補足情報" value={form.aiNotes} onChange={(value)=>update('aiNotes',value)}/></div></details>
+    <label className="creative-ia__reference-ai-toggle"><input type="checkbox" checked={form.aiEnabled} onChange={(event)=>update('aiEnabled',event.target.checked)}/><span><strong>AIで利用する</strong><small>Chatやコンテンツ生成の参照候補に含めます。</small></span></label><footer><button type="button" onClick={onCancel} disabled={isPending}>キャンセル</button><button type="submit" disabled={isPending||!form.name.trim()||(form.organizationType==='store'&&!form.parentCompanyId)}>{isPending?'保存中':organization?'変更を保存':'会社・店舗を登録'}</button></footer></form>
+  </section>
+}
+
+function ReferenceContactList({contacts,isLoading,error,onBack,onCreate,onOpen}:{contacts:CreativeIAReferenceContact[];isLoading:boolean;error:string|null;onBack:()=>void;onCreate:()=>void;onOpen:(id:string)=>void}){
+  return <section className="creative-ia__page creative-ia__reference-page" aria-labelledby="contacts-title"><button className="creative-ia__page-back" type="button" onClick={onBack}><span aria-hidden="true">←</span> 参照データ</button><header className="creative-ia__collection-header"><div><p>References</p><h1 id="contacts-title">担当者</h1><span>会社・店舗に所属する担当者の公開用情報を管理します。</span></div><button type="button" onClick={onCreate}>＋ 担当者を登録</button></header><div className="creative-ia__collection-meta"><span>{contacts.length}件</span></div>{error&&<p className="creative-ia__chat-error" role="alert">{error}</p>}{isLoading?<div className="creative-ia__empty-state"><p>担当者を読み込んでいます。</p></div>:contacts.length===0?<div className="creative-ia__empty-state"><span aria-hidden="true">✦</span><h2>最初の担当者を登録しましょう</h2><p>先に会社または店舗を登録して、所属先を紐づけます。</p><button type="button" onClick={onCreate}>担当者を登録</button></div>:<WorkspaceList ariaLabel="担当者一覧" columns={[{key:'name',label:'表示名'},{key:'organization',label:'所属先'},{key:'position',label:'部署・役職'},{key:'updated',label:'最終更新'},{key:'ai',label:'AI利用'}]} columnTemplate="minmax(220px,1.3fr) minmax(180px,1fr) minmax(180px,1fr) 132px 90px" rows={contacts.map((item)=>({id:item.id,ariaLabel:`「${item.name}」の詳細を開く`,cells:{name:<span className="creative-ia__collection-primary"><strong>{item.name}</strong><small>{item.description||'紹介文未入力'}</small></span>,organization:item.organizationName||'—',position:[item.department,item.role].filter(Boolean).join('・')||'—',updated:<FormattedDate value={item.updatedAt}/>,ai:<StatusBadge tone={item.aiEnabled?'saved':'neutral'}>{item.aiEnabled?'利用する':'利用しない'}</StatusBadge>},onOpen:()=>onOpen(item.id)}))}/>}</section>
+}
+
+function ContactDetail({contact,isPending,isDeleteConfirming,error,onBack,onEdit,onDeleteRequest,onDeleteCancel,onDelete}:{contact:CreativeIAReferenceContact;isPending:boolean;isDeleteConfirming:boolean;error:string|null;onBack:()=>void;onEdit:()=>void;onDeleteRequest:()=>void;onDeleteCancel:()=>void;onDelete:()=>void}){
+  const fields=[['所属先',contact.organizationName],['部署',contact.department],['役職',contact.role],['紹介文',contact.description],['専門分野・担当業務',contact.specialties],['AIへ渡す補足情報',contact.aiNotes]].filter(([,value])=>value)
+  return <section className="creative-ia__page creative-ia__reference-page" aria-labelledby="contact-detail-title"><button className="creative-ia__page-back" type="button" onClick={onBack}><span aria-hidden="true">←</span> 担当者一覧</button><header className="creative-ia__reference-detail-header"><div><p>Contact</p><h1 id="contact-detail-title">{contact.name}</h1><span>担当者の紹介情報とAI利用設定を管理します。</span></div><div><button type="button" onClick={onEdit}>編集</button><button type="button" data-danger="true" onClick={onDeleteRequest}>削除</button></div></header>{error&&<p className="creative-ia__chat-error" role="alert">{error}</p>}{isDeleteConfirming&&<div className="creative-ia__delete-confirm" role="alert"><span>この担当者を削除します。元に戻すことはできません。</span><div><button type="button" onClick={onDeleteCancel} disabled={isPending}>キャンセル</button><button type="button" onClick={onDelete} disabled={isPending}>{isPending?'削除中':'削除する'}</button></div></div>}<div className="creative-ia__reference-detail-grid"><section><span>AI利用</span><StatusBadge tone={contact.aiEnabled?'saved':'neutral'}>{contact.aiEnabled?'利用する':'利用しない'}</StatusBadge></section><section><span>最終更新</span><FormattedDate value={contact.updatedAt}/></section></div><dl className="creative-ia__reference-fields">{fields.map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></section>
+}
+
+function ContactEditor({contact,organizations,isPending,error,onCancel,onSave}:{contact?:CreativeIAReferenceContact;organizations:CreativeIAReferenceOrganization[];isPending:boolean;error:string|null;onCancel:()=>void;onSave:(input:CreativeIAReferenceContactInput)=>void}){
+  const [form,setForm]=useState<CreativeIAReferenceContactInput>(()=>({name:contact?.name??'',organizationId:contact?.organizationId??'',department:contact?.department??'',role:contact?.role??'',description:contact?.description??'',specialties:contact?.specialties??'',aiNotes:contact?.aiNotes??'',aiEnabled:contact?.aiEnabled??true}))
+  const update=<K extends keyof CreativeIAReferenceContactInput>(key:K,value:CreativeIAReferenceContactInput[K])=>setForm((current)=>({...current,[key]:value}))
+  return <section className="creative-ia__page creative-ia__reference-page" aria-labelledby="contact-editor-title"><button className="creative-ia__page-back" type="button" onClick={onCancel}><span aria-hidden="true">←</span> {contact?'担当者詳細':'担当者一覧'}</button><header className="creative-ia__section-header"><div><p>Contact</p><h1 id="contact-editor-title">{contact?'担当者を編集':'担当者を登録'}</h1><span>記事などで紹介する公開用情報を登録します。メールアドレスや電話番号は保存しません。</span></div></header><form className="creative-ia__reference-form" onSubmit={(event)=>{event.preventDefault();onSave(form)}}>{error&&<p className="creative-ia__chat-error" role="alert">{error}</p>}<div className="creative-ia__reference-form-grid"><label><span>表示名 <small>必須</small></span><input required maxLength={200} value={form.name} onChange={(event)=>update('name',event.target.value)}/></label><label><span>所属先 <small>必須</small></span><select required value={form.organizationId} onChange={(event)=>update('organizationId',event.target.value)}><option value="">選択してください</option>{organizations.map((item)=><option key={item.id} value={item.id}>{item.name}（{item.organizationType==='company'?'会社':'店舗'}）</option>)}</select></label><label><span>部署</span><input maxLength={200} value={form.department} onChange={(event)=>update('department',event.target.value)}/></label><label><span>役職</span><input maxLength={200} value={form.role} onChange={(event)=>update('role',event.target.value)}/></label><label className="creative-ia__reference-form-wide"><span>紹介文</span><textarea rows={4} maxLength={10000} value={form.description} onChange={(event)=>update('description',event.target.value)}/></label></div><details className="creative-ia__reference-form-details"><summary>詳細情報を追加</summary><div className="creative-ia__reference-form-grid"><ReferenceTextarea label="専門分野・担当業務" value={form.specialties} onChange={(value)=>update('specialties',value)}/><ReferenceTextarea label="AIへ渡す補足情報" value={form.aiNotes} onChange={(value)=>update('aiNotes',value)}/></div></details><label className="creative-ia__reference-ai-toggle"><input type="checkbox" checked={form.aiEnabled} onChange={(event)=>update('aiEnabled',event.target.checked)}/><span><strong>AIで利用する</strong><small>Chatやコンテンツ生成の参照候補に含めます。</small></span></label><footer><button type="button" onClick={onCancel} disabled={isPending}>キャンセル</button><button type="submit" disabled={isPending||!form.name.trim()||!form.organizationId}>{isPending?'保存中':contact?'変更を保存':'担当者を登録'}</button></footer></form></section>
 }
 
 function ProductDetail({

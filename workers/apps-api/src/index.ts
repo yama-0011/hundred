@@ -44,6 +44,19 @@ import {
   listCreativeIAReferenceServices,
   updateCreativeIAReferenceService,
 } from "./reference-services";
+import {
+  createCreativeIAReferenceContact,
+  createCreativeIAReferenceOrganization,
+  CreativeIAReferenceOrganizationError,
+  deleteCreativeIAReferenceContact,
+  deleteCreativeIAReferenceOrganization,
+  getCreativeIAReferenceContact,
+  getCreativeIAReferenceOrganization,
+  listCreativeIAReferenceContacts,
+  listCreativeIAReferenceOrganizations,
+  updateCreativeIAReferenceContact,
+  updateCreativeIAReferenceOrganization,
+} from "./reference-organizations";
 
 interface Env extends WordPressOAuthEnv, GeminiEnv {
   COGNITO_USER_POOL_ID: string;
@@ -148,6 +161,24 @@ function handleReferenceServiceError(
       },
       error.code === "NOT_FOUND" ? 404 : 400,
     );
+  }
+  return json(request, env, { error: fallbackMessage }, 500);
+}
+
+function handleReferenceOrganizationError(
+  request: Request, env: Env, error: unknown, fallbackMessage: string,
+): Response {
+  if (error instanceof CognitoAuthenticationError) {
+    return json(request, env, { error: "認証が必要です" }, 401);
+  }
+  if (error instanceof CreativeIAReferenceOrganizationError) {
+    const messages = {
+      NOT_FOUND: "参照データが見つかりません",
+      INVALID_INPUT: "入力内容を確認してください",
+      HAS_RELATIONS: "紐づく店舗または担当者があるため削除できません",
+    } as const;
+    return json(request, env, { error: messages[error.code] },
+      error.code === "NOT_FOUND" ? 404 : error.code === "HAS_RELATIONS" ? 409 : 400);
   }
   return json(request, env, { error: fallbackMessage }, 500);
 }
@@ -432,6 +463,72 @@ export default {
       } catch (error) {
         return handleReferenceServiceError(request, env, error, "サービスを削除できませんでした");
       }
+    }
+
+    const organizationCollection = "/api/creative-ia/references/organizations";
+    if (url.pathname === organizationCollection && request.method === "GET") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await listCreativeIAReferenceOrganizations(env, ownerUserId));
+      } catch (error) { return handleReferenceOrganizationError(request, env, error, "会社・店舗一覧を取得できませんでした"); }
+    }
+    if (url.pathname === organizationCollection && request.method === "POST") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await createCreativeIAReferenceOrganization(request, env, ownerUserId), 201);
+      } catch (error) { return handleReferenceOrganizationError(request, env, error, "会社・店舗を登録できませんでした"); }
+    }
+    const organizationMatch = url.pathname.match(/^\/api\/creative-ia\/references\/organizations\/([0-9a-f-]+)$/iu);
+    if (organizationMatch && request.method === "GET") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await getCreativeIAReferenceOrganization(env, ownerUserId, organizationMatch[1]));
+      } catch (error) { return handleReferenceOrganizationError(request, env, error, "会社・店舗を取得できませんでした"); }
+    }
+    if (organizationMatch && request.method === "PATCH") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await updateCreativeIAReferenceOrganization(request, env, ownerUserId, organizationMatch[1]));
+      } catch (error) { return handleReferenceOrganizationError(request, env, error, "会社・店舗を更新できませんでした"); }
+    }
+    if (organizationMatch && request.method === "DELETE") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await deleteCreativeIAReferenceOrganization(env, ownerUserId, organizationMatch[1]));
+      } catch (error) { return handleReferenceOrganizationError(request, env, error, "会社・店舗を削除できませんでした"); }
+    }
+
+    const contactCollection = "/api/creative-ia/references/contacts";
+    if (url.pathname === contactCollection && request.method === "GET") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await listCreativeIAReferenceContacts(env, ownerUserId));
+      } catch (error) { return handleReferenceOrganizationError(request, env, error, "担当者一覧を取得できませんでした"); }
+    }
+    if (url.pathname === contactCollection && request.method === "POST") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await createCreativeIAReferenceContact(request, env, ownerUserId), 201);
+      } catch (error) { return handleReferenceOrganizationError(request, env, error, "担当者を登録できませんでした"); }
+    }
+    const contactMatch = url.pathname.match(/^\/api\/creative-ia\/references\/contacts\/([0-9a-f-]+)$/iu);
+    if (contactMatch && request.method === "GET") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await getCreativeIAReferenceContact(env, ownerUserId, contactMatch[1]));
+      } catch (error) { return handleReferenceOrganizationError(request, env, error, "担当者を取得できませんでした"); }
+    }
+    if (contactMatch && request.method === "PATCH") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await updateCreativeIAReferenceContact(request, env, ownerUserId, contactMatch[1]));
+      } catch (error) { return handleReferenceOrganizationError(request, env, error, "担当者を更新できませんでした"); }
+    }
+    if (contactMatch && request.method === "DELETE") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await deleteCreativeIAReferenceContact(env, ownerUserId, contactMatch[1]));
+      } catch (error) { return handleReferenceOrganizationError(request, env, error, "担当者を削除できませんでした"); }
     }
 
     if (
