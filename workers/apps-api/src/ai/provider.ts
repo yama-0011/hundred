@@ -16,7 +16,7 @@ export interface GeneratedArticleContent {
 
 export interface UsedReference {
   id: string;
-  category: "product";
+  category: "product" | "service";
   name: string;
   updatedAt: number;
 }

@@ -32,7 +32,7 @@ export type CreativeIAGeneratedArticle = {
 
 export type CreativeIAUsedReference = {
   id: string
-  category: 'product'
+  category: 'product' | 'service'
   name: string
   updatedAt: number
 }
@@ -85,6 +85,29 @@ export type CreativeIAReferenceProduct = {
 
 export type CreativeIAReferenceProductInput = Omit<
   CreativeIAReferenceProduct,
+  'id' | 'createdAt' | 'updatedAt'
+>
+
+export type CreativeIAReferenceService = {
+  id: string
+  name: string
+  category: string
+  sourceUrl: string | null
+  description: string
+  features: string
+  price: string
+  duration: string
+  target: string
+  process: string
+  cautions: string
+  aiNotes: string
+  aiEnabled: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+export type CreativeIAReferenceServiceInput = Omit<
+  CreativeIAReferenceService,
   'id' | 'createdAt' | 'updatedAt'
 >
 
@@ -242,6 +265,47 @@ export function updateCreativeIAReferenceProduct(
 export function deleteCreativeIAReferenceProduct(productId: string) {
   return requestCreativeIAApi<{ deleted: boolean }>(
     `/api/creative-ia/references/products/${encodeURIComponent(productId)}`,
+    { method: 'DELETE' },
+  )
+}
+
+export function getCreativeIAReferenceServices() {
+  return requestCreativeIAApi<{
+    services: CreativeIAReferenceService[]
+    count: number
+  }>('/api/creative-ia/references/services')
+}
+
+export function createCreativeIAReferenceService(
+  service: CreativeIAReferenceServiceInput,
+) {
+  return requestCreativeIAApi<CreativeIAReferenceService>(
+    '/api/creative-ia/references/services',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(service),
+    },
+  )
+}
+
+export function updateCreativeIAReferenceService(
+  serviceId: string,
+  service: CreativeIAReferenceServiceInput,
+) {
+  return requestCreativeIAApi<CreativeIAReferenceService>(
+    `/api/creative-ia/references/services/${encodeURIComponent(serviceId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(service),
+    },
+  )
+}
+
+export function deleteCreativeIAReferenceService(serviceId: string) {
+  return requestCreativeIAApi<{ deleted: boolean }>(
+    `/api/creative-ia/references/services/${encodeURIComponent(serviceId)}`,
     { method: 'DELETE' },
   )
 }

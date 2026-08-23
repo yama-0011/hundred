@@ -1,6 +1,6 @@
 import type { UsedReference } from "./provider";
 
-const productCategory = "product";
+type ReferenceCategory = "product" | "service";
 const maxReferenceItems = 5;
 const maxReferenceContextLength = 24_000;
 
@@ -12,6 +12,7 @@ interface ReferenceItemRow {
   attributes_json: string;
   ai_notes: string;
   updated_at: number;
+  category: ReferenceCategory;
 }
 
 interface ProductAttributes {
@@ -23,6 +24,9 @@ interface ProductAttributes {
   specifications?: unknown;
   usage?: unknown;
   cautions?: unknown;
+  duration?: unknown;
+  target?: unknown;
+  process?: unknown;
 }
 
 export interface ResolvedReferenceContext {
@@ -76,11 +80,32 @@ function formatProduct(row: ReferenceItemRow): string {
     .join("\n");
 }
 
+function formatService(row: ReferenceItemRow): string {
+  const attributes = parseAttributes(row.attributes_json);
+  const fields: Array<[string, string]> = [
+    ["サービス名", row.name],
+    ["カテゴリ", optionalText(attributes.category)],
+    ["サービス説明", row.description.trim()],
+    ["特徴", optionalText(attributes.features)],
+    ["価格", optionalText(attributes.price)],
+    ["所要時間", optionalText(attributes.duration)],
+    ["対象", optionalText(attributes.target)],
+    ["提供内容・流れ", optionalText(attributes.process)],
+    ["注意事項", optionalText(attributes.cautions)],
+    ["AI向け補足", row.ai_notes.trim()],
+    ["情報元URL", row.source_url ?? ""],
+  ];
+  return fields
+    .filter(([, value]) => value)
+    .map(([label, value]) => `${label}: ${value}`)
+    .join("\n");
+}
+
 /**
- * 認証利用者のAI利用可能な商品から、明示済みIDと依頼文中の商品名を解決する。
- * 商品データ自体はフロントエンドから受け取らず、必ずD1の所有者条件で取得する。
+ * 認証利用者のAI利用可能な参照データから、明示済みIDと依頼文中の名称を解決する。
+ * 参照データ自体はフロントエンドから受け取らず、必ずD1の所有者条件で取得する。
  */
-export async function resolveProductReferenceContext(
+export async function resolveReferenceContext(
   db: D1Database,
   ownerUserId: string,
   requestText: string,
@@ -88,47 +113,49 @@ export async function resolveProductReferenceContext(
 ): Promise<ResolvedReferenceContext> {
   const result = await db.prepare(
     `SELECT id, name, source_url, description, attributes_json,
-            ai_notes, updated_at
+            ai_notes, updated_at, category
        FROM creative_ia_reference_items
       WHERE owner_user_id = ?1
-        AND category = ?2
+        AND category IN ('product', 'service')
         AND ai_enabled = 1
       ORDER BY updated_at DESC`,
   )
-    .bind(ownerUserId, productCategory)
+    .bind(ownerUserId)
     .all<ReferenceItemRow>();
 
-  const products = result.results;
-  const productById = new Map(products.map((product) => [product.id, product]));
+  const references = result.results;
+  const referenceById = new Map(
+    references.map((reference) => [reference.id, reference]),
+  );
   const selected: ReferenceItemRow[] = [];
   const selectedIds = new Set<string>();
 
   for (const id of existingReferenceIds) {
-    const product = productById.get(id);
-    if (!product || selectedIds.has(product.id)) continue;
-    selected.push(product);
-    selectedIds.add(product.id);
+    const reference = referenceById.get(id);
+    if (!reference || selectedIds.has(reference.id)) continue;
+    selected.push(reference);
+    selectedIds.add(reference.id);
   }
 
   const normalizedRequest = normalizeReferenceNameForMatch(requestText);
-  const detected = products
-    .map((product) => ({
-      product,
-      name: normalizeReferenceNameForMatch(product.name),
+  const detected = references
+    .map((reference) => ({
+      reference,
+      name: normalizeReferenceNameForMatch(reference.name),
     }))
     .filter(({ name }) => name && normalizedRequest.includes(name))
     .sort((left, right) => right.name.length - left.name.length);
   const selectedNames: string[] = [];
 
-  for (const { product, name } of detected) {
+  for (const { reference, name } of detected) {
     if (
-      selectedIds.has(product.id) ||
+      selectedIds.has(reference.id) ||
       selectedNames.some((selectedName) => selectedName.includes(name))
     ) {
       continue;
     }
-    selected.push(product);
-    selectedIds.add(product.id);
+    selected.push(reference);
+    selectedIds.add(reference.id);
     selectedNames.push(name);
   }
 
@@ -136,8 +163,10 @@ export async function resolveProductReferenceContext(
   const blocks: string[] = [];
   let currentLength = 0;
 
-  for (const product of limited) {
-    const block = `[商品]\n${formatProduct(product)}`;
+  for (const reference of limited) {
+    const block = reference.category === "service"
+      ? `[サービス]\n${formatService(reference)}`
+      : `[商品]\n${formatProduct(reference)}`;
     const remaining = maxReferenceContextLength - currentLength;
     if (remaining <= 0) break;
     blocks.push(block.slice(0, remaining));
@@ -146,11 +175,11 @@ export async function resolveProductReferenceContext(
 
   return {
     context: blocks.join("\n\n"),
-    references: limited.map((product) => ({
-      id: product.id,
-      category: productCategory,
-      name: product.name,
-      updatedAt: product.updated_at,
+    references: limited.map((reference) => ({
+      id: reference.id,
+      category: reference.category,
+      name: reference.name,
+      updatedAt: reference.updated_at,
     })),
   };
 }

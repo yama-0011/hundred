@@ -36,6 +36,14 @@ import {
   listCreativeIAReferenceProducts,
   updateCreativeIAReferenceProduct,
 } from "./reference-products";
+import {
+  createCreativeIAReferenceService,
+  CreativeIAReferenceServiceError,
+  deleteCreativeIAReferenceService,
+  getCreativeIAReferenceService,
+  listCreativeIAReferenceServices,
+  updateCreativeIAReferenceService,
+} from "./reference-services";
 
 interface Env extends WordPressOAuthEnv, GeminiEnv {
   COGNITO_USER_POOL_ID: string;
@@ -116,6 +124,31 @@ function handleReferenceProductError(
     );
   }
 
+  return json(request, env, { error: fallbackMessage }, 500);
+}
+
+function handleReferenceServiceError(
+  request: Request,
+  env: Env,
+  error: unknown,
+  fallbackMessage: string,
+): Response {
+  if (error instanceof CognitoAuthenticationError) {
+    return json(request, env, { error: "認証が必要です" }, 401);
+  }
+  if (error instanceof CreativeIAReferenceServiceError) {
+    return json(
+      request,
+      env,
+      {
+        error:
+          error.code === "NOT_FOUND"
+            ? "サービスが見つかりません"
+            : "入力内容を確認してください",
+      },
+      error.code === "NOT_FOUND" ? 404 : 400,
+    );
+  }
   return json(request, env, { error: fallbackMessage }, 500);
 }
 
@@ -346,6 +379,58 @@ export default {
           error,
           "商品を削除できませんでした",
         );
+      }
+    }
+
+    if (
+      request.method === "GET" &&
+      url.pathname === "/api/creative-ia/references/services"
+    ) {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await listCreativeIAReferenceServices(env, ownerUserId));
+      } catch (error) {
+        return handleReferenceServiceError(request, env, error, "サービス一覧を取得できませんでした");
+      }
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/creative-ia/references/services"
+    ) {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await createCreativeIAReferenceService(request, env, ownerUserId), 201);
+      } catch (error) {
+        return handleReferenceServiceError(request, env, error, "サービスを登録できませんでした");
+      }
+    }
+
+    const serviceMatch = url.pathname.match(
+      /^\/api\/creative-ia\/references\/services\/([0-9a-f-]+)$/iu,
+    );
+    if (serviceMatch && request.method === "GET") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await getCreativeIAReferenceService(env, ownerUserId, serviceMatch[1]));
+      } catch (error) {
+        return handleReferenceServiceError(request, env, error, "サービスを取得できませんでした");
+      }
+    }
+    if (serviceMatch && request.method === "PATCH") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await updateCreativeIAReferenceService(request, env, ownerUserId, serviceMatch[1]));
+      } catch (error) {
+        return handleReferenceServiceError(request, env, error, "サービスを更新できませんでした");
+      }
+    }
+    if (serviceMatch && request.method === "DELETE") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await deleteCreativeIAReferenceService(env, ownerUserId, serviceMatch[1]));
+      } catch (error) {
+        return handleReferenceServiceError(request, env, error, "サービスを削除できませんでした");
       }
     }
 

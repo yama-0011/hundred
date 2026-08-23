@@ -12,21 +12,27 @@ import {
   appendCreativeIAChatMessage,
   createCreativeIAChat,
   createCreativeIAReferenceProduct,
+  createCreativeIAReferenceService,
   createCreativeIAWordPressDraft,
   deleteCreativeIAChat,
   deleteCreativeIAReferenceProduct,
+  deleteCreativeIAReferenceService,
   generateCreativeIAArticle,
   getCreativeIAChats,
   getCreativeIAReferenceProducts,
+  getCreativeIAReferenceServices,
   getCreativeIAWordPressStatus,
   updateCreativeIAChat,
   updateCreativeIAReferenceProduct,
+  updateCreativeIAReferenceService,
   type CreativeIAChat,
   type CreativeIAChatMessage,
   type CreativeIAGeneratedArticle,
   type CreativeIAProductionMemo,
   type CreativeIAReferenceProduct,
   type CreativeIAReferenceProductInput,
+  type CreativeIAReferenceService,
+  type CreativeIAReferenceServiceInput,
   type CreativeIAWordPressDraft,
   type CreativeIAWordPressStatus,
 } from '../../services/CreativeIA/creativeIaWordPressApi'
@@ -309,20 +315,20 @@ function CreativeIAWorkspacePage() {
           activeChat.article?.usedReferences.map((reference) => reference.id) ??
           [],
       })
-      const referencedProductNames = result.usedReferences
-        .filter((reference) => reference.category === 'product')
-        .map((reference) => reference.name)
+      const referencedNames = result.usedReferences.map(
+        (reference) => reference.name,
+      )
       const assistantMessage = createMessage(
         'assistant',
         isRevision
           ? `${
-              referencedProductNames.length > 0
-                ? `「${referencedProductNames.join('」「')}」の登録情報を参照して、`
+              referencedNames.length > 0
+                ? `「${referencedNames.join('」「')}」の登録情報を参照して、`
                 : ''
             }修正内容を反映しました。記事案をもう一度確認してください。`
           : `${
-              referencedProductNames.length > 0
-                ? `「${referencedProductNames.join('」「')}」の登録情報を参照して、`
+              referencedNames.length > 0
+                ? `「${referencedNames.join('」「')}」の登録情報を参照して、`
                 : ''
             }記事案を作成しました。記事案を確認してください。直したいところは、このまま会話で伝えられます。`,
       )
@@ -1447,19 +1453,33 @@ function ContentView({
 
 function ReferencesView() {
   const [view, setView] = useState<
-    'overview' | 'products' | 'create' | 'detail' | 'edit'
+    | 'overview'
+    | 'products'
+    | 'create'
+    | 'detail'
+    | 'edit'
+    | 'services'
+    | 'service-create'
+    | 'service-detail'
+    | 'service-edit'
   >('overview')
   const [activeReferenceTab, setActiveReferenceTab] = useState<
     'materials' | 'rules'
   >('materials')
   const [products, setProducts] = useState<CreativeIAReferenceProduct[]>([])
+  const [services, setServices] = useState<CreativeIAReferenceService[]>([])
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isServicesLoading, setIsServicesLoading] = useState(true)
   const [isPending, setIsPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isDeleteConfirming, setIsDeleteConfirming] = useState(false)
   const selectedProduct = products.find(
     (product) => product.id === selectedProductId,
+  )
+  const selectedService = services.find(
+    (service) => service.id === selectedServiceId,
   )
 
   useEffect(() => {
@@ -1482,6 +1502,29 @@ function ReferencesView() {
         if (active) setIsLoading(false)
       })
 
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    void getCreativeIAReferenceServices()
+      .then((result) => {
+        if (!active) return
+        setServices(result.services)
+      })
+      .catch((requestError) => {
+        if (!active) return
+        setError(
+          requestError instanceof Error && requestError.message === 'AUTH_REQUIRED'
+            ? 'Hundredへサインインし直してください。'
+            : 'サービス一覧を読み込めませんでした。',
+        )
+      })
+      .finally(() => {
+        if (active) setIsServicesLoading(false)
+      })
     return () => {
       active = false
     }
@@ -1548,6 +1591,64 @@ function ReferencesView() {
     }
   }
 
+  const openService = (serviceId: string) => {
+    setSelectedServiceId(serviceId)
+    setIsDeleteConfirming(false)
+    setError(null)
+    setView('service-detail')
+  }
+
+  const handleSaveService = async (input: CreativeIAReferenceServiceInput) => {
+    if (isPending) return
+    setIsPending(true)
+    setError(null)
+    try {
+      const service =
+        view === 'service-edit' && selectedService
+          ? await updateCreativeIAReferenceService(selectedService.id, input)
+          : await createCreativeIAReferenceService(input)
+      setServices((current) => [
+        service,
+        ...current.filter((item) => item.id !== service.id),
+      ])
+      setSelectedServiceId(service.id)
+      setView('service-detail')
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error && requestError.message === 'AUTH_REQUIRED'
+          ? 'Hundredへサインインし直してください。'
+          : requestError instanceof Error && requestError.message === 'INVALID_INPUT'
+            ? '入力内容を確認してください。'
+            : 'サービスを保存できませんでした。',
+      )
+    } finally {
+      setIsPending(false)
+    }
+  }
+
+  const handleDeleteService = async () => {
+    if (!selectedService || isPending) return
+    setIsPending(true)
+    setError(null)
+    try {
+      await deleteCreativeIAReferenceService(selectedService.id)
+      setServices((current) =>
+        current.filter((service) => service.id !== selectedService.id),
+      )
+      setSelectedServiceId(null)
+      setIsDeleteConfirming(false)
+      setView('services')
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error && requestError.message === 'AUTH_REQUIRED'
+          ? 'Hundredへサインインし直してください。'
+          : 'サービスを削除できませんでした。',
+      )
+    } finally {
+      setIsPending(false)
+    }
+  }
+
   if (view === 'products') {
     return (
       <ReferenceProductList
@@ -1593,6 +1694,57 @@ function ReferencesView() {
         onDeleteRequest={() => setIsDeleteConfirming(true)}
         onDeleteCancel={() => setIsDeleteConfirming(false)}
         onDelete={() => void handleDeleteProduct()}
+      />
+    )
+  }
+
+  if (view === 'services') {
+    return (
+      <ReferenceServiceList
+        services={services}
+        isLoading={isServicesLoading}
+        error={error}
+        onBack={() => setView('overview')}
+        onCreate={() => {
+          setSelectedServiceId(null)
+          setError(null)
+          setView('service-create')
+        }}
+        onOpen={openService}
+      />
+    )
+  }
+
+  if (view === 'service-create' || view === 'service-edit') {
+    return (
+      <ServiceEditor
+        key={view === 'service-edit' ? selectedService?.id : 'new-service'}
+        service={view === 'service-edit' ? selectedService : undefined}
+        isPending={isPending}
+        error={error}
+        onCancel={() =>
+          setView(selectedService ? 'service-detail' : 'services')
+        }
+        onSave={(input) => void handleSaveService(input)}
+      />
+    )
+  }
+
+  if (view === 'service-detail' && selectedService) {
+    return (
+      <ServiceDetail
+        service={selectedService}
+        isPending={isPending}
+        isDeleteConfirming={isDeleteConfirming}
+        error={error}
+        onBack={() => setView('services')}
+        onEdit={() => {
+          setError(null)
+          setView('service-edit')
+        }}
+        onDeleteRequest={() => setIsDeleteConfirming(true)}
+        onDeleteCancel={() => setIsDeleteConfirming(false)}
+        onDelete={() => void handleDeleteService()}
       />
     )
   }
@@ -1645,7 +1797,13 @@ function ReferencesView() {
                 <span aria-hidden="true">→</span>
               </button>
             </li>
-            <li><span>サービス</span><small>準備中</small></li>
+            <li>
+              <button type="button" onClick={() => setView('services')}>
+                <span>サービス</span>
+                <small>{services.length}件</small>
+                <span aria-hidden="true">→</span>
+              </button>
+            </li>
             <li><span>写真</span><small>準備中</small></li>
             <li><span>会社・店舗</span><small>準備中</small></li>
           </ul>
@@ -1747,6 +1905,243 @@ function ReferenceProductList({
           }))}
         />
       )}
+    </section>
+  )
+}
+
+function ReferenceServiceList({
+  services, isLoading, error, onBack, onCreate, onOpen,
+}: {
+  services: CreativeIAReferenceService[]
+  isLoading: boolean
+  error: string | null
+  onBack: () => void
+  onCreate: () => void
+  onOpen: (serviceId: string) => void
+}) {
+  return (
+    <section className="creative-ia__page creative-ia__reference-page" aria-labelledby="services-title">
+      <button className="creative-ia__page-back" type="button" onClick={onBack}>
+        <span aria-hidden="true">←</span> 参照データ
+      </button>
+      <header className="creative-ia__collection-header">
+        <div>
+          <p>References</p>
+          <h1 id="services-title">サービス</h1>
+          <span>記事やSNSコンテンツで再利用するサービス情報を管理します。</span>
+        </div>
+        <button type="button" onClick={onCreate}>＋ サービスを登録</button>
+      </header>
+      <div className="creative-ia__collection-meta">
+        <span>{services.length}件</span>
+        {services.length > 0 && <small>更新日時が新しい順に表示しています。</small>}
+      </div>
+      {error && <p className="creative-ia__chat-error" role="alert">{error}</p>}
+      {isLoading ? (
+        <div className="creative-ia__empty-state"><p>サービスを読み込んでいます。</p></div>
+      ) : services.length === 0 ? (
+        <div className="creative-ia__empty-state">
+          <span aria-hidden="true">✦</span>
+          <h2>最初のサービスを登録しましょう</h2>
+          <p>サービス名だけでも登録できます。必要な情報はあとから追加できます。</p>
+          <button type="button" onClick={onCreate}>サービスを登録</button>
+        </div>
+      ) : (
+        <WorkspaceList
+          ariaLabel="サービス一覧"
+          columns={[
+            { key: 'name', label: 'サービス名' },
+            { key: 'category', label: 'カテゴリ' },
+            { key: 'price', label: '価格' },
+            { key: 'source', label: '情報元URL' },
+            { key: 'updated', label: '最終更新' },
+            { key: 'ai', label: 'AI利用' },
+          ]}
+          columnTemplate="minmax(220px, 1.35fr) minmax(120px, .75fr) minmax(120px, .75fr) minmax(160px, 1fr) 132px 90px"
+          rows={services.map((service) => ({
+            id: service.id,
+            ariaLabel: `「${service.name}」の詳細を開く`,
+            cells: {
+              name: (
+                <span className="creative-ia__collection-primary">
+                  <strong>{service.name}</strong>
+                  <small>{service.description || '説明未入力'}</small>
+                </span>
+              ),
+              category: service.category || '—',
+              price: service.price || '—',
+              source: formatSourceUrl(service.sourceUrl),
+              updated: <FormattedDate value={service.updatedAt} />,
+              ai: (
+                <StatusBadge tone={service.aiEnabled ? 'saved' : 'neutral'}>
+                  {service.aiEnabled ? '利用する' : '利用しない'}
+                </StatusBadge>
+              ),
+            },
+            onOpen: () => onOpen(service.id),
+          }))}
+        />
+      )}
+    </section>
+  )
+}
+
+function ServiceDetail({
+  service, isPending, isDeleteConfirming, error, onBack, onEdit,
+  onDeleteRequest, onDeleteCancel, onDelete,
+}: {
+  service: CreativeIAReferenceService
+  isPending: boolean
+  isDeleteConfirming: boolean
+  error: string | null
+  onBack: () => void
+  onEdit: () => void
+  onDeleteRequest: () => void
+  onDeleteCancel: () => void
+  onDelete: () => void
+}) {
+  const fields = [
+    ['カテゴリ', service.category], ['価格', service.price],
+    ['所要時間', service.duration], ['サービス説明', service.description],
+    ['特徴', service.features], ['対象', service.target],
+    ['提供内容・流れ', service.process], ['注意事項', service.cautions],
+    ['AIへ渡す補足情報', service.aiNotes],
+  ].filter(([, value]) => value)
+
+  return (
+    <section className="creative-ia__page creative-ia__reference-page" aria-labelledby="service-detail-title">
+      <button className="creative-ia__page-back" type="button" onClick={onBack}>
+        <span aria-hidden="true">←</span> サービス一覧
+      </button>
+      <header className="creative-ia__reference-detail-header">
+        <div>
+          <p>Service</p>
+          <h1 id="service-detail-title">{service.name}</h1>
+          <span>サービス情報の確認と、AIで利用する内容を管理します。</span>
+        </div>
+        <div>
+          <button type="button" onClick={onEdit}>編集</button>
+          <button type="button" data-danger="true" onClick={onDeleteRequest}>削除</button>
+        </div>
+      </header>
+      {error && <p className="creative-ia__chat-error" role="alert">{error}</p>}
+      {isDeleteConfirming && (
+        <div className="creative-ia__delete-confirm" role="alert">
+          <span>このサービスを削除します。元に戻すことはできません。</span>
+          <div>
+            <button type="button" onClick={onDeleteCancel} disabled={isPending}>キャンセル</button>
+            <button type="button" onClick={onDelete} disabled={isPending}>
+              {isPending ? '削除中' : '削除する'}
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="creative-ia__reference-detail-grid">
+        <section>
+          <span>AI利用</span>
+          <StatusBadge tone={service.aiEnabled ? 'saved' : 'neutral'}>
+            {service.aiEnabled ? '利用する' : '利用しない'}
+          </StatusBadge>
+        </section>
+        <section><span>最終更新</span><FormattedDate value={service.updatedAt} /></section>
+        {service.sourceUrl && (
+          <section>
+            <span>情報元URL</span>
+            <a href={service.sourceUrl} target="_blank" rel="noreferrer">
+              {formatSourceUrl(service.sourceUrl)} ↗
+            </a>
+          </section>
+        )}
+      </div>
+      <dl className="creative-ia__reference-fields">
+        {fields.length > 0 ? fields.map(([label, value]) => (
+          <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
+        )) : (
+          <div><dt>サービス情報</dt><dd>詳細情報はまだ登録されていません。</dd></div>
+        )}
+      </dl>
+    </section>
+  )
+}
+
+function ServiceEditor({ service, isPending, error, onCancel, onSave }: {
+  service?: CreativeIAReferenceService
+  isPending: boolean
+  error: string | null
+  onCancel: () => void
+  onSave: (input: CreativeIAReferenceServiceInput) => void
+}) {
+  const [form, setForm] = useState<CreativeIAReferenceServiceInput>(() => ({
+    name: service?.name ?? '', category: service?.category ?? '',
+    sourceUrl: service?.sourceUrl ?? null, description: service?.description ?? '',
+    features: service?.features ?? '', price: service?.price ?? '',
+    duration: service?.duration ?? '', target: service?.target ?? '',
+    process: service?.process ?? '', cautions: service?.cautions ?? '',
+    aiNotes: service?.aiNotes ?? '', aiEnabled: service?.aiEnabled ?? true,
+  }))
+  const updateField = <Key extends keyof CreativeIAReferenceServiceInput>(
+    key: Key, value: CreativeIAReferenceServiceInput[Key],
+  ) => setForm((current) => ({ ...current, [key]: value }))
+
+  return (
+    <section className="creative-ia__page creative-ia__reference-page" aria-labelledby="service-editor-title">
+      <button className="creative-ia__page-back" type="button" onClick={onCancel}>
+        <span aria-hidden="true">←</span> {service ? 'サービス詳細' : 'サービス一覧'}
+      </button>
+      <header className="creative-ia__section-header">
+        <div>
+          <p>Service</p>
+          <h1 id="service-editor-title">{service ? 'サービスを編集' : 'サービスを登録'}</h1>
+          <span>サービス名だけで保存できます。必要な情報はあとから追加できます。</span>
+        </div>
+      </header>
+      <form className="creative-ia__reference-form" onSubmit={(event) => {
+        event.preventDefault()
+        onSave({ ...form, sourceUrl: form.sourceUrl || null })
+      }}>
+        {error && <p className="creative-ia__chat-error" role="alert">{error}</p>}
+        <div className="creative-ia__reference-form-grid">
+          <label>
+            <span>サービス名 <small>必須</small></span>
+            <input value={form.name} maxLength={200} required onChange={(event) => updateField('name', event.target.value)} />
+          </label>
+          <label>
+            <span>カテゴリ</span>
+            <input value={form.category} maxLength={200} placeholder="例：コンサルティング" onChange={(event) => updateField('category', event.target.value)} />
+          </label>
+          <label className="creative-ia__reference-form-wide">
+            <span>サービスURL</span>
+            <input type="url" value={form.sourceUrl ?? ''} maxLength={2000} placeholder="https://example.com/service" onChange={(event) => updateField('sourceUrl', event.target.value)} />
+            <small>URLからのサービス情報取得は今後対応予定です。</small>
+          </label>
+          <label className="creative-ia__reference-form-wide">
+            <span>サービス説明</span>
+            <textarea value={form.description} rows={4} maxLength={10000} onChange={(event) => updateField('description', event.target.value)} />
+          </label>
+        </div>
+        <details className="creative-ia__reference-form-details">
+          <summary>詳細情報を追加</summary>
+          <div className="creative-ia__reference-form-grid">
+            <label><span>価格</span><input value={form.price} maxLength={200} onChange={(event) => updateField('price', event.target.value)} /></label>
+            <label><span>所要時間</span><input value={form.duration} maxLength={200} placeholder="例：60分" onChange={(event) => updateField('duration', event.target.value)} /></label>
+            <ReferenceTextarea label="特徴" value={form.features} onChange={(value) => updateField('features', value)} />
+            <ReferenceTextarea label="対象" value={form.target} onChange={(value) => updateField('target', value)} />
+            <ReferenceTextarea label="提供内容・流れ" value={form.process} onChange={(value) => updateField('process', value)} />
+            <ReferenceTextarea label="注意事項" value={form.cautions} onChange={(value) => updateField('cautions', value)} />
+            <ReferenceTextarea label="AIへ渡す補足情報" value={form.aiNotes} onChange={(value) => updateField('aiNotes', value)} />
+          </div>
+        </details>
+        <label className="creative-ia__reference-ai-toggle">
+          <input type="checkbox" checked={form.aiEnabled} onChange={(event) => updateField('aiEnabled', event.target.checked)} />
+          <span><strong>AIで利用する</strong><small>Chatやコンテンツ生成の参照候補に含めます。</small></span>
+        </label>
+        <footer>
+          <button type="button" onClick={onCancel} disabled={isPending}>キャンセル</button>
+          <button type="submit" disabled={isPending || !form.name.trim()}>
+            {isPending ? '保存中' : service ? '変更を保存' : 'サービスを登録'}
+          </button>
+        </footer>
+      </form>
     </section>
   )
 }
@@ -1960,11 +2355,11 @@ function ProductEditor({
           <div className="creative-ia__reference-form-grid">
             <label><span>価格</span><input value={form.price} maxLength={200} onChange={(event) => updateField('price', event.target.value)} /></label>
             <label><span>容量</span><input value={form.capacity} maxLength={200} onChange={(event) => updateField('capacity', event.target.value)} /></label>
-            <ProductTextarea label="特徴" value={form.features} onChange={(value) => updateField('features', value)} />
-            <ProductTextarea label="成分・仕様" value={form.specifications} onChange={(value) => updateField('specifications', value)} />
-            <ProductTextarea label="使用方法" value={form.usage} onChange={(value) => updateField('usage', value)} />
-            <ProductTextarea label="注意事項" value={form.cautions} onChange={(value) => updateField('cautions', value)} />
-            <ProductTextarea label="AIへ渡す補足情報" value={form.aiNotes} onChange={(value) => updateField('aiNotes', value)} />
+            <ReferenceTextarea label="特徴" value={form.features} onChange={(value) => updateField('features', value)} />
+            <ReferenceTextarea label="成分・仕様" value={form.specifications} onChange={(value) => updateField('specifications', value)} />
+            <ReferenceTextarea label="使用方法" value={form.usage} onChange={(value) => updateField('usage', value)} />
+            <ReferenceTextarea label="注意事項" value={form.cautions} onChange={(value) => updateField('cautions', value)} />
+            <ReferenceTextarea label="AIへ渡す補足情報" value={form.aiNotes} onChange={(value) => updateField('aiNotes', value)} />
           </div>
         </details>
 
@@ -1988,7 +2383,7 @@ function ProductEditor({
   )
 }
 
-function ProductTextarea({
+function ReferenceTextarea({
   label,
   value,
   onChange,

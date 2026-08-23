@@ -130,7 +130,10 @@ function parseUsedReferences(value: unknown): UsedReference[] {
   }
 
   return value.map((reference) => {
-    if (!isRecord(reference) || reference.category !== "product") {
+    if (
+      !isRecord(reference) ||
+      (reference.category !== "product" && reference.category !== "service")
+    ) {
       throw new CreativeIAChatError("INVALID_INPUT");
     }
 
@@ -141,7 +144,7 @@ function parseUsedReferences(value: unknown): UsedReference[] {
 
     return {
       id: parseString(reference.id, 100),
-      category: "product",
+      category: reference.category,
       name: parseString(reference.name, 200),
       updatedAt,
     };

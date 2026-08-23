@@ -4,7 +4,7 @@ import {
   type GeminiEnv,
 } from "./gemini";
 import type { ArticleGenerationInput, GeneratedArticle } from "./provider";
-import { resolveProductReferenceContext } from "./reference-context";
+import { resolveReferenceContext } from "./reference-context";
 
 const maxTopicLength = 200;
 const maxKeyPointsLength = 2_000;
@@ -120,7 +120,7 @@ export async function generateArticle(
 
   await enforceRateLimit(env, ownerUserId);
 
-  const resolvedReferences = await resolveProductReferenceContext(
+  const resolvedReferences = await resolveReferenceContext(
     env.DB,
     ownerUserId,
     [parsedInput.input.topic, parsedInput.input.keyPoints]
