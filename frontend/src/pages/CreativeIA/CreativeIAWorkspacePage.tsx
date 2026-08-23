@@ -305,12 +305,26 @@ function CreativeIAWorkspacePage() {
               .slice(0, 2000),
         audience: '',
         tone: 'friendly',
+        referenceIds:
+          activeChat.article?.usedReferences.map((reference) => reference.id) ??
+          [],
       })
+      const referencedProductNames = result.usedReferences
+        .filter((reference) => reference.category === 'product')
+        .map((reference) => reference.name)
       const assistantMessage = createMessage(
         'assistant',
         isRevision
-          ? '修正内容を反映しました。記事案をもう一度確認してください。'
-          : '記事案を作成しました。記事案を確認してください。直したいところは、このまま会話で伝えられます。',
+          ? `${
+              referencedProductNames.length > 0
+                ? `「${referencedProductNames.join('」「')}」の登録情報を参照して、`
+                : ''
+            }修正内容を反映しました。記事案をもう一度確認してください。`
+          : `${
+              referencedProductNames.length > 0
+                ? `「${referencedProductNames.join('」「')}」の登録情報を参照して、`
+                : ''
+            }記事案を作成しました。記事案を確認してください。直したいところは、このまま会話で伝えられます。`,
       )
       const updatedChat: ChatSession = {
         ...chatBeforeGeneration,
@@ -543,6 +557,7 @@ function CreativeIAWorkspacePage() {
             messages={activeChat.messages}
             composer={composer}
             article={activeChat.article}
+            usedReferences={activeChat.article?.usedReferences ?? []}
             isGenerating={isGenerating}
             error={generationError}
             persistenceError={chatError}
@@ -910,6 +925,7 @@ function CreateView({
   messages,
   composer,
   article,
+  usedReferences,
   isGenerating,
   error,
   persistenceError,
@@ -923,6 +939,7 @@ function CreateView({
   messages: Message[]
   composer: string
   article: CreativeIAGeneratedArticle | null
+  usedReferences: CreativeIAGeneratedArticle['usedReferences']
   isGenerating: boolean
   error: string | null
   persistenceError: string | null
@@ -969,6 +986,17 @@ function CreateView({
           </button>
         </div>
       </div>
+
+      {usedReferences.length > 0 && (
+        <div className="creative-ia__active-references" aria-label="参照中のデータ">
+          <span>参照中</span>
+          <div>
+            {usedReferences.map((reference) => (
+              <span key={reference.id}>{reference.name}</span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="creative-ia__conversation" aria-live="polite">
         {messages.map((message, index) => (

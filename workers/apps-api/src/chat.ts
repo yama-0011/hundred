@@ -1,3 +1,5 @@
+import type { UsedReference } from "./ai/provider";
+
 const maxChatsPerUser = 10;
 const maxMessagesPerChat = 1_000;
 const welcomeMessage =
@@ -16,6 +18,7 @@ interface ChatRow {
   article_content: string;
   article_excerpt: string;
   article_warnings_json: string;
+  article_references_json: string;
   article_model: string | null;
   production_memos_json: string;
   applied_rule_ids_json: string;
@@ -121,6 +124,30 @@ function parseWarnings(value: unknown): string[] {
   return value.map((item) => parseString(item, 1_000));
 }
 
+function parseUsedReferences(value: unknown): UsedReference[] {
+  if (!Array.isArray(value) || value.length > 20) {
+    throw new CreativeIAChatError("INVALID_INPUT");
+  }
+
+  return value.map((reference) => {
+    if (!isRecord(reference) || reference.category !== "product") {
+      throw new CreativeIAChatError("INVALID_INPUT");
+    }
+
+    const updatedAt = reference.updatedAt;
+    if (typeof updatedAt !== "number" || !Number.isFinite(updatedAt)) {
+      throw new CreativeIAChatError("INVALID_INPUT");
+    }
+
+    return {
+      id: parseString(reference.id, 100),
+      category: "product",
+      name: parseString(reference.name, 200),
+      updatedAt,
+    };
+  });
+}
+
 function parseSavedDraft(value: unknown): SavedDraft | null {
   if (value === null) return null;
   if (!isRecord(value)) throw new CreativeIAChatError("INVALID_INPUT");
@@ -157,6 +184,10 @@ function serializeChat(row: ChatRow, messages: MessageRow[]) {
           excerpt: row.article_excerpt,
           warnings: parseJson<string[]>(row.article_warnings_json, []),
           model: row.article_model ?? "",
+          usedReferences: parseJson<UsedReference[]>(
+            row.article_references_json,
+            [],
+          ),
         }
       : null,
     draftTitle: row.article_title,
@@ -297,6 +328,7 @@ export async function updateCreativeIAChat(
   let articleContent = "";
   let articleExcerpt = "";
   let articleWarnings: string[] = [];
+  let articleReferences: UsedReference[] = [];
   let articleModel: string | null = null;
 
   if (article !== null) {
@@ -305,6 +337,7 @@ export async function updateCreativeIAChat(
     articleContent = parseString(article.content, 100_000, { allowEmpty: true });
     articleExcerpt = parseString(article.excerpt, 2_000, { allowEmpty: true });
     articleWarnings = parseWarnings(article.warnings);
+    articleReferences = parseUsedReferences(article.usedReferences ?? []);
     articleModel = parseString(article.model, 200, { allowEmpty: true }) || null;
   }
 
@@ -318,12 +351,13 @@ export async function updateCreativeIAChat(
             article_content = ?3,
             article_excerpt = ?4,
             article_warnings_json = ?5,
-            article_model = ?6,
-            production_memos_json = ?7,
-            applied_rule_ids_json = ?8,
-            saved_draft_json = ?9,
-            updated_at = ?10
-      WHERE id = ?11 AND owner_user_id = ?12`,
+            article_references_json = ?6,
+            article_model = ?7,
+            production_memos_json = ?8,
+            applied_rule_ids_json = ?9,
+            saved_draft_json = ?10,
+            updated_at = ?11
+      WHERE id = ?12 AND owner_user_id = ?13`,
   )
     .bind(
       title,
@@ -331,6 +365,7 @@ export async function updateCreativeIAChat(
       articleContent,
       articleExcerpt,
       JSON.stringify(articleWarnings),
+      JSON.stringify(articleReferences),
       articleModel,
       JSON.stringify(productionMemos),
       JSON.stringify(appliedRuleIds),

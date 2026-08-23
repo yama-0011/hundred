@@ -711,6 +711,30 @@
   text-align: right;
 }
 
+.creative-ia__active-references {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 2px;
+  color: var(--cia-muted);
+  font-size: 0.7rem;
+}
+
+.creative-ia__active-references > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.creative-ia__active-references > div > span {
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--cia-accent) 36%, transparent);
+  border-radius: 999px;
+  color: var(--cia-accent);
+  background: var(--cia-accent-soft);
+  font-weight: 680;
+}
+
 .creative-ia__artifact {
   grid-column: 3;
   width: clamp(360px, 34vw, 510px);

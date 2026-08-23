@@ -4,10 +4,12 @@ import {
   type GeminiEnv,
 } from "./gemini";
 import type { ArticleGenerationInput, GeneratedArticle } from "./provider";
+import { resolveProductReferenceContext } from "./reference-context";
 
 const maxTopicLength = 200;
 const maxKeyPointsLength = 2_000;
 const maxAudienceLength = 200;
+const maxReferenceIds = 20;
 const minuteLimit = 3;
 const dailyLimit = 20;
 
@@ -32,7 +34,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function parseInput(value: unknown): ArticleGenerationInput {
+function parseInput(value: unknown): {
+  input: Omit<ArticleGenerationInput, "referenceContext">;
+  referenceIds: string[];
+} {
   if (!isRecord(value)) throw new ArticleGenerationError("INVALID_INPUT");
 
   const topic = typeof value.topic === "string" ? value.topic.trim() : "";
@@ -41,18 +46,24 @@ function parseInput(value: unknown): ArticleGenerationInput {
   const audience =
     typeof value.audience === "string" ? value.audience.trim() : "";
   const tone = value.tone ?? "friendly";
+  const referenceIds = Array.isArray(value.referenceIds)
+    ? value.referenceIds.filter(
+        (item): item is string => typeof item === "string" && item.length <= 100,
+      )
+    : [];
 
   if (
     !topic ||
     topic.length > maxTopicLength ||
     keyPoints.length > maxKeyPointsLength ||
     audience.length > maxAudienceLength ||
+    referenceIds.length > maxReferenceIds ||
     (tone !== "friendly" && tone !== "professional" && tone !== "casual")
   ) {
     throw new ArticleGenerationError("INVALID_INPUT");
   }
 
-  return { topic, keyPoints, audience, tone };
+  return { input: { topic, keyPoints, audience, tone }, referenceIds };
 }
 
 async function enforceRateLimit(env: GenerationEnv, ownerUserId: string) {
@@ -89,10 +100,10 @@ export async function generateArticle(
   env: GenerationEnv,
   ownerUserId: string,
 ): Promise<GeneratedArticle> {
-  let input: ArticleGenerationInput;
+  let parsedInput: ReturnType<typeof parseInput>;
 
   try {
-    input = parseInput(await request.json());
+    parsedInput = parseInput(await request.json());
   } catch (error) {
     if (error instanceof ArticleGenerationError) throw error;
     throw new ArticleGenerationError("INVALID_INPUT");
@@ -108,6 +119,19 @@ export async function generateArticle(
     .run();
 
   await enforceRateLimit(env, ownerUserId);
+
+  const resolvedReferences = await resolveProductReferenceContext(
+    env.DB,
+    ownerUserId,
+    [parsedInput.input.topic, parsedInput.input.keyPoints]
+      .filter(Boolean)
+      .join("\n"),
+    parsedInput.referenceIds,
+  );
+  const input: ArticleGenerationInput = {
+    ...parsedInput.input,
+    referenceContext: resolvedReferences.context,
+  };
 
   const model = env.GEMINI_MODEL?.trim() || "gemini-3.5-flash-lite";
   const requestId = crypto.randomUUID();
@@ -127,7 +151,7 @@ export async function generateArticle(
     )
       .bind(requestId)
       .run();
-    return result;
+    return { ...result, usedReferences: resolvedReferences.references };
   } catch (error) {
     await env.DB.prepare(
       `UPDATE generation_requests

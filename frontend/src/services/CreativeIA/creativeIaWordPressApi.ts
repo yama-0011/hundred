@@ -27,6 +27,14 @@ export type CreativeIAGeneratedArticle = {
   excerpt: string
   warnings: string[]
   model: string
+  usedReferences: CreativeIAUsedReference[]
+}
+
+export type CreativeIAUsedReference = {
+  id: string
+  category: 'product'
+  name: string
+  updatedAt: number
 }
 
 export type CreativeIAChatMessage = {
@@ -268,6 +276,7 @@ export function generateCreativeIAArticle(input: {
   keyPoints: string
   audience: string
   tone: 'friendly' | 'professional' | 'casual'
+  referenceIds?: string[]
 }) {
   return requestCreativeIAApi<CreativeIAGeneratedArticle>(
     '/api/creative-ia/generate',

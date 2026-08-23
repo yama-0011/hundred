@@ -3,9 +3,10 @@ export interface ArticleGenerationInput {
   keyPoints: string;
   audience: string;
   tone: "friendly" | "professional" | "casual";
+  referenceContext: string;
 }
 
-export interface GeneratedArticle {
+export interface GeneratedArticleContent {
   title: string;
   content: string;
   excerpt: string;
@@ -13,6 +14,17 @@ export interface GeneratedArticle {
   model: string;
 }
 
+export interface UsedReference {
+  id: string;
+  category: "product";
+  name: string;
+  updatedAt: number;
+}
+
+export interface GeneratedArticle extends GeneratedArticleContent {
+  usedReferences: UsedReference[];
+}
+
 export interface ArticleGenerator {
-  generate(input: ArticleGenerationInput): Promise<GeneratedArticle>;
+  generate(input: ArticleGenerationInput): Promise<GeneratedArticleContent>;
 }
