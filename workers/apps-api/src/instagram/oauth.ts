@@ -32,7 +32,6 @@ interface OAuthStateRow {
 
 interface InstagramTokenResponse {
   access_token?: unknown;
-  user_id?: unknown;
 }
 
 interface InstagramLongLivedTokenResponse {
@@ -184,7 +183,7 @@ async function consumeOAuthState(
 async function exchangeAuthorizationCode(
   env: InstagramOAuthEnv,
   code: string,
-): Promise<{ accessToken: string; userId: string | null }> {
+): Promise<string> {
   const response = await fetch(tokenEndpoint, {
     method: "POST",
     headers: { Accept: "application/json" },
@@ -210,13 +209,7 @@ async function exchangeAuthorizationCode(
     throw new InstagramOAuthError("INSTAGRAM_TOKEN_RESPONSE_INVALID");
   }
 
-  return {
-    accessToken: token.access_token,
-    userId:
-      typeof token.user_id === "string" || typeof token.user_id === "number"
-        ? String(token.user_id)
-        : null,
-  };
+  return token.access_token;
 }
 
 async function exchangeLongLivedToken(
@@ -301,16 +294,12 @@ export async function handleInstagramOAuthCallback(
   if (!code) return createFrontendRedirect(env, stateRow.return_to, "failed");
 
   try {
-    const shortLivedToken = await exchangeAuthorizationCode(env, code);
+    const shortLivedAccessToken = await exchangeAuthorizationCode(env, code);
     const longLivedToken = await exchangeLongLivedToken(
       env,
-      shortLivedToken.accessToken,
+      shortLivedAccessToken,
     );
     const profile = await getInstagramProfile(longLivedToken.accessToken);
-
-    if (shortLivedToken.userId && shortLivedToken.userId !== profile.id) {
-      throw new InstagramOAuthError("INSTAGRAM_USER_ID_MISMATCH");
-    }
 
     const encryptedToken = await encryptAccessToken(
       longLivedToken.accessToken,
