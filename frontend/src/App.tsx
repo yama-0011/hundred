@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom'
 import CreativeIAConnectionPage from './pages/CreativeIA/CreativeIAConnectionPage'
+import CreativeIAInstagramConnectionPage from './pages/CreativeIA/CreativeIAInstagramConnectionPage'
 import CreativeIAWorkspacePage from './pages/CreativeIA/CreativeIAWorkspacePage'
 import HundredHomePage from './pages/Hundred/HundredHomePage'
 
@@ -19,6 +20,10 @@ function App() {
       <Route
         path="/creative-ia/settings/wordpress"
         element={<CreativeIAConnectionPage />}
+      />
+      <Route
+        path="/creative-ia/settings/instagram"
+        element={<CreativeIAInstagramConnectionPage />}
       />
     </Routes>
   )

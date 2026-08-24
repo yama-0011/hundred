@@ -25,6 +25,11 @@ import {
   WordPressApplicationPasswordError,
 } from "./wordpress/application-password";
 import {
+  createInstagramAuthorizationUrl,
+  handleInstagramOAuthCallback,
+  type InstagramOAuthEnv,
+} from "./instagram/oauth";
+import {
   appendCreativeIAChatMessage,
   createCreativeIAChat,
   CreativeIAChatError,
@@ -62,7 +67,7 @@ import {
   updateCreativeIAReferenceOrganization,
 } from "./reference-organizations";
 
-interface Env extends WordPressOAuthEnv, GeminiEnv {
+interface Env extends WordPressOAuthEnv, InstagramOAuthEnv, GeminiEnv {
   COGNITO_USER_POOL_ID: string;
   COGNITO_USER_POOL_CLIENT_ID: string;
 }
@@ -245,6 +250,46 @@ async function handleWordPressStatus(
   });
 }
 
+async function handleInstagramStatus(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+  const connection = await env.DB.prepare(
+    `SELECT instagram_user_id, instagram_username, token_expires_at,
+            connected_at, granted_scopes
+       FROM instagram_connections
+      WHERE owner_user_id = ?1`,
+  )
+    .bind(ownerUserId)
+    .first<{
+      instagram_user_id: string;
+      instagram_username: string;
+      token_expires_at: number | null;
+      connected_at: number;
+      granted_scopes: string;
+    }>();
+  const now = Math.floor(Date.now() / 1000);
+  const tokenExpired =
+    connection?.token_expires_at !== null &&
+    connection?.token_expires_at !== undefined &&
+    connection.token_expires_at <= now;
+
+  return json(request, env, {
+    connected: connection !== null && !tokenExpired,
+    tokenExpired,
+    account: connection
+      ? {
+          id: connection.instagram_user_id,
+          username: connection.instagram_username,
+        }
+      : null,
+    connectedAt: connection?.connected_at ?? null,
+    tokenExpiresAt: connection?.token_expires_at ?? null,
+    grantedScopes: connection?.granted_scopes.split(" ").filter(Boolean) ?? [],
+  });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -285,6 +330,20 @@ export default {
           { error: "接続状態を取得できませんでした" },
           500,
         );
+      }
+    }
+
+    if (
+      request.method === "GET" &&
+      url.pathname === "/api/creative-ia/instagram/status"
+    ) {
+      try {
+        return await handleInstagramStatus(request, env);
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        return json(request, env, { error: "接続状態を取得できませんでした" }, 500);
       }
     }
 
@@ -836,6 +895,67 @@ export default {
         const redirectUrl = new URL(env.APP_ORIGIN);
         redirectUrl.searchParams.set("wordpress", "failed");
         return Response.redirect(redirectUrl.toString(), 303);
+      }
+    }
+
+    if (
+      request.method === "GET" &&
+      url.pathname === "/api/creative-ia/instagram/oauth/start"
+    ) {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        const authorizationUrl = await createInstagramAuthorizationUrl(
+          env,
+          ownerUserId,
+          url.searchParams.get("returnTo"),
+        );
+        return json(request, env, { authorizationUrl });
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        return json(
+          request,
+          env,
+          { error: "Instagramとの接続を開始できませんでした" },
+          500,
+        );
+      }
+    }
+
+    if (
+      request.method === "GET" &&
+      url.pathname === "/api/creative-ia/instagram/oauth/callback"
+    ) {
+      try {
+        return await handleInstagramOAuthCallback(url, env);
+      } catch {
+        const redirectUrl = new URL(
+          "/creative-ia/settings/instagram",
+          env.APP_ORIGIN,
+        );
+        redirectUrl.searchParams.set("instagram", "failed");
+        return Response.redirect(redirectUrl.toString(), 303);
+      }
+    }
+
+    if (
+      request.method === "DELETE" &&
+      url.pathname === "/api/creative-ia/instagram/connection"
+    ) {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        await env.DB.prepare(
+          "DELETE FROM instagram_connections WHERE owner_user_id = ?1",
+        )
+          .bind(ownerUserId)
+          .run();
+        return json(request, env, { disconnected: true });
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        return json(request, env, { error: "接続を解除できませんでした" }, 500);
       }
     }
 

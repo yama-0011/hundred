@@ -48,6 +48,10 @@ import {
   type CreativeIAWordPressDraft,
   type CreativeIAWordPressStatus,
 } from '../../services/CreativeIA/creativeIaWordPressApi'
+import {
+  getCreativeIAInstagramStatus,
+  type CreativeIAInstagramStatus,
+} from '../../services/CreativeIA/creativeIaInstagramApi'
 import '../../styles/CreativeIA/creative-ia-workspace.css'
 
 type CreativeIASection = 'create' | 'content' | 'references' | 'settings'
@@ -141,6 +145,10 @@ function CreativeIAWorkspacePage() {
   const [connection, setConnection] =
     useState<CreativeIAWordPressStatus | null>(null)
   const [isConnectionLoading, setIsConnectionLoading] = useState(true)
+  const [instagramConnection, setInstagramConnection] =
+    useState<CreativeIAInstagramStatus | null>(null)
+  const [isInstagramConnectionLoading, setIsInstagramConnectionLoading] =
+    useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [isArtifactOpen, setIsArtifactOpen] = useState(false)
@@ -179,6 +187,25 @@ function CreativeIAWorkspacePage() {
     return () => {
       for (const timer of timers.values()) window.clearTimeout(timer)
       timers.clear()
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+
+    void getCreativeIAInstagramStatus()
+      .then((status) => {
+        if (active) setInstagramConnection(status)
+      })
+      .catch(() => {
+        if (active) setInstagramConnection(null)
+      })
+      .finally(() => {
+        if (active) setIsInstagramConnectionLoading(false)
+      })
+
+    return () => {
+      active = false
     }
   }, [])
 
@@ -570,6 +597,8 @@ function CreativeIAWorkspacePage() {
             theme={theme}
             connection={connection}
             isConnectionLoading={isConnectionLoading}
+            instagramConnection={instagramConnection}
+            isInstagramConnectionLoading={isInstagramConnectionLoading}
             selectedSiteLabel={selectedSiteLabel}
             onThemeChange={setTheme}
           />
@@ -2587,12 +2616,16 @@ function SettingsView({
   theme,
   connection,
   isConnectionLoading,
+  instagramConnection,
+  isInstagramConnectionLoading,
   selectedSiteLabel,
   onThemeChange,
 }: {
   theme: CreativeIATheme
   connection: CreativeIAWordPressStatus | null
   isConnectionLoading: boolean
+  instagramConnection: CreativeIAInstagramStatus | null
+  isInstagramConnectionLoading: boolean
   selectedSiteLabel: string
   onThemeChange: (theme: CreativeIATheme) => void
 }) {
@@ -2618,6 +2651,23 @@ function SettingsView({
             </span>
           </div>
           <Link to="/creative-ia/settings/wordpress">接続を管理</Link>
+        </section>
+
+        <section>
+          <div>
+            <p>外部サービス接続</p>
+            <h2>Instagram</h2>
+            <span>
+              {isInstagramConnectionLoading
+                ? '接続状態を確認中'
+                : instagramConnection?.connected
+                  ? `@${instagramConnection.account?.username ?? 'Instagram'}へ接続済み`
+                  : instagramConnection?.tokenExpired
+                    ? '再接続が必要'
+                    : '未接続'}
+            </span>
+          </div>
+          <Link to="/creative-ia/settings/instagram">接続を管理</Link>
         </section>
 
         <section className="creative-ia__theme-setting">
