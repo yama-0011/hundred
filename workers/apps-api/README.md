@@ -19,7 +19,7 @@ Hundred上の各アプリで共用するCloudflare Workerです。Creative IAの
 - WordPress接続解除: `DELETE /api/creative-ia/wordpress/connection`
 - Instagram接続状態: `GET /api/creative-ia/instagram/status`
 - Instagram OAuth開始: `GET /api/creative-ia/instagram/oauth/start`
-- Instagram OAuthコールバック: `https://apps-api.yamahit.com/api/creative-ia/instagram/oauth/callback`
+- Instagram OAuthコールバック: `https://hundred-apps-api.oneonewapig.workers.dev/api/creative-ia/instagram/oauth/callback`
 - Instagram接続解除: `DELETE /api/creative-ia/instagram/connection`
 - Gemini記事案生成: `POST /api/creative-ia/generate`
 - Creative IA会話応答: `POST /api/creative-ia/chats/:chatId/respond`
@@ -49,7 +49,7 @@ Geminiのモデル名は公開設定`GEMINI_MODEL`で切り替えます。初期
 Meta開発者ダッシュボードの「InstagramログインによるAPI設定」で、次のリダイレクトURIを完全一致で登録します。
 
 ```text
-https://apps-api.yamahit.com/api/creative-ia/instagram/oauth/callback
+https://hundred-apps-api.oneonewapig.workers.dev/api/creative-ia/instagram/oauth/callback
 ```
 
 Instagram App Secretは画面やソースへ保存せず、WorkerのSecretへ登録します。
