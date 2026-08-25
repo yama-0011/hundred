@@ -961,6 +961,17 @@
   gap: 8px;
 }
 
+.creative-ia__destination-notice {
+  margin: 0;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, var(--cia-accent) 28%, transparent);
+  border-radius: 11px;
+  color: var(--cia-accent);
+  background: var(--cia-accent-soft);
+  font-size: 0.72rem;
+  line-height: 1.6;
+}
+
 .creative-ia__destination-option {
   display: flex !important;
   align-items: flex-start;

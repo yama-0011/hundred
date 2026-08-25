@@ -34,6 +34,8 @@ export type CreativeIAAssistantResponse = {
   action: 'chat' | 'clarify' | 'update_article'
   message: string
   article: CreativeIAGeneratedArticle | null
+  productionDestination: CreativeIAProductionDestination | null
+  instagramContentType: CreativeIAInstagramContentType
 }
 
 export type CreativeIAUsedReference = {
@@ -69,7 +71,7 @@ export type CreativeIAChat = {
   savedDraft: CreativeIAWordPressDraft | null
   productionMemos: CreativeIAProductionMemo[]
   appliedRuleIds: string[]
-  productionDestination: CreativeIAProductionDestination
+  productionDestination: CreativeIAProductionDestination | null
   instagramContentType: CreativeIAInstagramContentType
   createdAt?: number
   updatedAt: number

@@ -22,6 +22,8 @@ export interface CreativeIAConversationResponse {
   action: "chat" | "clarify" | "update_article";
   message: string;
   article: GeneratedArticle | null;
+  productionDestination: "wordpress" | "instagram" | null;
+  instagramContentType: "feed" | "stories" | "reels";
 }
 
 export class CreativeIAConversationError extends Error {
@@ -63,6 +65,51 @@ async function enforceRateLimit(env: ConversationEnv, ownerUserId: string) {
   }
 }
 
+function resolveProductionDestinationAnswer(
+  messages: Array<{ role: "assistant" | "user"; text: string }>,
+): {
+  productionDestination: "wordpress" | "instagram";
+  instagramContentType: "feed" | "stories" | "reels";
+} | null {
+  const latestUserMessage = messages.at(-1);
+  const previousAssistantMessage = messages.at(-2);
+  if (
+    latestUserMessage?.role !== "user" ||
+    previousAssistantMessage?.role !== "assistant" ||
+    latestUserMessage.text.length > 100 ||
+    !/制作先|WordPress|Instagram/iu.test(previousAssistantMessage.text)
+  ) {
+    return null;
+  }
+
+  const answer = latestUserMessage.text;
+  if (/WordPress|ワードプレス/iu.test(answer)) {
+    return {
+      productionDestination: "wordpress",
+      instagramContentType: "feed",
+    };
+  }
+  if (/ストーリーズ?|ストーリー/iu.test(answer)) {
+    return {
+      productionDestination: "instagram",
+      instagramContentType: "stories",
+    };
+  }
+  if (/Reels?|リール/iu.test(answer)) {
+    return {
+      productionDestination: "instagram",
+      instagramContentType: "reels",
+    };
+  }
+  if (/フィード/iu.test(answer)) {
+    return {
+      productionDestination: "instagram",
+      instagramContentType: "feed",
+    };
+  }
+  return null;
+}
+
 /** 保存済みChatを正としてGeminiへ渡し、通常会話または記事更新を返す。 */
 export async function respondToCreativeIAChat(
   env: ConversationEnv,
@@ -84,6 +131,32 @@ export async function respondToCreativeIAChat(
     .find((message) => message.role === "user")?.text;
   if (!latestUserMessage) {
     throw new CreativeIAConversationError("INVALID_INPUT");
+  }
+
+  if (context.productionDestination === null) {
+    const resolvedDestination = resolveProductionDestinationAnswer(
+      context.messages,
+    );
+    if (resolvedDestination) {
+      await env.DB.prepare(
+        `UPDATE creative_ia_chats
+            SET production_destination = ?1,
+                instagram_content_type = ?2,
+                production_destination_confirmed = 1,
+                updated_at = ?3
+          WHERE id = ?4 AND owner_user_id = ?5`,
+      )
+        .bind(
+          resolvedDestination.productionDestination,
+          resolvedDestination.instagramContentType,
+          Date.now(),
+          chatId,
+          ownerUserId,
+        )
+        .run();
+      context.productionDestination = resolvedDestination.productionDestination;
+      context.instagramContentType = resolvedDestination.instagramContentType;
+    }
   }
 
   await enforceRateLimit(env, ownerUserId);
@@ -122,6 +195,8 @@ export async function respondToCreativeIAChat(
       productionMemoContext,
       referenceContext: resolvedReferences.context,
       applicationGuideContext,
+      productionDestination: context.productionDestination,
+      instagramContentType: context.instagramContentType,
     });
     await env.DB.prepare(
       `UPDATE generation_requests
@@ -134,6 +209,8 @@ export async function respondToCreativeIAChat(
     return {
       action: result.action,
       message: result.message,
+      productionDestination: context.productionDestination,
+      instagramContentType: context.instagramContentType,
       article: result.article
         ? {
             ...result.article,

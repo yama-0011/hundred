@@ -25,6 +25,7 @@ interface ChatRow {
   production_memos_json: string;
   applied_rule_ids_json: string;
   production_destination: ProductionDestination;
+  production_destination_confirmed: number;
   instagram_content_type: InstagramContentType;
   saved_draft_json: string | null;
   created_at: number;
@@ -63,6 +64,8 @@ export interface CreativeIAConversationContext {
   } | null;
   productionMemos: ProductionMemo[];
   appliedRuleIds: string[];
+  productionDestination: ProductionDestination | null;
+  instagramContentType: InstagramContentType;
 }
 
 export class CreativeIAChatError extends Error {
@@ -136,7 +139,7 @@ function parseStringArray(value: unknown, maxItems: number): string[] {
 function parseProductionDestination(
   value: unknown,
 ): ProductionDestination | null {
-  if (value === undefined) return null;
+  if (value === undefined || value === null) return null;
   if (value !== "wordpress" && value !== "instagram") {
     throw new CreativeIAChatError("INVALID_INPUT");
   }
@@ -238,7 +241,11 @@ function serializeChat(row: ChatRow, messages: MessageRow[]) {
     productionMemos: parseJson<ProductionMemo[]>(row.production_memos_json, []),
     appliedRuleIds: parseJson<string[]>(row.applied_rule_ids_json, []),
     productionDestination:
-      row.production_destination === "instagram" ? "instagram" : "wordpress",
+      row.production_destination_confirmed === 1
+        ? row.production_destination === "instagram"
+          ? "instagram"
+          : "wordpress"
+        : null,
     instagramContentType: ["feed", "stories", "reels"].includes(
       row.instagram_content_type,
     )
@@ -316,6 +323,17 @@ export async function getCreativeIAConversationContext(
       [],
     ),
     appliedRuleIds: parseJson<string[]>(chat.applied_rule_ids_json, []),
+    productionDestination:
+      chat.production_destination_confirmed === 1
+        ? chat.production_destination === "instagram"
+          ? "instagram"
+          : "wordpress"
+        : null,
+    instagramContentType: ["feed", "stories", "reels"].includes(
+      chat.instagram_content_type,
+    )
+      ? chat.instagram_content_type
+      : "feed",
   };
 }
 
@@ -369,8 +387,8 @@ export async function createCreativeIAChat(
   const now = Date.now();
   const insert = await env.DB.prepare(
     `INSERT INTO creative_ia_chats
-       (id, owner_user_id, title, created_at, updated_at)
-     SELECT ?1, ?2, '新しいChat', ?3, ?3
+       (id, owner_user_id, title, production_destination_confirmed, created_at, updated_at)
+     SELECT ?1, ?2, '新しいChat', 0, ?3, ?3
       WHERE (
         SELECT COUNT(*)
           FROM creative_ia_chats
@@ -440,6 +458,14 @@ export async function updateCreativeIAChat(
   const productionDestination = parseProductionDestination(
     value.productionDestination,
   );
+  const productionDestinationConfirmed = Object.prototype.hasOwnProperty.call(
+    value,
+    "productionDestination",
+  )
+    ? productionDestination === null
+      ? 0
+      : 1
+    : null;
   const instagramContentType = parseInstagramContentType(
     value.instagramContentType,
   );
@@ -457,9 +483,10 @@ export async function updateCreativeIAChat(
             applied_rule_ids_json = ?9,
             production_destination = COALESCE(?10, production_destination),
             instagram_content_type = COALESCE(?11, instagram_content_type),
-            saved_draft_json = ?12,
-            updated_at = ?13
-      WHERE id = ?14 AND owner_user_id = ?15`,
+            production_destination_confirmed = COALESCE(?12, production_destination_confirmed),
+            saved_draft_json = ?13,
+            updated_at = ?14
+      WHERE id = ?15 AND owner_user_id = ?16`,
   )
     .bind(
       title,
@@ -473,6 +500,7 @@ export async function updateCreativeIAChat(
       JSON.stringify(appliedRuleIds),
       productionDestination,
       instagramContentType,
+      productionDestinationConfirmed,
       savedDraft ? JSON.stringify(savedDraft) : null,
       Date.now(),
       chatId,

@@ -72,6 +72,58 @@ type ChatState = {
   activeChatId: string | null
 }
 
+const instagramContentTypeLabels: Record<CreativeIAInstagramContentType, string> = {
+  feed: 'フィード',
+  stories: 'ストーリーズ',
+  reels: 'Reels',
+}
+
+function getArtifactCopy(
+  destination: CreativeIAProductionDestination | null,
+  instagramContentType: CreativeIAInstagramContentType,
+) {
+  if (destination === null) {
+    return {
+      artifactLabel: '成果物',
+      openLabel: '成果物を見る',
+      titleLabel: '管理タイトル',
+      contentLabel: '内容',
+      thinkingLabel: '制作内容を確認しています',
+      emptyLabel: '制作物未作成',
+      destinationLabel: '未設定',
+    }
+  }
+
+  if (destination === 'wordpress') {
+    return {
+      artifactLabel: '記事案',
+      openLabel: '記事案を見る',
+      titleLabel: 'タイトル',
+      contentLabel: '本文',
+      thinkingLabel: '記事案を考えています',
+      emptyLabel: '記事未作成',
+      destinationLabel: 'WordPress記事',
+    }
+  }
+
+  const formatLabel = instagramContentTypeLabels[instagramContentType]
+  const contentLabels: Record<CreativeIAInstagramContentType, string> = {
+    feed: 'キャプション',
+    stories: 'ストーリーズ構成',
+    reels: '台本・構成',
+  }
+
+  return {
+    artifactLabel: '投稿案',
+    openLabel: '投稿案を見る',
+    titleLabel: '管理タイトル',
+    contentLabel: contentLabels[instagramContentType],
+    thinkingLabel: '投稿案を考えています',
+    emptyLabel: '投稿案未作成',
+    destinationLabel: `Instagram・${formatLabel}`,
+  }
+}
+
 const navigationItems: Array<{
   id: CreativeIASection
   label: string
@@ -102,6 +154,18 @@ const navigationItems: Array<{
 const quickPrompts = [
   { label: '商品紹介', prompt: '商品を紹介するブログ記事を作りたい' },
   { label: '施術紹介', prompt: '施術やサービスを紹介するブログ記事を作りたい' },
+  { label: '相談', prompt: '何を発信すればよいか相談したい' },
+]
+
+const instagramQuickPrompts = [
+  { label: '商品紹介', prompt: '商品を紹介するInstagram投稿案を作りたい' },
+  { label: 'サービス紹介', prompt: 'サービスを紹介するInstagram投稿案を作りたい' },
+  { label: '相談', prompt: 'Instagramで何を発信すればよいか相談したい' },
+]
+
+const unsetDestinationQuickPrompts = [
+  { label: '商品紹介', prompt: '商品を紹介するコンテンツを作りたい' },
+  { label: 'サービス紹介', prompt: 'サービスを紹介するコンテンツを作りたい' },
   { label: '相談', prompt: '何を発信すればよいか相談したい' },
 ]
 
@@ -327,6 +391,8 @@ function CreativeIAWorkspacePage() {
           : chatBeforeGeneration.article
       const updatedChat: ChatSession = {
         ...chatBeforeGeneration,
+        productionDestination: result.productionDestination,
+        instagramContentType: result.instagramContentType,
         article: updatedArticle,
         draftTitle: result.article?.title ?? chatBeforeGeneration.draftTitle,
         draftContent:
@@ -343,7 +409,7 @@ function CreativeIAWorkspacePage() {
         appendCreativeIAChatMessage(targetChatId, assistantMessage),
         updateCreativeIAChat(updatedChat),
       ]).catch(() => {
-        setChatError('生成した記事案をD1へ保存できませんでした。')
+        setChatError('生成した成果物をD1へ保存できませんでした。')
       })
       if (result.action === 'update_article' && result.article) {
         setArtifactView('article')
@@ -563,6 +629,8 @@ function CreativeIAWorkspacePage() {
             messages={activeChat.messages}
             composer={composer}
             article={activeChat.article}
+            productionDestination={activeChat.productionDestination}
+            instagramContentType={activeChat.instagramContentType}
             usedReferences={activeChat.article?.usedReferences ?? []}
             isGenerating={isGenerating}
             error={generationError}
@@ -583,7 +651,7 @@ function CreativeIAWorkspacePage() {
         {activeSection === 'content' && (
           <ContentView
             chats={chatState.chats}
-            destination={selectedSiteLabel}
+            wordpressDestination={selectedSiteLabel}
             onOpen={(chatId) => {
               handleSelectChat(chatId)
               setActiveSection('create')
@@ -740,7 +808,7 @@ function ChatOverview({
         <div>
           <p>Create</p>
           <h1 id="chat-overview-title">Chat</h1>
-          <span>作成中の記事を選ぶか、新しいChatを始めます。</span>
+          <span>作成中のコンテンツを選ぶか、新しいChatを始めます。</span>
         </div>
         <button
           type="button"
@@ -766,7 +834,7 @@ function ChatOverview({
         <div className="creative-ia__empty-state">
           <span aria-hidden="true">✦</span>
           <h2>最初のChatを始めましょう</h2>
-          <p>AIに情報を渡しながら、1つの記事を育てていけます。</p>
+          <p>AIに情報を渡しながら、1つのコンテンツを育てていけます。</p>
           <button type="button" onClick={onNewChat} disabled={isPending}>
             新しいChatを作成
           </button>
@@ -776,38 +844,44 @@ function ChatOverview({
           ariaLabel="Chat一覧"
           columns={[
             { key: 'title', label: 'Chatタイトル' },
-            { key: 'article', label: '関連している記事' },
+            { key: 'article', label: '関連している制作物' },
             { key: 'updated', label: '最終更新' },
             { key: 'status', label: '状態' },
           ]}
           columnTemplate="minmax(220px, 1.35fr) minmax(220px, 1.2fr) 132px 108px"
-          rows={sortedChats.map((chat) => ({
-            id: chat.id,
-            ariaLabel: `「${chat.title}」を開く`,
-            active: activeChatId === chat.id,
-            cells: {
-              title: (
-                <span className="creative-ia__collection-primary">
-                  <strong>{chat.title}</strong>
-                  <small>{chat.messages.at(-1)?.text ?? '会話を始めましょう'}</small>
-                </span>
-              ),
-              article: chat.draftTitle || chat.article?.title || '記事未作成',
-              updated: <FormattedDate value={chat.updatedAt} />,
-              status: (
-                <StatusBadge tone={chat.savedDraft ? 'saved' : 'editing'}>
-                  {chat.savedDraft
-                    ? '保存済み'
-                    : chat.article
-                      ? '作成中'
-                      : '会話中'}
-                </StatusBadge>
-              ),
-            },
-            onOpen: () => onSelectChat(chat.id),
-            onDelete: () => onDeleteChat(chat.id),
-            deleteLabel: `「${chat.title}」を削除`,
-          }))}
+          rows={sortedChats.map((chat) => {
+            const artifactCopy = getArtifactCopy(
+              chat.productionDestination,
+              chat.instagramContentType,
+            )
+            const isSaved =
+              chat.productionDestination === 'wordpress' && Boolean(chat.savedDraft)
+
+            return {
+              id: chat.id,
+              ariaLabel: `「${chat.title}」を開く`,
+              active: activeChatId === chat.id,
+              cells: {
+                title: (
+                  <span className="creative-ia__collection-primary">
+                    <strong>{chat.title}</strong>
+                    <small>{chat.messages.at(-1)?.text ?? '会話を始めましょう'}</small>
+                  </span>
+                ),
+                article:
+                  chat.draftTitle || chat.article?.title || artifactCopy.emptyLabel,
+                updated: <FormattedDate value={chat.updatedAt} />,
+                status: (
+                  <StatusBadge tone={isSaved ? 'saved' : 'editing'}>
+                    {isSaved ? '保存済み' : chat.article ? '作成中' : '会話中'}
+                  </StatusBadge>
+                ),
+              },
+              onOpen: () => onSelectChat(chat.id),
+              onDelete: () => onDeleteChat(chat.id),
+              deleteLabel: `「${chat.title}」を削除`,
+            }
+          })}
           disabled={isPending}
         />
       )}
@@ -951,6 +1025,8 @@ function CreateView({
   messages,
   composer,
   article,
+  productionDestination,
+  instagramContentType,
   usedReferences,
   isGenerating,
   error,
@@ -965,6 +1041,8 @@ function CreateView({
   messages: Message[]
   composer: string
   article: CreativeIAGeneratedArticle | null
+  productionDestination: CreativeIAProductionDestination | null
+  instagramContentType: CreativeIAInstagramContentType
   usedReferences: CreativeIAGeneratedArticle['usedReferences']
   isGenerating: boolean
   error: string | null
@@ -976,6 +1054,23 @@ function CreateView({
   onOpenArtifact: (view: ArtifactView) => void
   onBackToChats: () => void
 }) {
+  const artifactCopy = getArtifactCopy(
+    productionDestination,
+    instagramContentType,
+  )
+  const activeQuickPrompts =
+    productionDestination === null
+      ? unsetDestinationQuickPrompts
+      : productionDestination === 'instagram'
+        ? instagramQuickPrompts
+        : quickPrompts
+  const composerPlaceholder =
+    productionDestination === null
+      ? '例：このサービスを紹介するコンテンツを作りたい'
+      : productionDestination === 'instagram'
+      ? `例：このサービスを紹介するInstagramの${instagramContentTypeLabels[instagramContentType]}投稿案を作りたい`
+      : '例：このトリートメントを紹介する記事を書きたい'
+
   return (
     <section className="creative-ia__create" aria-label="作成">
       <div className="creative-ia__create-toolbar">
@@ -993,7 +1088,7 @@ function CreateView({
               type="button"
               onClick={() => onOpenArtifact('article')}
             >
-              記事案を見る
+              {artifactCopy.openLabel}
             </button>
           )}
           <button
@@ -1048,7 +1143,7 @@ function CreateView({
               <p>{message.text}</p>
               {index === 0 && (
                 <div className="creative-ia__quick-prompts">
-                  {quickPrompts.map((item) => (
+                  {activeQuickPrompts.map((item) => (
                     <button
                       key={item.label}
                       type="button"
@@ -1071,7 +1166,7 @@ function CreateView({
             </span>
             <div>
               <small>Creative IA</small>
-              <p className="creative-ia__thinking">記事案を考えています</p>
+              <p className="creative-ia__thinking">{artifactCopy.thinkingLabel}</p>
             </div>
           </div>
         )}
@@ -1088,7 +1183,7 @@ function CreateView({
             value={composer}
             rows={2}
             maxLength={2000}
-            placeholder="例：このトリートメントを紹介する記事を書きたい"
+            placeholder={composerPlaceholder}
             onChange={(event) => onComposerChange(event.target.value)}
           />
           <button
@@ -1141,7 +1236,7 @@ function ArtifactPanel({
   productionMemos: ProductionMemo[]
   availableRules: ReferenceAIRule[]
   appliedRuleIds: string[]
-  productionDestination: CreativeIAProductionDestination
+  productionDestination: CreativeIAProductionDestination | null
   instagramContentType: CreativeIAInstagramContentType
   isSaving: boolean
   connection: CreativeIAWordPressStatus | null
@@ -1162,6 +1257,11 @@ function ArtifactPanel({
   onSave: () => void
   onOpenSettings: () => void
 }) {
+  const artifactCopy = getArtifactCopy(
+    productionDestination,
+    instagramContentType,
+  )
+
   return (
     <aside
       className="creative-ia__artifact"
@@ -1188,7 +1288,7 @@ function ArtifactPanel({
             disabled={!hasArticle}
             onClick={() => onViewChange('article')}
           >
-            記事案
+            {artifactCopy.artifactLabel}
           </button>
           <button
             type="button"
@@ -1211,7 +1311,7 @@ function ArtifactPanel({
         {view === 'article' && hasArticle && (
           <>
             <label>
-              <span>タイトル</span>
+              <span>{artifactCopy.titleLabel}</span>
               <input
                 value={title}
                 maxLength={200}
@@ -1231,7 +1331,7 @@ function ArtifactPanel({
             )}
 
             <label className="creative-ia__article-content">
-              <span>本文</span>
+              <span>{artifactCopy.contentLabel}</span>
               <textarea
                 value={content}
                 maxLength={20000}
@@ -1266,7 +1366,7 @@ function ArtifactPanel({
         )}
       </div>
 
-      {view === 'article' && hasArticle && (
+      {view === 'article' && hasArticle && productionDestination === 'wordpress' && (
         <footer>
           {saveError && <p role="alert">{saveError}</p>}
           {savedDraft && (
@@ -1304,7 +1404,7 @@ function ProductionDestinationEditor({
   onDestinationChange,
   onInstagramContentTypeChange,
 }: {
-  destination: CreativeIAProductionDestination
+  destination: CreativeIAProductionDestination | null
   instagramContentType: CreativeIAInstagramContentType
   onDestinationChange: (destination: CreativeIAProductionDestination) => void
   onInstagramContentTypeChange: (
@@ -1331,6 +1431,12 @@ function ProductionDestinationEditor({
           <p>このChatで作成するコンテンツの種類を選びます。</p>
         </div>
       </header>
+
+      {destination === null && (
+        <p className="creative-ia__destination-notice" role="status">
+          制作先は未設定です。制作を依頼すると、Creative IAが確認します。
+        </p>
+      )}
 
       <div className="creative-ia__destination-list">
         <label className="creative-ia__destination-option">
@@ -1487,7 +1593,7 @@ function AppliedRulesEditor({
       <header>
         <div>
           <h2 id="applied-rules-title">適用ルール</h2>
-          <p>参照データの「02 AIルール」から、今回の記事で使うルールを選びます。</p>
+          <p>参照データの「02 AIルール」から、今回の制作で使うルールを選びます。</p>
         </div>
       </header>
 
@@ -1528,11 +1634,11 @@ function AppliedRulesEditor({
 
 function ContentView({
   chats,
-  destination,
+  wordpressDestination,
   onOpen,
 }: {
   chats: ChatSession[]
-  destination: string
+  wordpressDestination: string
   onOpen: (chatId: string) => void
 }) {
   const contentChats = useMemo(
@@ -1549,7 +1655,7 @@ function ContentView({
         <div>
           <p>Content</p>
           <h1 id="content-title">下書き</h1>
-          <span>作成した記事案とWordPressへの保存状態を確認できます。</span>
+          <span>作成した記事案・投稿案と、その保存状態を確認できます。</span>
         </div>
       </header>
       {contentChats.length > 0 ? (
@@ -1559,37 +1665,49 @@ function ContentView({
             { key: 'title', label: 'タイトル' },
             { key: 'destination', label: '投稿先' },
             { key: 'updated', label: '最終更新' },
-            { key: 'status', label: '保存状態' },
+            { key: 'status', label: '状態' },
             { key: 'error', label: 'エラー' },
           ]}
           columnTemplate="minmax(260px, 1.55fr) minmax(140px, .8fr) 132px 108px 84px"
-          rows={contentChats.map((chat) => ({
-            id: chat.id,
-            ariaLabel: `「${chat.draftTitle || chat.title}」を開く`,
-            cells: {
-              title: (
-                <span className="creative-ia__collection-primary">
-                  <strong>{chat.draftTitle || 'タイトル未入力'}</strong>
-                  <small>{chat.title}</small>
-                </span>
-              ),
-              destination,
-              updated: <FormattedDate value={chat.updatedAt} />,
-              status: (
-                <StatusBadge tone={chat.savedDraft ? 'saved' : 'editing'}>
-                  {chat.savedDraft ? '保存済み' : '未保存'}
-                </StatusBadge>
-              ),
-              error: <span className="creative-ia__no-error">なし</span>,
-            },
-            onOpen: () => onOpen(chat.id),
-          }))}
+          rows={contentChats.map((chat) => {
+            const artifactCopy = getArtifactCopy(
+              chat.productionDestination,
+              chat.instagramContentType,
+            )
+            const isInstagram = chat.productionDestination === 'instagram'
+
+            return {
+              id: chat.id,
+              ariaLabel: `「${chat.draftTitle || chat.title}」を開く`,
+              cells: {
+                title: (
+                  <span className="creative-ia__collection-primary">
+                    <strong>{chat.draftTitle || 'タイトル未入力'}</strong>
+                    <small>{chat.title}</small>
+                  </span>
+                ),
+                destination: isInstagram
+                  ? artifactCopy.destinationLabel
+                  : wordpressDestination,
+                updated: <FormattedDate value={chat.updatedAt} />,
+                status: isInstagram ? (
+                  <StatusBadge tone="editing">投稿案</StatusBadge>
+                ) : (
+                  <StatusBadge tone={chat.savedDraft ? 'saved' : 'editing'}>
+                    {chat.savedDraft ? '保存済み' : '未保存'}
+                  </StatusBadge>
+                ),
+                error: <span className="creative-ia__no-error">なし</span>,
+              },
+              onOpen: () => onOpen(chat.id),
+            }
+          })}
         />
       ) : (
         <div className="creative-ia__empty-state">
           <span aria-hidden="true">✦</span>
           <h2>まだ下書きはありません</h2>
-          <p>「作成」でAIへ話しかけると、作成中の記事がここに表示されます。</p>
+          <p>「作成」でAIへ話しかけると、作成中のコンテンツがここに表示されます。</p>
         </div>
       )}
     </section>

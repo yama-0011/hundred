@@ -13,7 +13,7 @@ const sectionKeywords: Record<string, string[]> = {
   "Creative IAとは": ["creative ia", "creativeia", "何", "できる", "機能", "目的", "使い方"],
   "基本的な利用の流れ": ["使い方", "使用方法", "利用", "流れ", "手順", "始め", "どうやって"],
   "作成とChat": ["作成", "chat", "チャット", "会話", "質問", "相談", "記事", "新しいchat"],
-  "記事案・制作メモ・適用ルール": ["記事案", "制作メモ", "メモ", "適用ルール", "修正", "反映"],
+  "制作先・成果物・制作メモ・適用ルール": ["制作先", "記事案", "投稿案", "制作メモ", "メモ", "適用ルール", "修正", "反映", "instagram"],
   下書き: ["下書き", "保存", "公開", "投稿", "wordpress"],
   参照データ: ["参照データ", "商品", "サービス", "会社", "店舗", "担当者", "aiで利用"],
   "WordPressとの接続": ["wordpress", "接続", "application password", "アプリケーションパスワード", "認証"],
@@ -51,9 +51,11 @@ export function resolveCreativeIAApplicationGuide(requestText: string): string {
     normalized.includes("creative ia") || normalized.includes("creativeia");
   const appSpecificTerms = [
     "制作メモ",
+    "制作先",
     "適用ルール",
     "参照データ",
     "記事案を見る",
+    "投稿案を見る",
     "chat一覧",
     "hundredへ戻る",
   ];
