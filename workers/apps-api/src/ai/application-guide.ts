@@ -17,6 +17,7 @@ const sectionKeywords: Record<string, string[]> = {
   下書き: ["下書き", "保存", "公開", "投稿", "wordpress"],
   参照データ: ["参照データ", "商品", "サービス", "会社", "店舗", "担当者", "aiで利用"],
   "WordPressとの接続": ["wordpress", "接続", "application password", "アプリケーションパスワード", "認証"],
+  "Instagramとの接続と投稿": ["instagram", "接続", "投稿", "フィード", "画像", "jpeg", "公開"],
   "表示とHundredへの移動": ["表示", "テーマ", "ライト", "ダーク", "hundred", "戻る"],
   "現在対応していないこと": ["できない", "未対応", "対応", "instagram", "画像", "seo", "複数"],
 };

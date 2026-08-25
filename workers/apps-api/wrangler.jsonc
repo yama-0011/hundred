@@ -27,5 +27,11 @@
       "database_name": "hundred-apps-prod",
       "database_id": "cecee6f9-06fa-4c36-9e34-a9b1d8a17130"
     }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "hundred-creative-ia-media"
+    }
   ]
 }

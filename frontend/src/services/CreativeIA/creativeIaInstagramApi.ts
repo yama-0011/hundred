@@ -15,6 +15,19 @@ export type CreativeIAInstagramStatus = {
   grantedScopes: string[]
 }
 
+export type CreativeIAInstagramPublication = {
+  id: string
+  imageUrl: string
+  imageContentType: 'image/jpeg'
+  status: 'draft' | 'processing' | 'published' | 'failed'
+  instagramMediaId: string | null
+  providerErrorCode: string | null
+  updatedAt: number
+  publishedAt: number | null
+  duplicate?: boolean
+  accountUrl?: string
+}
+
 async function getCreativeIAAccessToken() {
   const session = await fetchAuthSession()
   const accessToken = session.tokens?.accessToken?.toString()
@@ -37,7 +50,17 @@ async function requestCreativeIAInstagramApi<T>(
   })
 
   if (!response.ok) {
-    throw new Error(response.status === 401 ? 'AUTH_REQUIRED' : 'API_FAILED')
+    throw new Error(
+      response.status === 401
+        ? 'AUTH_REQUIRED'
+        : response.status === 409
+          ? 'CONFLICT'
+          : response.status === 400
+            ? 'INVALID_INPUT'
+            : response.status === 502
+              ? 'PROVIDER_FAILED'
+              : 'API_FAILED',
+    )
   }
   return (await response.json()) as T
 }
@@ -74,4 +97,37 @@ export async function getCreativeIAInstagramAuthorizationUrl() {
     throw new Error('AUTHORIZATION_URL_INVALID')
   }
   return authorizationUrl.toString()
+}
+
+export function getCreativeIAInstagramPublication(chatId: string) {
+  return requestCreativeIAInstagramApi<{
+    publication: CreativeIAInstagramPublication | null
+  }>(
+    `/api/creative-ia/chats/${encodeURIComponent(chatId)}/instagram/publication`,
+  )
+}
+
+export function uploadCreativeIAInstagramFeedImage(
+  chatId: string,
+  image: File,
+) {
+  return requestCreativeIAInstagramApi<CreativeIAInstagramPublication>(
+    `/api/creative-ia/chats/${encodeURIComponent(chatId)}/instagram/publication`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': image.type },
+      body: image,
+    },
+  )
+}
+
+export function publishCreativeIAInstagramFeed(chatId: string) {
+  return requestCreativeIAInstagramApi<CreativeIAInstagramPublication>(
+    `/api/creative-ia/chats/${encodeURIComponent(chatId)}/instagram/publish`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmed: true }),
+    },
+  )
 }

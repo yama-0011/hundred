@@ -30,6 +30,14 @@ import {
   type InstagramOAuthEnv,
 } from "./instagram/oauth";
 import {
+  getInstagramPublication,
+  InstagramPublicationError,
+  publishInstagramFeed,
+  serveInstagramPublicationImage,
+  type InstagramPublicationEnv,
+  uploadInstagramFeedImage,
+} from "./instagram/publications";
+import {
   appendCreativeIAChatMessage,
   createCreativeIAChat,
   CreativeIAChatError,
@@ -67,9 +75,57 @@ import {
   updateCreativeIAReferenceOrganization,
 } from "./reference-organizations";
 
-interface Env extends WordPressOAuthEnv, InstagramOAuthEnv, GeminiEnv {
+interface Env
+  extends WordPressOAuthEnv,
+    InstagramOAuthEnv,
+    InstagramPublicationEnv,
+    GeminiEnv {
   COGNITO_USER_POOL_ID: string;
   COGNITO_USER_POOL_CLIENT_ID: string;
+}
+
+function handleInstagramPublicationError(
+  request: Request,
+  env: Env,
+  error: unknown,
+): Response {
+  if (error instanceof CognitoAuthenticationError) {
+    return json(request, env, { error: "認証が必要です" }, 401);
+  }
+  if (error instanceof InstagramPublicationError) {
+    const status =
+      error.code === "NOT_FOUND"
+        ? 404
+        : error.code === "CONNECTION_REQUIRED" || error.code === "TOKEN_EXPIRED"
+          ? 401
+          : error.code === "UNSUPPORTED_DESTINATION" ||
+              error.code === "MEDIA_REQUIRED" ||
+              error.code === "ALREADY_PROCESSING"
+            ? 409
+            : error.code === "INVALID_INPUT"
+              ? 400
+              : 502;
+    const messages = {
+      INVALID_INPUT: "画像または投稿内容を確認してください",
+      NOT_FOUND: "Instagram投稿案が見つかりません",
+      UNSUPPORTED_DESTINATION: "InstagramフィードのChatを選択してください",
+      CONNECTION_REQUIRED: "Instagramを接続してください",
+      TOKEN_EXPIRED: "Instagramへ再接続してください",
+      MEDIA_REQUIRED: "投稿する画像を選択してください",
+      ALREADY_PROCESSING: "Instagramへの投稿処理中です",
+      PROVIDER_FAILED: "Instagramへ投稿できませんでした",
+    } as const;
+    return json(
+      request,
+      env,
+      {
+        error: messages[error.code],
+        providerCode: error.providerCode ?? null,
+      },
+      status,
+    );
+  }
+  return json(request, env, { error: "Instagram投稿を処理できませんでした" }, 500);
 }
 
 const localOrigins = new Set([
@@ -311,6 +367,13 @@ export default {
         url.pathname === "/api/creative-ia/health")
     ) {
       return json(request, env, { status: "ok" });
+    }
+
+    const instagramMediaMatch = url.pathname.match(
+      /^\/api\/creative-ia\/instagram\/media\/([0-9a-f-]+)$/iu,
+    );
+    if (instagramMediaMatch && request.method === "GET") {
+      return serveInstagramPublicationImage(env, instagramMediaMatch[1]);
     }
 
     if (
@@ -754,6 +817,69 @@ export default {
         }
 
         return json(request, env, { error: "AIの応答を取得できませんでした" }, 502);
+      }
+    }
+
+    const instagramPublicationMatch = url.pathname.match(
+      /^\/api\/creative-ia\/chats\/([0-9a-f-]+)\/instagram\/publication$/iu,
+    );
+    if (instagramPublicationMatch && request.method === "GET") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(
+          request,
+          env,
+          await getInstagramPublication(
+            env,
+            ownerUserId,
+            instagramPublicationMatch[1],
+            url.origin,
+          ),
+        );
+      } catch (error) {
+        return handleInstagramPublicationError(request, env, error);
+      }
+    }
+    if (instagramPublicationMatch && request.method === "PUT") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(
+          request,
+          env,
+          await uploadInstagramFeedImage(
+            request,
+            env,
+            ownerUserId,
+            instagramPublicationMatch[1],
+            url.origin,
+          ),
+          201,
+        );
+      } catch (error) {
+        return handleInstagramPublicationError(request, env, error);
+      }
+    }
+
+    const instagramPublishMatch = url.pathname.match(
+      /^\/api\/creative-ia\/chats\/([0-9a-f-]+)\/instagram\/publish$/iu,
+    );
+    if (instagramPublishMatch && request.method === "POST") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(
+          request,
+          env,
+          await publishInstagramFeed(
+            request,
+            env,
+            ownerUserId,
+            instagramPublishMatch[1],
+            url.origin,
+          ),
+          201,
+        );
+      } catch (error) {
+        return handleInstagramPublicationError(request, env, error);
       }
     }
 

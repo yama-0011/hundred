@@ -51,7 +51,11 @@ import {
   type CreativeIAWordPressStatus,
 } from '../../services/CreativeIA/creativeIaWordPressApi'
 import {
+  getCreativeIAInstagramPublication,
   getCreativeIAInstagramStatus,
+  publishCreativeIAInstagramFeed,
+  uploadCreativeIAInstagramFeedImage,
+  type CreativeIAInstagramPublication,
   type CreativeIAInstagramStatus,
 } from '../../services/CreativeIA/creativeIaInstagramApi'
 import '../../styles/CreativeIA/creative-ia-workspace.css'
@@ -215,6 +219,15 @@ function CreativeIAWorkspacePage() {
     useState<CreativeIAInstagramStatus | null>(null)
   const [isInstagramConnectionLoading, setIsInstagramConnectionLoading] =
     useState(true)
+  const [instagramPublication, setInstagramPublication] =
+    useState<CreativeIAInstagramPublication | null>(null)
+  const [isInstagramPublicationLoading, setIsInstagramPublicationLoading] =
+    useState(false)
+  const [isInstagramImageUploading, setIsInstagramImageUploading] =
+    useState(false)
+  const [isInstagramPublishing, setIsInstagramPublishing] = useState(false)
+  const [instagramPublishError, setInstagramPublishError] =
+    useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [isArtifactOpen, setIsArtifactOpen] = useState(false)
@@ -324,6 +337,43 @@ function CreativeIAWorkspacePage() {
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [activeChat?.messages, isGenerating])
+
+  useEffect(() => {
+    let active = true
+    if (
+      !activeChat ||
+      activeChat.productionDestination !== 'instagram' ||
+      activeChat.instagramContentType !== 'feed'
+    ) {
+      setInstagramPublication(null)
+      setInstagramPublishError(null)
+      setIsInstagramPublicationLoading(false)
+      return () => {
+        active = false
+      }
+    }
+
+    setIsInstagramPublicationLoading(true)
+    setInstagramPublishError(null)
+    void getCreativeIAInstagramPublication(activeChat.id)
+      .then((result) => {
+        if (active) setInstagramPublication(result.publication)
+      })
+      .catch(() => {
+        if (active) setInstagramPublishError('投稿画像を読み込めませんでした。')
+      })
+      .finally(() => {
+        if (active) setIsInstagramPublicationLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [
+    activeChat?.id,
+    activeChat?.instagramContentType,
+    activeChat?.productionDestination,
+  ])
 
   const scheduleChatSave = (chatId: string) => {
     const currentTimer = chatSaveTimersRef.current.get(chatId)
@@ -470,6 +520,60 @@ function CreativeIAWorkspacePage() {
       )
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleInstagramImageUpload = async (image: File) => {
+    if (!activeChat) return
+    if (image.type !== 'image/jpeg' || image.size > 8 * 1024 * 1024) {
+      setInstagramPublishError('8MB以下のJPEG画像を選択してください。')
+      return
+    }
+    setIsInstagramImageUploading(true)
+    setInstagramPublishError(null)
+    try {
+      const publication = await uploadCreativeIAInstagramFeedImage(
+        activeChat.id,
+        image,
+      )
+      setInstagramPublication(publication)
+    } catch (error) {
+      setInstagramPublishError(
+        error instanceof Error && error.message === 'AUTH_REQUIRED'
+          ? 'Hundredへサインインし直してください。'
+          : '画像を保存できませんでした。JPEG形式を確認してください。',
+      )
+    } finally {
+      setIsInstagramImageUploading(false)
+    }
+  }
+
+  const handleInstagramPublish = async () => {
+    if (!activeChat || !instagramPublication) return
+    const confirmed = window.confirm(
+      'この画像とキャプションをInstagramへ公開します。公開後はCreative IAから取り消せません。投稿しますか？',
+    )
+    if (!confirmed) return
+
+    setIsInstagramPublishing(true)
+    setInstagramPublishError(null)
+    try {
+      await updateCreativeIAChat(activeChat)
+      const publication = await publishCreativeIAInstagramFeed(activeChat.id)
+      setInstagramPublication(publication)
+    } catch (error) {
+      const code = error instanceof Error ? error.message : ''
+      setInstagramPublishError(
+        code === 'AUTH_REQUIRED'
+          ? 'Instagramへ再接続してからお試しください。'
+          : code === 'CONFLICT'
+            ? '投稿準備が完了していないか、現在処理中です。'
+            : code === 'PROVIDER_FAILED'
+              ? 'Instagramへ投稿できませんでした。画像や権限を確認してください。'
+              : 'Instagramへの投稿処理に失敗しました。',
+      )
+    } finally {
+      setIsInstagramPublishing(false)
     }
   }
 
@@ -692,6 +796,12 @@ function CreativeIAWorkspacePage() {
           connection={connection}
           saveError={saveError}
           savedDraft={activeChat.savedDraft}
+          instagramConnection={instagramConnection}
+          instagramPublication={instagramPublication}
+          isInstagramPublicationLoading={isInstagramPublicationLoading}
+          isInstagramImageUploading={isInstagramImageUploading}
+          isInstagramPublishing={isInstagramPublishing}
+          instagramPublishError={instagramPublishError}
           onClose={() => setIsArtifactOpen(false)}
           onViewChange={setArtifactView}
           onProductionDestinationChange={(productionDestination) => {
@@ -751,6 +861,10 @@ function CreativeIAWorkspacePage() {
             draftRequestKeyRef.current = null
           }}
           onSave={() => void handleSave()}
+          onInstagramImageUpload={(image) =>
+            void handleInstagramImageUpload(image)
+          }
+          onInstagramPublish={() => void handleInstagramPublish()}
           onOpenSettings={() => {
             setActiveSection('settings')
             setIsArtifactOpen(false)
@@ -1216,6 +1330,12 @@ function ArtifactPanel({
   connection,
   saveError,
   savedDraft,
+  instagramConnection,
+  instagramPublication,
+  isInstagramPublicationLoading,
+  isInstagramImageUploading,
+  isInstagramPublishing,
+  instagramPublishError,
   onClose,
   onViewChange,
   onProductionDestinationChange,
@@ -1225,6 +1345,8 @@ function ArtifactPanel({
   onTitleChange,
   onContentChange,
   onSave,
+  onInstagramImageUpload,
+  onInstagramPublish,
   onOpenSettings,
 }: {
   open: boolean
@@ -1242,6 +1364,12 @@ function ArtifactPanel({
   connection: CreativeIAWordPressStatus | null
   saveError: string | null
   savedDraft: CreativeIAWordPressDraft | null
+  instagramConnection: CreativeIAInstagramStatus | null
+  instagramPublication: CreativeIAInstagramPublication | null
+  isInstagramPublicationLoading: boolean
+  isInstagramImageUploading: boolean
+  isInstagramPublishing: boolean
+  instagramPublishError: string | null
   onClose: () => void
   onViewChange: (view: ArtifactView) => void
   onProductionDestinationChange: (
@@ -1255,6 +1383,8 @@ function ArtifactPanel({
   onTitleChange: (value: string) => void
   onContentChange: (value: string) => void
   onSave: () => void
+  onInstagramImageUpload: (image: File) => void
+  onInstagramPublish: () => void
   onOpenSettings: () => void
 }) {
   const artifactCopy = getArtifactCopy(
@@ -1338,6 +1468,59 @@ function ArtifactPanel({
                 onChange={(event) => onContentChange(event.target.value)}
               />
             </label>
+
+            {productionDestination === 'instagram' &&
+              instagramContentType === 'feed' && (
+                <section className="creative-ia__instagram-media" aria-labelledby="instagram-media-title">
+                  <header>
+                    <div>
+                      <h2 id="instagram-media-title">投稿画像</h2>
+                      <p>フィードへ投稿するJPEG画像を1枚選択します。</p>
+                    </div>
+                  </header>
+                  {isInstagramPublicationLoading ? (
+                    <p className="creative-ia__instagram-media-status">画像を確認しています。</p>
+                  ) : instagramPublication ? (
+                    <figure>
+                      <img
+                        src={`${instagramPublication.imageUrl}?v=${instagramPublication.updatedAt}`}
+                        alt="Instagramへ投稿する画像のプレビュー"
+                      />
+                      <figcaption>
+                        {instagramPublication.status === 'published'
+                          ? 'Instagramへ投稿済み'
+                          : '投稿前プレビュー'}
+                      </figcaption>
+                    </figure>
+                  ) : (
+                    <p className="creative-ia__instagram-media-status">
+                      画像はまだ選択されていません。
+                    </p>
+                  )}
+                  {instagramPublication?.status !== 'published' && (
+                    <label className="creative-ia__instagram-file-picker">
+                      <span>
+                        {isInstagramImageUploading
+                          ? 'アップロード中'
+                          : instagramPublication
+                            ? '画像を変更'
+                            : 'JPEG画像を選択'}
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/jpeg,.jpg,.jpeg"
+                        disabled={isInstagramImageUploading || isInstagramPublishing}
+                        onChange={(event) => {
+                          const image = event.target.files?.[0]
+                          if (image) onInstagramImageUpload(image)
+                          event.target.value = ''
+                        }}
+                      />
+                    </label>
+                  )}
+                  <small>8MB以下のJPEG画像に対応しています。</small>
+                </section>
+              )}
           </>
         )}
 
@@ -1394,6 +1577,53 @@ function ArtifactPanel({
           )}
         </footer>
       )}
+
+      {view === 'article' &&
+        hasArticle &&
+        productionDestination === 'instagram' &&
+        instagramContentType === 'feed' && (
+          <footer>
+            {instagramPublishError && <p role="alert">{instagramPublishError}</p>}
+            {instagramPublication?.status === 'published' && (
+              <p className="creative-ia__save-success" role="status">
+                Instagramへ投稿しました。
+                {instagramPublication.accountUrl && (
+                  <a
+                    href={instagramPublication.accountUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Instagramで確認
+                  </a>
+                )}
+              </p>
+            )}
+            {!instagramConnection?.connected ? (
+              <button type="button" onClick={onOpenSettings}>
+                Instagramを接続
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={
+                  isInstagramPublishing ||
+                  isInstagramImageUploading ||
+                  !content.trim() ||
+                  !instagramPublication ||
+                  instagramPublication.status === 'published'
+                }
+                onClick={onInstagramPublish}
+              >
+                {isInstagramPublishing
+                  ? 'Instagramへ投稿中'
+                  : instagramPublication?.status === 'published'
+                    ? 'Instagramへ投稿済み'
+                    : 'Instagramへ投稿'}
+              </button>
+            )}
+            <small>確認なしに自動公開することはありません。</small>
+          </footer>
+        )}
     </aside>
   )
 }

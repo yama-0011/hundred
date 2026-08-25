@@ -67,3 +67,20 @@ npx wrangler secret put INSTAGRAM_CLIENT_SECRET
 ```bash
 npx wrangler d1 migrations apply hundred-apps-prod --remote
 ```
+# Instagramフィード投稿で使用するR2
+
+Instagramが投稿画像を取得できるように、JPEG画像をR2へ保存し、Worker経由の公開URLを発行します。
+
+初回デプロイ前にR2バケットを作成してください。
+
+```bash
+npx wrangler r2 bucket create hundred-creative-ia-media
+```
+
+続いてD1マイグレーションを適用します。
+
+```bash
+npx wrangler@4.125.0 d1 migrations apply hundred-apps-prod --remote
+```
+
+投稿はInstagramフィードのJPEG画像1枚に限定し、フロントエンドの確認操作後にだけ実行します。
