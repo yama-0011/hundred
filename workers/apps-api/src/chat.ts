@@ -10,6 +10,8 @@ export interface CreativeIAChatEnv {
 }
 
 type ChatRole = "assistant" | "user";
+type ProductionDestination = "wordpress" | "instagram";
+type InstagramContentType = "feed" | "stories" | "reels";
 
 interface ChatRow {
   id: string;
@@ -22,6 +24,8 @@ interface ChatRow {
   article_model: string | null;
   production_memos_json: string;
   applied_rule_ids_json: string;
+  production_destination: ProductionDestination;
+  instagram_content_type: InstagramContentType;
   saved_draft_json: string | null;
   created_at: number;
   updated_at: number;
@@ -129,6 +133,26 @@ function parseStringArray(value: unknown, maxItems: number): string[] {
   return value.map((item) => parseString(item, 100));
 }
 
+function parseProductionDestination(
+  value: unknown,
+): ProductionDestination | null {
+  if (value === undefined) return null;
+  if (value !== "wordpress" && value !== "instagram") {
+    throw new CreativeIAChatError("INVALID_INPUT");
+  }
+  return value;
+}
+
+function parseInstagramContentType(
+  value: unknown,
+): InstagramContentType | null {
+  if (value === undefined) return null;
+  if (!["feed", "stories", "reels"].includes(String(value))) {
+    throw new CreativeIAChatError("INVALID_INPUT");
+  }
+  return value as InstagramContentType;
+}
+
 function parseWarnings(value: unknown): string[] {
   if (!Array.isArray(value) || value.length > 20) {
     throw new CreativeIAChatError("INVALID_INPUT");
@@ -213,6 +237,13 @@ function serializeChat(row: ChatRow, messages: MessageRow[]) {
     savedDraft: parseJson<SavedDraft | null>(row.saved_draft_json, null),
     productionMemos: parseJson<ProductionMemo[]>(row.production_memos_json, []),
     appliedRuleIds: parseJson<string[]>(row.applied_rule_ids_json, []),
+    productionDestination:
+      row.production_destination === "instagram" ? "instagram" : "wordpress",
+    instagramContentType: ["feed", "stories", "reels"].includes(
+      row.instagram_content_type,
+    )
+      ? row.instagram_content_type
+      : "feed",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -375,7 +406,7 @@ export async function createCreativeIAChat(
   ]);
 }
 
-/** 記事、制作メモ、適用ルール、WordPress保存状態を更新する。 */
+/** 記事、制作先、制作メモ、適用ルール、WordPress保存状態を更新する。 */
 export async function updateCreativeIAChat(
   request: Request,
   env: CreativeIAChatEnv,
@@ -406,6 +437,12 @@ export async function updateCreativeIAChat(
 
   const productionMemos = parseProductionMemos(value.productionMemos);
   const appliedRuleIds = parseStringArray(value.appliedRuleIds, 100);
+  const productionDestination = parseProductionDestination(
+    value.productionDestination,
+  );
+  const instagramContentType = parseInstagramContentType(
+    value.instagramContentType,
+  );
   const savedDraft = parseSavedDraft(value.savedDraft);
   const result = await env.DB.prepare(
     `UPDATE creative_ia_chats
@@ -418,9 +455,11 @@ export async function updateCreativeIAChat(
             article_model = ?7,
             production_memos_json = ?8,
             applied_rule_ids_json = ?9,
-            saved_draft_json = ?10,
-            updated_at = ?11
-      WHERE id = ?12 AND owner_user_id = ?13`,
+            production_destination = COALESCE(?10, production_destination),
+            instagram_content_type = COALESCE(?11, instagram_content_type),
+            saved_draft_json = ?12,
+            updated_at = ?13
+      WHERE id = ?14 AND owner_user_id = ?15`,
   )
     .bind(
       title,
@@ -432,6 +471,8 @@ export async function updateCreativeIAChat(
       articleModel,
       JSON.stringify(productionMemos),
       JSON.stringify(appliedRuleIds),
+      productionDestination,
+      instagramContentType,
       savedDraft ? JSON.stringify(savedDraft) : null,
       Date.now(),
       chatId,

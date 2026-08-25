@@ -779,7 +779,7 @@
 
 .creative-ia__artifact-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
   padding: 4px;
   border: 1px solid var(--cia-border);
@@ -954,6 +954,100 @@
 .creative-ia__add-item:focus-visible {
   border-color: var(--cia-accent);
   background: var(--cia-accent-soft);
+}
+
+.creative-ia__destination-list {
+  display: grid;
+  gap: 8px;
+}
+
+.creative-ia__destination-option {
+  display: flex !important;
+  align-items: flex-start;
+  gap: 11px !important;
+  padding: 14px;
+  border: 1px solid var(--cia-border);
+  border-radius: 13px;
+  background: var(--cia-surface-soft);
+  cursor: pointer;
+}
+
+.creative-ia__destination-option:has(input:checked) {
+  border-color: var(--cia-accent);
+  background: var(--cia-accent-soft);
+}
+
+.creative-ia__destination-option input,
+.creative-ia__destination-formats input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  margin: 1px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  accent-color: var(--cia-accent);
+  box-shadow: none;
+}
+
+.creative-ia__destination-option > span {
+  display: grid;
+  gap: 4px;
+}
+
+.creative-ia__destination-option strong {
+  color: var(--cia-text);
+  font-size: 0.82rem;
+}
+
+.creative-ia__destination-option small {
+  color: var(--cia-muted);
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+.creative-ia__destination-formats {
+  display: grid;
+  gap: 9px;
+  margin: 4px 0 0;
+  padding: 14px;
+  border: 1px solid var(--cia-border);
+  border-radius: 13px;
+}
+
+.creative-ia__destination-formats legend {
+  padding: 0 6px;
+  color: var(--cia-muted);
+  font-size: 0.75rem;
+}
+
+.creative-ia__destination-formats > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.creative-ia__destination-formats label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 8px 9px;
+  border: 1px solid var(--cia-border);
+  border-radius: 11px;
+  background: var(--cia-surface-soft);
+  cursor: pointer;
+}
+
+.creative-ia__destination-formats label:has(input:checked) {
+  border-color: var(--cia-accent);
+  background: var(--cia-accent-soft);
+}
+
+.creative-ia__destination-formats label > span {
+  color: var(--cia-text);
+  font-size: 0.72rem;
 }
 
 .creative-ia__rule-list {

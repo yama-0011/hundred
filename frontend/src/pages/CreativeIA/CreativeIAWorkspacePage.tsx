@@ -36,6 +36,8 @@ import {
   type CreativeIAChat,
   type CreativeIAChatMessage,
   type CreativeIAGeneratedArticle,
+  type CreativeIAInstagramContentType,
+  type CreativeIAProductionDestination,
   type CreativeIAProductionMemo,
   type CreativeIAReferenceProduct,
   type CreativeIAReferenceProductInput,
@@ -56,7 +58,7 @@ import '../../styles/CreativeIA/creative-ia-workspace.css'
 
 type CreativeIASection = 'create' | 'content' | 'references' | 'settings'
 type CreativeIATheme = 'auto' | 'light' | 'dark'
-type ArtifactView = 'article' | 'memo' | 'rules'
+type ArtifactView = 'article' | 'destination' | 'memo' | 'rules'
 type Message = CreativeIAChatMessage
 type ProductionMemo = CreativeIAProductionMemo
 type ReferenceAIRule = {
@@ -616,12 +618,30 @@ function CreativeIAWorkspacePage() {
           productionMemos={activeChat.productionMemos}
           availableRules={referenceAIRules}
           appliedRuleIds={activeChat.appliedRuleIds}
+          productionDestination={activeChat.productionDestination}
+          instagramContentType={activeChat.instagramContentType}
           isSaving={isSaving}
           connection={connection}
           saveError={saveError}
           savedDraft={activeChat.savedDraft}
           onClose={() => setIsArtifactOpen(false)}
           onViewChange={setArtifactView}
+          onProductionDestinationChange={(productionDestination) => {
+            updateChat(activeChat.id, (chat) => ({
+              ...chat,
+              productionDestination,
+              updatedAt: Date.now(),
+            }))
+            scheduleChatSave(activeChat.id)
+          }}
+          onInstagramContentTypeChange={(instagramContentType) => {
+            updateChat(activeChat.id, (chat) => ({
+              ...chat,
+              instagramContentType,
+              updatedAt: Date.now(),
+            }))
+            scheduleChatSave(activeChat.id)
+          }}
           onProductionMemosChange={(productionMemos) => {
             updateChat(activeChat.id, (chat) => ({
               ...chat,
@@ -979,6 +999,13 @@ function CreateView({
           <button
             className="creative-ia__artifact-toggle"
             type="button"
+            onClick={() => onOpenArtifact('destination')}
+          >
+            制作先
+          </button>
+          <button
+            className="creative-ia__artifact-toggle"
+            type="button"
             onClick={() => onOpenArtifact('memo')}
           >
             制作メモ
@@ -1088,12 +1115,16 @@ function ArtifactPanel({
   productionMemos,
   availableRules,
   appliedRuleIds,
+  productionDestination,
+  instagramContentType,
   isSaving,
   connection,
   saveError,
   savedDraft,
   onClose,
   onViewChange,
+  onProductionDestinationChange,
+  onInstagramContentTypeChange,
   onProductionMemosChange,
   onAppliedRuleIdsChange,
   onTitleChange,
@@ -1110,12 +1141,20 @@ function ArtifactPanel({
   productionMemos: ProductionMemo[]
   availableRules: ReferenceAIRule[]
   appliedRuleIds: string[]
+  productionDestination: CreativeIAProductionDestination
+  instagramContentType: CreativeIAInstagramContentType
   isSaving: boolean
   connection: CreativeIAWordPressStatus | null
   saveError: string | null
   savedDraft: CreativeIAWordPressDraft | null
   onClose: () => void
   onViewChange: (view: ArtifactView) => void
+  onProductionDestinationChange: (
+    destination: CreativeIAProductionDestination,
+  ) => void
+  onInstagramContentTypeChange: (
+    contentType: CreativeIAInstagramContentType,
+  ) => void
   onProductionMemosChange: (memos: ProductionMemo[]) => void
   onAppliedRuleIdsChange: (ruleIds: string[]) => void
   onTitleChange: (value: string) => void
@@ -1127,13 +1166,21 @@ function ArtifactPanel({
     <aside
       className="creative-ia__artifact"
       data-open={open}
-      aria-label="記事制作パネル"
+      aria-label="制作パネル"
     >
       <div className="creative-ia__artifact-body">
         <button type="button" onClick={onClose} aria-label="パネルを閉じる">
           ×
         </button>
-        <div className="creative-ia__artifact-tabs" role="tablist" aria-label="記事制作">
+        <div className="creative-ia__artifact-tabs" role="tablist" aria-label="制作設定">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'destination'}
+            onClick={() => onViewChange('destination')}
+          >
+            制作先
+          </button>
           <button
             type="button"
             role="tab"
@@ -1194,6 +1241,15 @@ function ArtifactPanel({
           </>
         )}
 
+        {view === 'destination' && (
+          <ProductionDestinationEditor
+            destination={productionDestination}
+            instagramContentType={instagramContentType}
+            onDestinationChange={onProductionDestinationChange}
+            onInstagramContentTypeChange={onInstagramContentTypeChange}
+          />
+        )}
+
         {view === 'memo' && (
           <ProductionMemoEditor
             memos={productionMemos}
@@ -1242,6 +1298,95 @@ function ArtifactPanel({
   )
 }
 
+function ProductionDestinationEditor({
+  destination,
+  instagramContentType,
+  onDestinationChange,
+  onInstagramContentTypeChange,
+}: {
+  destination: CreativeIAProductionDestination
+  instagramContentType: CreativeIAInstagramContentType
+  onDestinationChange: (destination: CreativeIAProductionDestination) => void
+  onInstagramContentTypeChange: (
+    contentType: CreativeIAInstagramContentType,
+  ) => void
+}) {
+  const instagramFormats: Array<{
+    value: CreativeIAInstagramContentType
+    label: string
+  }> = [
+    { value: 'feed', label: 'フィード' },
+    { value: 'stories', label: 'ストーリーズ' },
+    { value: 'reels', label: 'Reels' },
+  ]
+
+  return (
+    <section
+      className="creative-ia__artifact-section"
+      aria-labelledby="production-destination-title"
+    >
+      <header>
+        <div>
+          <h2 id="production-destination-title">制作先</h2>
+          <p>このChatで作成するコンテンツの種類を選びます。</p>
+        </div>
+      </header>
+
+      <div className="creative-ia__destination-list">
+        <label className="creative-ia__destination-option">
+          <input
+            type="radio"
+            name="production-destination"
+            value="wordpress"
+            checked={destination === 'wordpress'}
+            onChange={() => onDestinationChange('wordpress')}
+          />
+          <span>
+            <strong>WordPress記事</strong>
+            <small>記事案を作成し、WordPressへ下書き保存します。</small>
+          </span>
+        </label>
+
+        <label className="creative-ia__destination-option">
+          <input
+            type="radio"
+            name="production-destination"
+            value="instagram"
+            checked={destination === 'instagram'}
+            onChange={() => onDestinationChange('instagram')}
+          />
+          <span>
+            <strong>Instagram</strong>
+            <small>Instagram向けの投稿案を作成します。</small>
+          </span>
+        </label>
+      </div>
+
+      {destination === 'instagram' && (
+        <fieldset className="creative-ia__destination-formats">
+          <legend>投稿形式</legend>
+          <div>
+            {instagramFormats.map((format) => (
+              <label key={format.value}>
+                <input
+                  type="radio"
+                  name="instagram-content-type"
+                  value={format.value}
+                  checked={instagramContentType === format.value}
+                  onChange={() =>
+                    onInstagramContentTypeChange(format.value)
+                  }
+                />
+                <span>{format.label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
+    </section>
+  )
+}
+
 function ProductionMemoEditor({
   memos,
   onChange,
@@ -1266,7 +1411,7 @@ function ProductionMemoEditor({
       <header>
         <div>
           <h2 id="production-memo-title">制作メモ</h2>
-          <p>今回の記事だけで使う情報や要望を記録します。</p>
+          <p>今回の制作だけで使う情報や要望を記録します。</p>
         </div>
       </header>
 

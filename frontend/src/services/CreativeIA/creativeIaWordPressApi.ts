@@ -56,6 +56,9 @@ export type CreativeIAProductionMemo = {
   value: string
 }
 
+export type CreativeIAProductionDestination = 'wordpress' | 'instagram'
+export type CreativeIAInstagramContentType = 'feed' | 'stories' | 'reels'
+
 export type CreativeIAChat = {
   id: string
   title: string
@@ -66,6 +69,8 @@ export type CreativeIAChat = {
   savedDraft: CreativeIAWordPressDraft | null
   productionMemos: CreativeIAProductionMemo[]
   appliedRuleIds: string[]
+  productionDestination: CreativeIAProductionDestination
+  instagramContentType: CreativeIAInstagramContentType
   createdAt?: number
   updatedAt: number
 }
@@ -228,7 +233,7 @@ export function createCreativeIAChat() {
   })
 }
 
-/** Chatの記事・制作メモ・適用ルールの現在状態をD1へ保存する。 */
+/** Chatの記事・制作先・制作メモ・適用ルールの現在状態をD1へ保存する。 */
 export function updateCreativeIAChat(chat: CreativeIAChat) {
   return requestCreativeIAApi<{ updated: boolean }>(
     `/api/creative-ia/chats/${encodeURIComponent(chat.id)}`,
@@ -246,6 +251,8 @@ export function updateCreativeIAChat(chat: CreativeIAChat) {
           : null,
         productionMemos: chat.productionMemos,
         appliedRuleIds: chat.appliedRuleIds,
+        productionDestination: chat.productionDestination,
+        instagramContentType: chat.instagramContentType,
         savedDraft: chat.savedDraft,
       }),
     },
