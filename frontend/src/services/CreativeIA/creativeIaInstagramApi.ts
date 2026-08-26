@@ -28,6 +28,13 @@ export type CreativeIAInstagramPublication = {
   accountUrl?: string
 }
 
+export type CreativeIAInstagramStoryInsight = {
+  id: string
+  mediaType: string | null
+  timestamp: string | null
+  likes: number | null
+}
+
 async function getCreativeIAAccessToken() {
   const session = await fetchAuthSession()
   const accessToken = session.tokens?.accessToken?.toString()
@@ -69,6 +76,12 @@ export function getCreativeIAInstagramStatus() {
   return requestCreativeIAInstagramApi<CreativeIAInstagramStatus>(
     '/api/creative-ia/instagram/status',
   )
+}
+
+export function getCreativeIAInstagramStoryInsights() {
+  return requestCreativeIAInstagramApi<{
+    stories: CreativeIAInstagramStoryInsight[]
+  }>('/api/creative-ia/instagram/stories')
 }
 
 export function disconnectCreativeIAInstagram() {

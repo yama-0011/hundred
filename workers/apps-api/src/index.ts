@@ -38,6 +38,11 @@ import {
   uploadInstagramFeedImage,
 } from "./instagram/publications";
 import {
+  InstagramInsightsError,
+  listInstagramStoryInsights,
+  type InstagramInsightsEnv,
+} from "./instagram/insights";
+import {
   appendCreativeIAChatMessage,
   createCreativeIAChat,
   CreativeIAChatError,
@@ -79,6 +84,7 @@ interface Env
   extends WordPressOAuthEnv,
     InstagramOAuthEnv,
     InstagramPublicationEnv,
+    InstagramInsightsEnv,
     GeminiEnv {
   COGNITO_USER_POOL_ID: string;
   COGNITO_USER_POOL_CLIENT_ID: string;
@@ -407,6 +413,51 @@ export default {
           return json(request, env, { error: "認証が必要です" }, 401);
         }
         return json(request, env, { error: "接続状態を取得できませんでした" }, 500);
+      }
+    }
+
+    if (
+      request.method === "GET" &&
+      url.pathname === "/api/creative-ia/instagram/stories"
+    ) {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(
+          request,
+          env,
+          await listInstagramStoryInsights(env, ownerUserId),
+        );
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        if (error instanceof InstagramInsightsError) {
+          const status =
+            error.code === "CONNECTION_REQUIRED" ||
+            error.code === "TOKEN_EXPIRED"
+              ? 401
+              : 502;
+          return json(
+            request,
+            env,
+            {
+              error:
+                error.code === "CONNECTION_REQUIRED"
+                  ? "Instagramを接続してください"
+                  : error.code === "TOKEN_EXPIRED"
+                    ? "Instagramへ再接続してください"
+                    : "InstagramのStory反応を取得できませんでした",
+              providerCode: error.providerCode ?? null,
+            },
+            status,
+          );
+        }
+        return json(
+          request,
+          env,
+          { error: "Story反応を取得できませんでした" },
+          500,
+        );
       }
     }
 

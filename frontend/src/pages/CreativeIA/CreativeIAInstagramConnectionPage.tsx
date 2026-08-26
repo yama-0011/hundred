@@ -3,7 +3,9 @@ import { Link, useSearchParams } from 'react-router-dom'
 import {
   disconnectCreativeIAInstagram,
   getCreativeIAInstagramAuthorizationUrl,
+  getCreativeIAInstagramStoryInsights,
   getCreativeIAInstagramStatus,
+  type CreativeIAInstagramStoryInsight,
   type CreativeIAInstagramStatus,
 } from '../../services/CreativeIA/creativeIaInstagramApi'
 import '../../styles/CreativeIA/creative-ia-connection.css'
@@ -35,6 +37,9 @@ function CreativeIAInstagramConnectionPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(false)
   const [isDisconnecting, setIsDisconnecting] = useState(false)
+  const [storyInsights, setStoryInsights] =
+    useState<CreativeIAInstagramStoryInsight[] | null>(null)
+  const [isStoryInsightsLoading, setIsStoryInsightsLoading] = useState(false)
   const oauthMessage = getOAuthMessage(searchParams.get('instagram'))
 
   const loadConnection = async () => {
@@ -118,6 +123,24 @@ function CreativeIAInstagramConnectionPage() {
     }
   }
 
+  const handleStoryInsights = async () => {
+    setIsStoryInsightsLoading(true)
+    setErrorMessage(null)
+    try {
+      const result = await getCreativeIAInstagramStoryInsights()
+      setStoryInsights(result.stories)
+    } catch (error) {
+      setStoryInsights(null)
+      setErrorMessage(
+        error instanceof Error && error.message === 'AUTH_REQUIRED'
+          ? 'Instagramへ再接続してからお試しください。'
+          : 'Storyの反応を取得できませんでした。権限と投稿状態を確認してください。',
+      )
+    } finally {
+      setIsStoryInsightsLoading(false)
+    }
+  }
+
   return (
     <main className="creative-ia-connection">
       <div className="creative-ia-connection__glow" aria-hidden="true" />
@@ -173,6 +196,46 @@ function CreativeIAInstagramConnectionPage() {
               <dd>{formatDate(connection.tokenExpiresAt)}</dd>
             </div>
           </dl>
+        )}
+
+        {connection?.connected && (
+          <section className="creative-ia-connection__insights">
+            <div className="creative-ia-connection__draft-heading">
+              <div>
+                <p className="creative-ia-connection__eyebrow">技術検証</p>
+                <h2>Story反応</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleStoryInsights()}
+                disabled={isStoryInsightsLoading}
+              >
+                {isStoryInsightsLoading ? '確認中' : '反応を確認'}
+              </button>
+            </div>
+            {storyInsights !== null &&
+              (storyInsights.length === 0 ? (
+                <p className="creative-ia-connection__privacy-note">
+                  公開中のStoryが見つかりませんでした。
+                </p>
+              ) : (
+                <dl className="creative-ia-connection__site">
+                  {storyInsights.map((story) => (
+                    <div key={story.id}>
+                      <dt>
+                        {story.timestamp
+                          ? new Intl.DateTimeFormat('ja-JP', {
+                              dateStyle: 'short',
+                              timeStyle: 'short',
+                            }).format(new Date(story.timestamp))
+                          : 'Story'}
+                      </dt>
+                      <dd>いいね {story.likes ?? '取得なし'}件</dd>
+                    </div>
+                  ))}
+                </dl>
+              ))}
+          </section>
         )}
 
         {errorMessage && (
