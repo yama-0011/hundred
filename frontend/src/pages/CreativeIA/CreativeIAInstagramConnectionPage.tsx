@@ -242,7 +242,7 @@ function CreativeIAInstagramConnectionPage() {
                             }).format(new Date(story.timestamp))
                           : 'Story'}
                       </dt>
-                      <dd>いいね {story.likes ?? '取得なし'}件</dd>
+                      <dd>総反応 {story.interactions ?? '取得なし'}件</dd>
                     </div>
                   ))}
                 </dl>

@@ -32,7 +32,7 @@ export type CreativeIAInstagramStoryInsight = {
   id: string
   mediaType: string | null
   timestamp: string | null
-  likes: number | null
+  interactions: number | null
 }
 
 async function getCreativeIAAccessToken() {

@@ -44,7 +44,7 @@ export class InstagramInsightsError extends Error {
       | "TOKEN_EXPIRED"
       | "PROVIDER_FAILED",
     readonly providerCode?: string,
-    readonly providerStage?: "stories" | "likes",
+    readonly providerStage?: "stories" | "interactions",
     readonly providerMessage?: string,
   ) {
     super(code);
@@ -60,7 +60,7 @@ function getProviderCode(body: StoriesResponse | InsightsResponse) {
 async function requestProvider<T extends StoriesResponse | InsightsResponse>(
   path: string,
   accessToken: string,
-  stage: "stories" | "likes",
+  stage: "stories" | "interactions",
 ): Promise<T> {
   const response = await fetch(`${graphApiOrigin}/${graphApiVersion}/${path}`, {
     headers: {
@@ -106,7 +106,7 @@ function readMetricValue(item: InsightItem): number | null {
   return null;
 }
 
-/** 接続中アカウントが公開しているStoryと、現在のいいね数を取得する。 */
+/** 接続中アカウントが公開しているStoryと、現在の総反応数を取得する。 */
 export async function listInstagramStoryInsights(
   env: InstagramInsightsEnv,
   ownerUserId: string,
@@ -151,21 +151,25 @@ export async function listInstagramStoryInsights(
       stories.map(async (story) => {
         const storyId = String(story.id);
         const insightsResponse = await requestProvider<InsightsResponse>(
-          `${encodeURIComponent(storyId)}/insights?metric=likes`,
+          `${encodeURIComponent(storyId)}/insights?metric=total_interactions`,
           accessToken,
-          "likes",
+          "interactions",
         );
         const metrics = Array.isArray(insightsResponse.data)
           ? (insightsResponse.data as InsightItem[])
           : [];
-        const likesMetric = metrics.find((item) => item.name === "likes");
+        const interactionsMetric = metrics.find(
+          (item) => item.name === "total_interactions",
+        );
         return {
           id: storyId,
           mediaType:
             typeof story.media_type === "string" ? story.media_type : null,
           timestamp:
             typeof story.timestamp === "string" ? story.timestamp : null,
-          likes: likesMetric ? readMetricValue(likesMetric) : null,
+          interactions: interactionsMetric
+            ? readMetricValue(interactionsMetric)
+            : null,
         };
       }),
     ),
