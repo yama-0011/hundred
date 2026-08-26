@@ -57,7 +57,12 @@ async function requestCreativeIAInstagramApi<T>(
   })
 
   if (!response.ok) {
-    throw new Error(
+    const body = (await response.json().catch(() => null)) as {
+      providerCode?: unknown
+      providerStage?: unknown
+      providerMessage?: unknown
+    } | null
+    const error = new Error(
       response.status === 401
         ? 'AUTH_REQUIRED'
         : response.status === 409
@@ -67,7 +72,21 @@ async function requestCreativeIAInstagramApi<T>(
             : response.status === 502
               ? 'PROVIDER_FAILED'
               : 'API_FAILED',
-    )
+    ) as Error & {
+      providerCode?: string
+      providerStage?: string
+      providerMessage?: string
+    }
+    if (typeof body?.providerCode === 'string') {
+      error.providerCode = body.providerCode
+    }
+    if (typeof body?.providerStage === 'string') {
+      error.providerStage = body.providerStage
+    }
+    if (typeof body?.providerMessage === 'string') {
+      error.providerMessage = body.providerMessage
+    }
+    throw error
   }
   return (await response.json()) as T
 }

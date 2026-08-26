@@ -23,7 +23,7 @@ interface StoryItem {
 
 interface StoriesResponse {
   data?: unknown;
-  error?: { code?: unknown; type?: unknown };
+  error?: { code?: unknown; type?: unknown; message?: unknown };
 }
 
 interface InsightItem {
@@ -34,7 +34,7 @@ interface InsightItem {
 
 interface InsightsResponse {
   data?: unknown;
-  error?: { code?: unknown; type?: unknown };
+  error?: { code?: unknown; type?: unknown; message?: unknown };
 }
 
 export class InstagramInsightsError extends Error {
@@ -44,6 +44,8 @@ export class InstagramInsightsError extends Error {
       | "TOKEN_EXPIRED"
       | "PROVIDER_FAILED",
     readonly providerCode?: string,
+    readonly providerStage?: "stories" | "likes",
+    readonly providerMessage?: string,
   ) {
     super(code);
     this.name = "InstagramInsightsError";
@@ -58,6 +60,7 @@ function getProviderCode(body: StoriesResponse | InsightsResponse) {
 async function requestProvider<T extends StoriesResponse | InsightsResponse>(
   path: string,
   accessToken: string,
+  stage: "stories" | "likes",
 ): Promise<T> {
   const response = await fetch(`${graphApiOrigin}/${graphApiVersion}/${path}`, {
     headers: {
@@ -67,7 +70,14 @@ async function requestProvider<T extends StoriesResponse | InsightsResponse>(
   });
   const body = (await response.json()) as T;
   if (!response.ok) {
-    throw new InstagramInsightsError("PROVIDER_FAILED", getProviderCode(body));
+    throw new InstagramInsightsError(
+      "PROVIDER_FAILED",
+      getProviderCode(body),
+      stage,
+      typeof body.error?.message === "string"
+        ? body.error.message.slice(0, 300)
+        : undefined,
+    );
   }
   return body;
 }
@@ -125,6 +135,7 @@ export async function listInstagramStoryInsights(
   const storiesResponse = await requestProvider<StoriesResponse>(
     `${encodeURIComponent(connection.instagram_user_id)}/stories?fields=id,media_type,timestamp`,
     accessToken,
+    "stories",
   );
   const stories = Array.isArray(storiesResponse.data)
     ? storiesResponse.data.filter(
@@ -142,6 +153,7 @@ export async function listInstagramStoryInsights(
         const insightsResponse = await requestProvider<InsightsResponse>(
           `${encodeURIComponent(storyId)}/insights?metric=likes`,
           accessToken,
+          "likes",
         );
         const metrics = Array.isArray(insightsResponse.data)
           ? (insightsResponse.data as InsightItem[])

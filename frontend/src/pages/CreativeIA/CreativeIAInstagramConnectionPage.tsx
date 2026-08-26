@@ -131,10 +131,22 @@ function CreativeIAInstagramConnectionPage() {
       setStoryInsights(result.stories)
     } catch (error) {
       setStoryInsights(null)
+      const providerError = error as Error & {
+        providerCode?: string
+        providerStage?: string
+        providerMessage?: string
+      }
+      const diagnostic = [
+        providerError.providerStage,
+        providerError.providerCode,
+        providerError.providerMessage,
+      ]
+        .filter(Boolean)
+        .join(' / ')
       setErrorMessage(
         error instanceof Error && error.message === 'AUTH_REQUIRED'
           ? 'Instagramへ再接続してからお試しください。'
-          : 'Storyの反応を取得できませんでした。権限と投稿状態を確認してください。',
+          : `Storyの反応を取得できませんでした。${diagnostic ? `（${diagnostic}）` : '権限と投稿状態を確認してください。'}`,
       )
     } finally {
       setIsStoryInsightsLoading(false)

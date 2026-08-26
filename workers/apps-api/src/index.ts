@@ -448,6 +448,8 @@ export default {
                     ? "Instagramへ再接続してください"
                     : "InstagramのStory反応を取得できませんでした",
               providerCode: error.providerCode ?? null,
+              providerStage: error.providerStage ?? null,
+              providerMessage: error.providerMessage ?? null,
             },
             status,
           );
