@@ -33,6 +33,17 @@ export type CreativeIAInstagramStoryInsight = {
   mediaType: string | null
   timestamp: string | null
   interactions: number | null
+  foodAwarded: number
+  totalFoodAwarded: number
+  maxInteractions: number
+  foodLimit: number
+}
+
+export type CreativeIAInstagramPetState = {
+  species: string
+  status: 'alive' | 'dead' | 'evolved'
+  fullness: number
+  lastFedAt: number | null
 }
 
 async function getCreativeIAAccessToken() {
@@ -100,6 +111,7 @@ export function getCreativeIAInstagramStatus() {
 export function getCreativeIAInstagramStoryInsights() {
   return requestCreativeIAInstagramApi<{
     stories: CreativeIAInstagramStoryInsight[]
+    pet: CreativeIAInstagramPetState | null
   }>('/api/creative-ia/instagram/stories')
 }
 

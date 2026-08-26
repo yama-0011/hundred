@@ -11,6 +11,9 @@
     }
   ],
   "workers_dev": true,
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  },
   "vars": {
     "APP_ORIGIN": "https://yamahit.com",
     "WORDPRESS_CLIENT_ID": "146245",

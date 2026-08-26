@@ -40,6 +40,7 @@ import {
 import {
   InstagramInsightsError,
   listInstagramStoryInsights,
+  syncAllInstagramStoryInsights,
   type InstagramInsightsEnv,
 } from "./instagram/insights";
 import {
@@ -353,6 +354,17 @@ async function handleInstagramStatus(
 }
 
 export default {
+  async scheduled(
+    _controller: ScheduledController,
+    env: Env,
+    context: ExecutionContext,
+  ): Promise<void> {
+    context.waitUntil(
+      syncAllInstagramStoryInsights(env).then((summary) => {
+        console.log("Instagram Story sync completed", summary);
+      }),
+    );
+  },
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 

@@ -2,6 +2,7 @@ import { decryptAccessToken } from "../security/crypto";
 
 const graphApiOrigin = "https://graph.instagram.com";
 const graphApiVersion = "v23.0";
+const storyFoodLimit = 20;
 
 export interface InstagramInsightsEnv {
   DB: D1Database;
@@ -106,6 +107,166 @@ function readMetricValue(item: InsightItem): number | null {
   return null;
 }
 
+function parseStoryTimestamp(timestamp: unknown): number | null {
+  if (typeof timestamp !== "string") return null;
+  const value = Date.parse(timestamp);
+  return Number.isFinite(value) ? value : null;
+}
+
+async function recordStoryInteractions(
+  env: InstagramInsightsEnv,
+  ownerUserId: string,
+  instagramUserId: string,
+  story: StoryItem,
+  interactions: number,
+) {
+  const storyId = String(story.id);
+  const now = Date.now();
+  const normalizedInteractions = Math.max(0, Math.floor(interactions));
+  const previous = await env.DB.prepare(
+    `SELECT max_total_interactions, total_food_awarded
+       FROM instagram_story_snapshots
+      WHERE owner_user_id = ?1 AND story_id = ?2`,
+  )
+    .bind(ownerUserId, storyId)
+    .first<{
+      max_total_interactions: number;
+      total_food_awarded: number;
+    }>();
+  const previousMaximum = previous?.max_total_interactions ?? 0;
+  const previousAwarded = previous?.total_food_awarded ?? 0;
+  const interactionDelta = Math.max(
+    0,
+    normalizedInteractions - previousMaximum,
+  );
+  const foodAwarded = Math.max(
+    0,
+    Math.min(normalizedInteractions, storyFoodLimit) -
+      Math.min(previousMaximum, storyFoodLimit),
+  );
+
+  const statements = [
+    env.DB.prepare(
+      `INSERT INTO instagram_story_snapshots
+         (owner_user_id, instagram_user_id, story_id, media_type,
+          story_published_at, current_total_interactions,
+          max_total_interactions, total_food_awarded, first_seen_at,
+          last_checked_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6, ?7, ?8, ?8)
+       ON CONFLICT(owner_user_id, story_id) DO UPDATE SET
+         instagram_user_id = excluded.instagram_user_id,
+         media_type = excluded.media_type,
+         story_published_at = excluded.story_published_at,
+         current_total_interactions = excluded.current_total_interactions,
+         max_total_interactions = MAX(
+           instagram_story_snapshots.max_total_interactions,
+           excluded.max_total_interactions
+         ),
+         last_checked_at = excluded.last_checked_at`,
+    )
+      .bind(
+        ownerUserId,
+        instagramUserId,
+        storyId,
+        typeof story.media_type === "string" ? story.media_type : null,
+        parseStoryTimestamp(story.timestamp),
+        normalizedInteractions,
+        0,
+        now,
+      ),
+  ];
+
+  if (interactionDelta > 0 && foodAwarded > 0) {
+    statements.push(
+      env.DB.prepare(
+        `INSERT OR IGNORE INTO instagram_food_events
+           (id, owner_user_id, instagram_user_id, story_id,
+            observed_total_interactions, interaction_delta, food_amount,
+            created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+      )
+        .bind(
+          crypto.randomUUID(),
+          ownerUserId,
+          instagramUserId,
+          storyId,
+          normalizedInteractions,
+          interactionDelta,
+          foodAwarded,
+          now,
+        ),
+    );
+    statements.push(
+      env.DB.prepare(
+        `UPDATE instagram_story_snapshots
+            SET total_food_awarded = COALESCE(
+              (SELECT SUM(food_amount)
+                 FROM instagram_food_events
+                WHERE owner_user_id = ?1 AND story_id = ?2),
+              0
+            )
+          WHERE owner_user_id = ?1 AND story_id = ?2`,
+      ).bind(ownerUserId, storyId),
+    );
+  }
+  const results = await env.DB.batch(statements);
+  const insertedFoodEvent = (results[1]?.meta.changes ?? 0) > 0;
+
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO hundred_pet_states
+         (owner_user_id, species, life_status, fullness, created_at, updated_at)
+       VALUES (?1, 'hedgehog', 'alive', 0, ?2, ?2)
+       ON CONFLICT(owner_user_id) DO NOTHING`,
+    ).bind(ownerUserId, now),
+    env.DB.prepare(
+      `UPDATE hundred_pet_states
+          SET fullness = MIN(
+                100,
+                fullness + COALESCE(
+                  (SELECT SUM(food_amount)
+                     FROM instagram_food_events
+                    WHERE owner_user_id = ?1 AND applied_at IS NULL),
+                  0
+                )
+              ),
+              last_fed_at = CASE
+                WHEN EXISTS (
+                  SELECT 1
+                    FROM instagram_food_events
+                   WHERE owner_user_id = ?1 AND applied_at IS NULL
+                ) THEN ?2
+                ELSE last_fed_at
+              END,
+              updated_at = ?2
+        WHERE owner_user_id = ?1`,
+    ).bind(ownerUserId, now),
+    env.DB.prepare(
+      `UPDATE instagram_food_events
+          SET applied_at = ?2
+        WHERE owner_user_id = ?1 AND applied_at IS NULL`,
+    ).bind(ownerUserId, now),
+  ]);
+
+  const snapshot = await env.DB.prepare(
+    `SELECT max_total_interactions, total_food_awarded
+       FROM instagram_story_snapshots
+      WHERE owner_user_id = ?1 AND story_id = ?2`,
+  )
+    .bind(ownerUserId, storyId)
+    .first<{
+      max_total_interactions: number;
+      total_food_awarded: number;
+    }>();
+
+  return {
+    foodAwarded: insertedFoodEvent ? foodAwarded : 0,
+    totalFoodAwarded: snapshot?.total_food_awarded ?? previousAwarded,
+    maxInteractions: snapshot?.max_total_interactions ?? previousMaximum,
+    foodLimit: storyFoodLimit,
+  };
+}
+
 /** 接続中アカウントが公開しているStoryと、現在の総反応数を取得する。 */
 export async function listInstagramStoryInsights(
   env: InstagramInsightsEnv,
@@ -146,32 +307,94 @@ export async function listInstagramStoryInsights(
       )
     : [];
 
+  const serializedStories = [];
+  for (const story of stories) {
+    const storyId = String(story.id);
+    const insightsResponse = await requestProvider<InsightsResponse>(
+      `${encodeURIComponent(storyId)}/insights?metric=total_interactions`,
+      accessToken,
+      "interactions",
+    );
+    const metrics = Array.isArray(insightsResponse.data)
+      ? (insightsResponse.data as InsightItem[])
+      : [];
+    const interactionsMetric = metrics.find(
+      (item) => item.name === "total_interactions",
+    );
+    const interactions = interactionsMetric
+      ? readMetricValue(interactionsMetric)
+      : null;
+    const food =
+      interactions === null
+        ? {
+            foodAwarded: 0,
+            totalFoodAwarded: 0,
+            maxInteractions: 0,
+            foodLimit: storyFoodLimit,
+          }
+        : await recordStoryInteractions(
+            env,
+            ownerUserId,
+            connection.instagram_user_id,
+            story,
+            interactions,
+          );
+    serializedStories.push({
+      id: storyId,
+      mediaType:
+        typeof story.media_type === "string" ? story.media_type : null,
+      timestamp: typeof story.timestamp === "string" ? story.timestamp : null,
+      interactions,
+      ...food,
+    });
+  }
+  const pet = await env.DB.prepare(
+    `SELECT species, life_status, fullness, last_fed_at
+       FROM hundred_pet_states
+      WHERE owner_user_id = ?1`,
+  )
+    .bind(ownerUserId)
+    .first<{
+      species: string;
+      life_status: string;
+      fullness: number;
+      last_fed_at: number | null;
+    }>();
   return {
-    stories: await Promise.all(
-      stories.map(async (story) => {
-        const storyId = String(story.id);
-        const insightsResponse = await requestProvider<InsightsResponse>(
-          `${encodeURIComponent(storyId)}/insights?metric=total_interactions`,
-          accessToken,
-          "interactions",
-        );
-        const metrics = Array.isArray(insightsResponse.data)
-          ? (insightsResponse.data as InsightItem[])
-          : [];
-        const interactionsMetric = metrics.find(
-          (item) => item.name === "total_interactions",
-        );
-        return {
-          id: storyId,
-          mediaType:
-            typeof story.media_type === "string" ? story.media_type : null,
-          timestamp:
-            typeof story.timestamp === "string" ? story.timestamp : null,
-          interactions: interactionsMetric
-            ? readMetricValue(interactionsMetric)
-            : null,
-        };
-      }),
-    ),
+    stories: serializedStories,
+    pet: pet
+      ? {
+          species: pet.species,
+          status: pet.life_status,
+          fullness: pet.fullness,
+          lastFedAt: pet.last_fed_at,
+        }
+      : null,
   };
+}
+
+/** 接続中アカウントのStory反応を定期同期する。個別失敗で全体を止めない。 */
+export async function syncAllInstagramStoryInsights(
+  env: InstagramInsightsEnv,
+) {
+  const result = await env.DB.prepare(
+    `SELECT owner_user_id
+       FROM instagram_connections
+      WHERE token_expires_at IS NULL OR token_expires_at > ?1
+      ORDER BY updated_at ASC
+      LIMIT 100`,
+  )
+    .bind(Math.floor(Date.now() / 1000))
+    .all<{ owner_user_id: string }>();
+  let succeeded = 0;
+  let failed = 0;
+  for (const connection of result.results) {
+    try {
+      await listInstagramStoryInsights(env, connection.owner_user_id);
+      succeeded += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+  return { processed: result.results.length, succeeded, failed };
 }

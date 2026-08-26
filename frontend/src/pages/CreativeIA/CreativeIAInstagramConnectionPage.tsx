@@ -6,6 +6,7 @@ import {
   getCreativeIAInstagramStoryInsights,
   getCreativeIAInstagramStatus,
   type CreativeIAInstagramStoryInsight,
+  type CreativeIAInstagramPetState,
   type CreativeIAInstagramStatus,
 } from '../../services/CreativeIA/creativeIaInstagramApi'
 import '../../styles/CreativeIA/creative-ia-connection.css'
@@ -39,6 +40,8 @@ function CreativeIAInstagramConnectionPage() {
   const [isDisconnecting, setIsDisconnecting] = useState(false)
   const [storyInsights, setStoryInsights] =
     useState<CreativeIAInstagramStoryInsight[] | null>(null)
+  const [petState, setPetState] =
+    useState<CreativeIAInstagramPetState | null>(null)
   const [isStoryInsightsLoading, setIsStoryInsightsLoading] = useState(false)
   const oauthMessage = getOAuthMessage(searchParams.get('instagram'))
 
@@ -129,8 +132,10 @@ function CreativeIAInstagramConnectionPage() {
     try {
       const result = await getCreativeIAInstagramStoryInsights()
       setStoryInsights(result.stories)
+      setPetState(result.pet)
     } catch (error) {
       setStoryInsights(null)
+      setPetState(null)
       const providerError = error as Error & {
         providerCode?: string
         providerStage?: string
@@ -242,11 +247,22 @@ function CreativeIAInstagramConnectionPage() {
                             }).format(new Date(story.timestamp))
                           : 'Story'}
                       </dt>
-                      <dd>総反応 {story.interactions ?? '取得なし'}件</dd>
+                      <dd>
+                        総反応 {story.interactions ?? '取得なし'}件
+                        {story.foodAwarded > 0
+                          ? `・今回の餌 +${story.foodAwarded}`
+                          : ''}
+                        {`・獲得済み ${story.totalFoodAwarded}/${story.foodLimit}`}
+                      </dd>
                     </div>
                   ))}
                 </dl>
               ))}
+            {petState && (
+              <p className="creative-ia-connection__privacy-note">
+                ハリネズミの満腹度 {petState.fullness}/100
+              </p>
+            )}
           </section>
         )}
 
