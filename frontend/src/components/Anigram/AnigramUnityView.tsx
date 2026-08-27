@@ -86,9 +86,9 @@ function AnigramUnityView({ displayState }: AnigramUnityViewProps) {
         const instance = await createUnityInstance(
           canvas,
           {
-            dataUrl: `${unityRoot}/Build/WebGL.data`,
-            frameworkUrl: `${unityRoot}/Build/WebGL.framework.js`,
-            codeUrl: `${unityRoot}/Build/WebGL.wasm`,
+            dataUrl: `${unityRoot}/Build/WebGL.data.unityweb`,
+            frameworkUrl: `${unityRoot}/Build/WebGL.framework.js.unityweb`,
+            codeUrl: `${unityRoot}/Build/WebGL.wasm.unityweb`,
             streamingAssetsUrl: `${unityRoot}/StreamingAssets`,
             companyName: 'Hundred',
             productName: 'Anigram',

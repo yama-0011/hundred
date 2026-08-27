@@ -12,8 +12,13 @@ frontend/node_modules/
 frontend/dist/
 frontend/dist-ssr/
 frontend/**/*.local
-# Unity WebGLのローカル技術検証用コピー（本番配信方法の決定後に管理を見直す）
-frontend/public/anigram-unity/
+# Unity WebGL成果物はCloudflare Pages配信用として
+# frontend/public/anigram-unity/へ同期し、Gitで管理する。
+# 旧・未圧縮ビルドとFinder由来の重複ファイルは配信しない。
+frontend/public/anigram-unity/Build/WebGL.data
+frontend/public/anigram-unity/Build/WebGL.framework.js
+frontend/public/anigram-unity/Build/WebGL.wasm
+frontend/public/anigram-unity/index 2.html
 
 # Cloudflare Workers
 workers/**/node_modules/

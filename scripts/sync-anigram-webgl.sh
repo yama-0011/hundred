@@ -10,9 +10,9 @@ public_target="${repository_root}/frontend/public/anigram-unity"
 required_files=(
   "index.html"
   "Build/WebGL.loader.js"
-  "Build/WebGL.data"
-  "Build/WebGL.framework.js"
-  "Build/WebGL.wasm"
+  "Build/WebGL.data.unityweb"
+  "Build/WebGL.framework.js.unityweb"
+  "Build/WebGL.wasm.unityweb"
 )
 
 for required_file in "${required_files[@]}"; do
@@ -24,6 +24,7 @@ for required_file in "${required_files[@]}"; do
 done
 
 mkdir -p "${public_target}"
+find "${public_target}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 cp -R "${build_source}/." "${public_target}/"
 
 echo "Anigram WebGL成果物をfrontend/public/anigram-unityへ同期しました。"

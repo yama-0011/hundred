@@ -46,9 +46,10 @@ namespace Hundred.Anigram.Editor
                 CreateScene();
             }
 
-            // ViteとCloudflareの双方でContent-Encoding設定に依存せず読めるよう、
-            // 技術検証ビルドではUnity側の事前圧縮を無効にする。
-            PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Disabled;
+            // Cloudflare Pagesの単一ファイル上限（25 MiB）を超えないようBrotli圧縮し、
+            // Content-Encoding設定に依存しないようブラウザ側の展開フォールバックを使う。
+            PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Brotli;
+            PlayerSettings.WebGL.decompressionFallback = true;
 
             // 圧縮方式を変えた際に古い.brファイルが残らないよう、出力先だけを作り直す。
             if (Directory.Exists(WebGlOutputPath))
