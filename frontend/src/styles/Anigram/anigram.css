@@ -1,0 +1,212 @@
+.anigram-page {
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 28px clamp(20px, 4vw, 68px) 48px;
+  color: #eef4f1;
+  background:
+    radial-gradient(circle at 82% 14%, rgb(50 117 107 / 22%), transparent 34%),
+    radial-gradient(circle at 12% 76%, rgb(95 73 116 / 18%), transparent 36%),
+    #07100e;
+}
+
+.anigram-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1480px;
+  margin: 0 auto 28px;
+  color: #94a39e;
+  font-size: 14px;
+}
+
+.anigram-header a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.anigram-header a:hover {
+  color: #82ddc6;
+}
+
+.anigram-hero {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.55fr) minmax(480px, 1.5fr) minmax(270px, 0.7fr);
+  gap: clamp(20px, 3vw, 48px);
+  align-items: center;
+  max-width: 1480px;
+  min-height: calc(100vh - 130px);
+  margin: 0 auto;
+}
+
+.anigram-eyebrow,
+.anigram-status__heading p {
+  margin: 0 0 8px;
+  color: #75d9c1;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.anigram-hero__copy h1 {
+  margin: 0;
+  font-size: clamp(52px, 6vw, 92px);
+  font-weight: 600;
+  letter-spacing: -0.07em;
+}
+
+.anigram-hero__copy > p:last-child {
+  max-width: 250px;
+  color: #a7b2ae;
+  line-height: 1.8;
+}
+
+.anigram-unity {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border: 1px solid rgb(130 221 198 / 16%);
+  border-radius: 32px;
+  background: #06110e;
+  box-shadow: 0 34px 90px rgb(0 0 0 / 35%);
+}
+
+.anigram-unity__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.anigram-unity__loading,
+.anigram-unity__fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  background: #06110e;
+  color: #9aa8a3;
+}
+
+.anigram-unity__loading progress {
+  width: min(280px, 60vw);
+  accent-color: #78ddc4;
+}
+
+.anigram-unity__fallback span {
+  font-size: 64px;
+}
+
+.anigram-unity__fallback p {
+  max-width: 360px;
+  margin: 0;
+  line-height: 1.7;
+}
+
+.anigram-status {
+  padding: 26px;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 24px;
+  background: rgb(16 26 23 / 76%);
+}
+
+.anigram-status__heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.anigram-status__heading h2 {
+  margin: 0;
+  font-size: 23px;
+}
+
+.anigram-status__heading strong {
+  color: #82ddc6;
+  font-size: 34px;
+  font-weight: 500;
+}
+
+.anigram-status label {
+  display: block;
+  margin: 28px 0 10px;
+  color: #96a59f;
+  font-size: 13px;
+}
+
+.anigram-status input[type='range'] {
+  width: 100%;
+  accent-color: #78ddc4;
+}
+
+.anigram-status__actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.anigram-status button {
+  min-height: 48px;
+  border: 1px solid #72d7be;
+  border-radius: 14px;
+  background: #72d7be;
+  color: #07110e;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.anigram-status button:hover {
+  filter: brightness(1.08);
+}
+
+.anigram-status .anigram-button--secondary {
+  background: transparent;
+  color: #a9bbb5;
+  border-color: rgb(255 255 255 / 14%);
+}
+
+.anigram-status__note {
+  margin: 20px 0 0;
+  color: #74817d;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+@media (max-width: 1050px) {
+  .anigram-hero {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .anigram-hero__copy {
+    grid-column: 1 / -1;
+  }
+
+  .anigram-hero__copy > p:last-child {
+    max-width: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .anigram-page {
+    padding: 20px 16px 32px;
+  }
+
+  .anigram-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    min-height: auto;
+  }
+
+  .anigram-hero__copy h1 {
+    font-size: 56px;
+  }
+
+  .anigram-unity {
+    border-radius: 22px;
+  }
+}

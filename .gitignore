@@ -12,11 +12,32 @@ frontend/node_modules/
 frontend/dist/
 frontend/dist-ssr/
 frontend/**/*.local
+# Unity WebGLのローカル技術検証用コピー（本番配信方法の決定後に管理を見直す）
+frontend/public/anigram-unity/
 
 # Cloudflare Workers
 workers/**/node_modules/
 workers/**/.wrangler/
 workers/**/.dev.vars
+
+# Unity
+unity/**/[Ll]ibrary/
+unity/**/[Tt]emp/
+unity/**/[Oo]bj/
+unity/**/[Bb]uild/
+unity/**/[Bb]uilds/
+unity/**/[Ll]ogs/
+unity/**/[Uu]ser[Ss]ettings/
+unity/**/*.csproj
+unity/**/*.sln
+unity/**/*.user
+unity/**/*.pidb
+unity/**/*.booproj
+unity/**/*.svd
+unity/**/*.pdb
+unity/**/*.mdb
+unity/**/*.opendb
+unity/**/*.VC.db
 
 # Backend (Java / Maven)
 *.class

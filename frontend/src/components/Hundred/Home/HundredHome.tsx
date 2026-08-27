@@ -54,7 +54,7 @@ import '../../../styles/Hundred/hundred-home-settings.css'
 
 // IDを文字列の自由入力にせず、扱えるカテゴリとAppを型で限定する。
 type CategoryId = 'profile' | 'apps' | 'store' | 'mail' | 'settings'
-type AppId = 'record-hub' | 'creative-ia' | 'memo' | 'game'
+type AppId = 'record-hub' | 'creative-ia' | 'memo' | 'anigram'
 
 type Category = {
   id: CategoryId
@@ -89,7 +89,11 @@ const installedApps: InstalledApp[] = [
     detail: 'ブログ記事をかんたんに作成',
   },
   { id: 'memo', name: 'Memo', detail: '考えをすばやく残す' },
-  { id: 'game', name: 'Game', detail: 'ひと息つく時間' },
+  {
+    id: 'anigram',
+    name: 'Anigram',
+    detail: 'みんなの反応でハリネズミを育てる',
+  },
 ]
 
 const initialCategoryIndex = categories.findIndex(({ id }) => id === 'apps')
@@ -286,12 +290,12 @@ function AppIcon({ id }: { id: AppId }) {
         <path d="M14.5 4.5V8H18M9 11h6M9 14.5h6" />
       </>
     ),
-    game: (
+    anigram: (
       <>
-        <path d="M8.5 8h7a5 5 0 0 1 4.7 3.3l1 2.9a3.1 3.1 0 0 1-5 3.3L14.6 16H9.4l-1.6 1.5a3.1 3.1 0 0 1-5-3.3l1-2.9A5 5 0 0 1 8.5 8Z" />
-        <path d="M8 11v4M6 13h4" />
-        <circle cx="16" cy="12" r=".7" fill="currentColor" stroke="none" />
-        <circle cx="18" cy="14" r=".7" fill="currentColor" stroke="none" />
+        <path d="M5.2 15.8c-.7-3.9 1.8-7.6 5.7-8.4 3.7-.7 7.3 1.5 8.3 5.1.6 2.2-.2 4.5-2 5.8-1.9 1.4-4.6 1.3-6.4-.3-1.5-1.4-3.6-2.1-5.6-2.2Z" />
+        <path d="m7 9-1.4-2.4M9.4 7.8 8.8 5M12 7.4V4.5M14.5 8l.8-2.7M16.8 9.4l1.6-2.2" />
+        <circle cx="14.6" cy="13" r=".6" fill="currentColor" stroke="none" />
+        <path d="m18.6 14.4 1.7.7-1.7.7" />
       </>
     ),
   }
@@ -675,13 +679,16 @@ function HundredHome() {
     playCursorSound()
   }
 
-  /** Appを選択し、選択済みのCreative IAが押された場合は画面を開く。 */
+  /** Appを選択し、選択済みの起動可能なAppが押された場合は画面を開く。 */
   const handleAppClick = (app: InstalledApp, index: number) => {
-    if (
-      app.id === 'creative-ia' &&
-      index === selectedAppIndexRef.current
-    ) {
-      navigate('/creative-ia')
+    const appRoutes: Partial<Record<AppId, string>> = {
+      'creative-ia': '/creative-ia',
+      anigram: '/anigram',
+    }
+    const route = appRoutes[app.id]
+
+    if (route && index === selectedAppIndexRef.current) {
+      navigate(route)
       return
     }
 
