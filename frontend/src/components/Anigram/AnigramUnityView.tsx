@@ -69,8 +69,11 @@ type AnigramUnityViewProps = {
 function AnigramUnityView({ displayState }: AnigramUnityViewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const unityInstanceRef = useRef<UnityInstance | null>(null)
+  const displayStateRef = useRef(displayState)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
+
+  displayStateRef.current = displayState
 
   useEffect(() => {
     let cancelled = false
@@ -107,7 +110,7 @@ function AnigramUnityView({ displayState }: AnigramUnityViewProps) {
         instance.SendMessage(
           'AnigramPet',
           'ApplyStateJson',
-          JSON.stringify(displayState),
+          JSON.stringify(displayStateRef.current),
         )
       } catch {
         if (!cancelled) {
