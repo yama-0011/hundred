@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 
 export type AnigramDisplayState = {
-  fullnessPercent: number
+  species: string
   status: 'alive' | 'dead'
-  motion: 'idle' | 'feed'
-  evolutionStage: number
+  lifeStage: 'egg' | 'hatching' | 'baby' | 'adult'
+  motion: 'egg_idle' | 'hatching' | 'idle' | 'feed' | 'dead'
+  evolutionStage: string
+  hatchProgressPercent: number | null
+  fullnessPercent: number | null
 }
 
 type UnityInstance = {

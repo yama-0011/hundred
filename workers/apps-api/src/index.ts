@@ -80,6 +80,12 @@ import {
   updateCreativeIAReferenceContact,
   updateCreativeIAReferenceOrganization,
 } from "./reference-organizations";
+import {
+  addAnigramGrowthEvent,
+  AnigramGameError,
+  getAnigramPetState,
+  listAnigramGrowthEvents,
+} from "./anigram/game";
 
 interface Env
   extends WordPressOAuthEnv,
@@ -385,6 +391,72 @@ export default {
         url.pathname === "/api/creative-ia/health")
     ) {
       return json(request, env, { status: "ok" });
+    }
+
+    if (
+      request.method === "GET" &&
+      url.pathname === "/api/anigram/pet"
+    ) {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, {
+          pet: await getAnigramPetState(env, ownerUserId),
+        });
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        return json(request, env, { error: "動物の状態を取得できませんでした" }, 500);
+      }
+    }
+
+    if (
+      request.method === "GET" &&
+      url.pathname === "/api/anigram/growth-events"
+    ) {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        const requestedLimit = Number(url.searchParams.get("limit") ?? 20);
+        return json(request, env, {
+          events: await listAnigramGrowthEvents(
+            env,
+            ownerUserId,
+            Number.isFinite(requestedLimit) ? requestedLimit : 20,
+          ),
+        });
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        return json(request, env, { error: "成長履歴を取得できませんでした" }, 500);
+      }
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/anigram/pet/growth-events/validation"
+    ) {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(
+          request,
+          env,
+          await addAnigramGrowthEvent(env, ownerUserId, {
+            source: "hundred_validation",
+            externalEventId: crypto.randomUUID(),
+            reactionType: "manual_validation",
+            points: 1,
+          }),
+        );
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        if (error instanceof AnigramGameError) {
+          return json(request, env, { error: "成長イベントを反映できませんでした" }, 400);
+        }
+        return json(request, env, { error: "ごはんを反映できませんでした" }, 500);
+      }
     }
 
     const instagramMediaMatch = url.pathname.match(

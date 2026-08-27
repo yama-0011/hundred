@@ -1,4 +1,5 @@
 import { decryptAccessToken } from "../security/crypto";
+import { addAnigramGrowthEvent } from "../anigram/game";
 
 const graphApiOrigin = "https://graph.instagram.com";
 const graphApiVersion = "v23.0";
@@ -247,6 +248,18 @@ async function recordStoryInteractions(
         WHERE owner_user_id = ?1 AND applied_at IS NULL`,
     ).bind(ownerUserId, now),
   ]);
+
+  // Instagram側の観測履歴とゲーム本体の成長イベントを分離する。
+  // 技術検証用の1 Story 20ポイント上限はAnigramには適用しない。
+  if (interactionDelta > 0) {
+    await addAnigramGrowthEvent(env, ownerUserId, {
+      source: "instagram_story",
+      externalEventId: `${instagramUserId}:${storyId}:${normalizedInteractions}`,
+      reactionType: "total_interactions",
+      points: interactionDelta,
+      occurredAt: now,
+    });
+  }
 
   const snapshot = await env.DB.prepare(
     `SELECT max_total_interactions, total_food_awarded

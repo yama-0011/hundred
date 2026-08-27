@@ -130,16 +130,29 @@
   font-weight: 500;
 }
 
-.anigram-status label {
-  display: block;
+.anigram-status__progress-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
   margin: 28px 0 10px;
   color: #96a59f;
   font-size: 13px;
 }
 
-.anigram-status input[type='range'] {
+.anigram-status__progress {
+  overflow: hidden;
   width: 100%;
-  accent-color: #78ddc4;
+  height: 7px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 18%);
+}
+
+.anigram-status__progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #78ddc4;
+  transition: width 240ms ease;
 }
 
 .anigram-status__actions {
@@ -163,6 +176,12 @@
   filter: brightness(1.08);
 }
 
+.anigram-status button:disabled {
+  cursor: not-allowed;
+  filter: none;
+  opacity: 0.48;
+}
+
 .anigram-status .anigram-button--secondary {
   background: transparent;
   color: #a9bbb5;
@@ -174,6 +193,23 @@
   color: #74817d;
   font-size: 12px;
   line-height: 1.7;
+}
+
+.anigram-status__error {
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgb(240 118 118 / 22%);
+  border-radius: 10px;
+  background: rgb(117 33 33 / 24%);
+  color: #f0b0aa;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.anigram-status__meta {
+  margin: 16px 0 0;
+  color: #8fa19b;
+  font-size: 12px;
 }
 
 @media (max-width: 1050px) {

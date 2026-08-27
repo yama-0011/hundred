@@ -12,10 +12,13 @@ namespace Hundred.Anigram
         [Serializable]
         private sealed class PetViewState
         {
-            public float fullnessPercent = 50f;
+            public string species = "hedgehog";
             public string status = "alive";
-            public string motion = "idle";
-            public int evolutionStage = 1;
+            public string lifeStage = "egg";
+            public string motion = "egg_idle";
+            public string evolutionStage = "base";
+            public float hatchProgressPercent = 0f;
+            public float fullnessPercent = 0f;
         }
 
         [SerializeField] private Color hungryColor = new(0.48f, 0.40f, 0.35f);
@@ -24,7 +27,9 @@ namespace Hundred.Anigram
         [SerializeField] private Color deadColor = new(0.30f, 0.31f, 0.31f);
 
         private readonly PetViewState state = new();
-        private Renderer[] petRenderers = Array.Empty<Renderer>();
+        private Renderer[] animalRenderers = Array.Empty<Renderer>();
+        private GameObject eggVisual;
+        private Renderer eggRenderer;
         private Vector3 initialPosition;
         private Quaternion initialRotation;
         private Vector3 initialScale;
@@ -34,7 +39,8 @@ namespace Hundred.Anigram
             initialPosition = transform.position;
             initialRotation = transform.rotation;
             initialScale = transform.localScale;
-            petRenderers = GetComponentsInChildren<Renderer>();
+            animalRenderers = GetComponentsInChildren<Renderer>();
+            CreateEggVisual();
             ApplyVisualState();
         }
 
@@ -42,6 +48,25 @@ namespace Hundred.Anigram
         {
             if (IsDead())
             {
+                return;
+            }
+
+            if (IsBeforeHatching())
+            {
+                var hatching = string.Equals(
+                    state.lifeStage,
+                    "hatching",
+                    StringComparison.OrdinalIgnoreCase);
+                var eggSpeed = hatching ? 9f : 1.8f;
+                var eggHeight = hatching ? 0.08f : 0.035f;
+                transform.position = initialPosition
+                    + Vector3.up * (Mathf.Sin(Time.time * eggSpeed) * eggHeight);
+                transform.rotation = hatching
+                    ? initialRotation * Quaternion.Euler(
+                        0f,
+                        0f,
+                        Mathf.Sin(Time.time * eggSpeed) * 7f)
+                    : initialRotation;
                 return;
             }
 
@@ -56,7 +81,7 @@ namespace Hundred.Anigram
 
         /// <summary>
         /// JavaScriptからSendMessageで呼び出し、表示状態を更新する。
-        /// 例: {"fullnessPercent":80,"status":"alive","motion":"feed","evolutionStage":1}
+        /// 例: {"lifeStage":"baby","fullnessPercent":80,"status":"alive","motion":"feed"}
         /// </summary>
         public void ApplyStateJson(string json)
         {
@@ -69,6 +94,7 @@ namespace Hundred.Anigram
             try
             {
                 JsonUtility.FromJsonOverwrite(json, state);
+                state.hatchProgressPercent = Mathf.Clamp(state.hatchProgressPercent, 0f, 100f);
                 state.fullnessPercent = Mathf.Clamp(state.fullnessPercent, 0f, 100f);
                 ApplyVisualState();
             }
@@ -82,12 +108,27 @@ namespace Hundred.Anigram
         {
             transform.position = initialPosition;
             transform.localScale = initialScale;
+            var showEgg = IsBeforeHatching();
+            if (eggVisual != null)
+            {
+                eggVisual.SetActive(showEgg);
+            }
+            foreach (var animalRenderer in animalRenderers)
+            {
+                animalRenderer.gameObject.SetActive(!showEgg);
+            }
             transform.rotation = IsDead()
                 ? initialRotation * Quaternion.Euler(0f, 0f, 82f)
                 : initialRotation;
 
+            if (showEgg)
+            {
+                ApplyEggColor();
+                return;
+            }
+
             var color = ResolveStateColor();
-            foreach (var petRenderer in petRenderers)
+            foreach (var petRenderer in animalRenderers)
             {
                 foreach (var material in petRenderer.materials)
                 {
@@ -114,6 +155,49 @@ namespace Hundred.Anigram
         private bool IsDead()
         {
             return string.Equals(state.status, "dead", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool IsBeforeHatching()
+        {
+            return string.Equals(state.lifeStage, "egg", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(state.lifeStage, "hatching", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void CreateEggVisual()
+        {
+            eggVisual = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            eggVisual.name = "Egg";
+            eggVisual.transform.SetParent(transform, false);
+            eggVisual.transform.localPosition = new Vector3(0f, 0.52f, 0f);
+            eggVisual.transform.localScale = new Vector3(0.92f, 1.25f, 0.92f);
+            eggRenderer = eggVisual.GetComponent<Renderer>();
+
+            var shader = Shader.Find("Universal Render Pipeline/Lit")
+                ?? Shader.Find("Standard");
+            eggRenderer.material = new Material(shader)
+            {
+                name = "Anigram Egg",
+                color = new Color(0.82f, 0.78f, 0.64f),
+            };
+
+            var eggCollider = eggVisual.GetComponent<Collider>();
+            if (eggCollider != null)
+            {
+                Destroy(eggCollider);
+            }
+        }
+
+        private void ApplyEggColor()
+        {
+            if (eggRenderer == null)
+            {
+                return;
+            }
+
+            var progress = state.hatchProgressPercent / 100f;
+            var baseColor = new Color(0.82f, 0.78f, 0.64f);
+            var readyColor = new Color(0.48f, 0.88f, 0.76f);
+            eggRenderer.material.color = Color.Lerp(baseColor, readyColor, progress * 0.55f);
         }
     }
 }
