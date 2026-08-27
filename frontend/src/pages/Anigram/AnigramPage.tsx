@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AnigramUnityView, {
   type AnigramDisplayState,
@@ -44,11 +44,40 @@ function AnigramPage() {
   const [feeding, setFeeding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [motion, setMotion] = useState<AnigramDisplayState['motion'] | null>(null)
+  const petRef = useRef<AnigramPetState | null>(null)
+  const motionTimerRef = useRef<number | null>(null)
+
+  const showGrowthMotion = useCallback((nextPet: AnigramPetState) => {
+    const previousPet = petRef.current
+    const hatchPointsIncreased =
+      typeof previousPet?.hatchPoints === 'number' &&
+      typeof nextPet.hatchPoints === 'number' &&
+      nextPet.hatchPoints > previousPet.hatchPoints
+    const fullnessIncreased =
+      typeof previousPet?.fullnessPoints === 'number' &&
+      typeof nextPet.fullnessPoints === 'number' &&
+      nextPet.fullnessPoints > previousPet.fullnessPoints
+
+    if (hatchPointsIncreased || fullnessIncreased) {
+      setMotion(nextPet.lifeStage === 'egg' ? 'egg_idle' : 'feed')
+      if (motionTimerRef.current !== null) {
+        window.clearTimeout(motionTimerRef.current)
+      }
+      motionTimerRef.current = window.setTimeout(() => {
+        setMotion(null)
+        motionTimerRef.current = null
+      }, 900)
+    }
+
+    petRef.current = nextPet
+  }, [])
 
   const loadPet = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true)
     try {
-      setPet(await getAnigramPet())
+      const nextPet = await getAnigramPet()
+      showGrowthMotion(nextPet)
+      setPet(nextPet)
       setError(null)
     } catch (requestError) {
       setError(
@@ -59,17 +88,30 @@ function AnigramPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [showGrowthMotion])
 
   useEffect(() => {
     void loadPet(true)
   }, [loadPet])
 
   useEffect(() => {
-    if (pet?.lifeStage !== 'hatching') return
-    const interval = window.setInterval(() => void loadPet(), 5_000)
+    const pollingInterval = pet?.lifeStage === 'hatching' ? 5_000 : 30_000
+    const interval = window.setInterval(() => void loadPet(), pollingInterval)
     return () => window.clearInterval(interval)
   }, [loadPet, pet?.lifeStage])
+
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void loadPet()
+    }
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => {
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+      if (motionTimerRef.current !== null) {
+        window.clearTimeout(motionTimerRef.current)
+      }
+    }
+  }, [loadPet])
 
   const displayState = useMemo<AnigramDisplayState>(
     () =>
@@ -87,10 +129,9 @@ function AnigramPage() {
     setFeeding(true)
     try {
       const nextPet = await addAnigramValidationGrowthEvent()
+      showGrowthMotion(nextPet)
       setPet(nextPet)
       setError(null)
-      setMotion(nextPet.lifeStage === 'egg' ? 'egg_idle' : 'feed')
-      window.setTimeout(() => setMotion(null), 900)
     } catch {
       setError('成長ポイントを反映できませんでした。')
     } finally {
@@ -178,7 +219,7 @@ function AnigramPage() {
             </p>
           ) : null}
           <p className="anigram-status__note">
-            状態はWorkerが現在時刻を反映し、D1へ保存しています。
+            Instagram反応はWorkerが定期取得し、D1を経由して自動反映します。
             このボタンはPhase 1の動作確認用です。
           </p>
         </aside>
