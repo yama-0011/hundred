@@ -7,7 +7,9 @@ import {
   addAnigramValidationGrowthEvent,
   getAnigramPet,
   resetAnigramPetForValidation,
+  runAnigramEvolutionValidation,
   runAnigramStarvationValidation,
+  type AnigramEvolutionValidationAction,
   type AnigramStarvationValidationAction,
   type AnigramPetState,
 } from '../../services/Anigram/anigramApi'
@@ -38,7 +40,7 @@ function resolveStageMessage(pet: AnigramPetState | null) {
   if (pet.lifeStage === 'egg') return '卵を温めています'
   if (pet.lifeStage === 'hatching') return 'もうすぐ孵化します'
   if (pet.lifeStage === 'baby') return '元気な幼体です'
-  return '元気です'
+  return '成体へ進化しました'
 }
 
 /** Worker / D1のゲーム状態をUnity表示へ反映するAnigramホーム。 */
@@ -48,6 +50,7 @@ function AnigramPage() {
   const [feeding, setFeeding] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [validatingStarvation, setValidatingStarvation] = useState(false)
+  const [validatingEvolution, setValidatingEvolution] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [motion, setMotion] = useState<AnigramDisplayState['motion'] | null>(null)
   const petRef = useRef<AnigramPetState | null>(null)
@@ -203,6 +206,37 @@ function AnigramPage() {
     }
   }
 
+  const validateEvolution = async (
+    action: AnigramEvolutionValidationAction,
+  ) => {
+    if (!pet || validatingEvolution) return
+    const messages = {
+      prepare:
+        '進化検証を開始し、幼体の満腹度を100%にします。現在の育成状態は上書きされます。よろしいですか？',
+      advance_hold:
+        '設定されている満腹維持期間を経過させ、成体への進化判定を実行します。よろしいですか？',
+    }
+    if (!window.confirm(messages[action])) return
+
+    setValidatingEvolution(true)
+    try {
+      const nextPet = await runAnigramEvolutionValidation(action)
+      petRef.current = nextPet
+      setMotion(null)
+      setPet(nextPet)
+      setError(null)
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error &&
+          requestError.message === 'ADMIN_REQUIRED'
+          ? '進化フローの検証には管理者権限が必要です。'
+          : '進化フローを検証できませんでした。現在の育成状態を確認してください。',
+      )
+    } finally {
+      setValidatingEvolution(false)
+    }
+  }
+
   const isBeforeHatching =
     pet?.lifeStage === 'egg' || pet?.lifeStage === 'hatching'
   const progressValue = isBeforeHatching
@@ -272,6 +306,7 @@ function AnigramPage() {
                     feeding ||
                     resetting ||
                     validatingStarvation ||
+                    validatingEvolution ||
                     !pet ||
                     pet.lifeStage === 'hatching' ||
                     pet.status === 'dead'
@@ -279,6 +314,35 @@ function AnigramPage() {
                 >
                   {feeding ? '反映中です…' : actionLabel}
                 </button>
+                {pet.lifeStage !== 'adult' ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void validateEvolution(
+                        pet.lifeStage === 'baby' &&
+                          pet.evolutionStartedAt !== null
+                          ? 'advance_hold'
+                          : 'prepare',
+                      )
+                    }
+                    disabled={
+                      loading ||
+                      feeding ||
+                      resetting ||
+                      validatingStarvation ||
+                      validatingEvolution
+                    }
+                  >
+                    {validatingEvolution
+                      ? '進化状態を反映中です…'
+                      : pet.lifeStage === 'baby' &&
+                          pet.evolutionStartedAt !== null
+                        ? '満腹維持期間を経過させる'
+                        : '進化検証を開始（満腹度100%）'}
+                  </button>
+                ) : (
+                  <p className="anigram-status__meta">進化検証: 成体へ進化済み</p>
+                )}
                 {pet.status !== 'dead' ? (
                   <button
                     type="button"
@@ -294,7 +358,11 @@ function AnigramPage() {
                       )
                     }
                     disabled={
-                      loading || feeding || resetting || validatingStarvation
+                      loading ||
+                      feeding ||
+                      resetting ||
+                      validatingStarvation ||
+                      validatingEvolution
                     }
                   >
                     {validatingStarvation
@@ -311,7 +379,12 @@ function AnigramPage() {
                   className="anigram-button--secondary"
                   onClick={() => void resetPet()}
                   disabled={
-                    loading || feeding || resetting || validatingStarvation || !pet
+                    loading ||
+                    feeding ||
+                    resetting ||
+                    validatingStarvation ||
+                    validatingEvolution ||
+                    !pet
                   }
                 >
                   {resetting ? '初期化中です…' : '育成状態を卵へ戻す'}
@@ -329,6 +402,16 @@ function AnigramPage() {
           {!isBeforeHatching && pet ? (
             <p className="anigram-status__meta">
               最終給餌: {formatDateTime(pet.lastFedAt)}
+            </p>
+          ) : null}
+          {pet?.status === 'alive' && pet.lifeStage === 'baby' ? (
+            <p className="anigram-status__meta" aria-live="polite">
+              進化進捗: {pet.evolutionProgressPercent}%
+              {pet.evolutionStartedAt !== null
+                ? `（満腹度${pet.evolutionThresholdPercent}%以上をあと約${Math.ceil(
+                    (pet.evolutionRemainingSeconds ?? 0) / 3_600,
+                  )}時間維持）`
+                : `（満腹度${pet.evolutionThresholdPercent}%以上で開始）`}
             </p>
           ) : null}
           {pet?.zeroStartedAt !== null && pet?.status === 'alive' ? (

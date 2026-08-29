@@ -47,6 +47,8 @@ export type AnigramStarvationValidationAction =
   | "advance_to_zero"
   | "advance_grace";
 
+export type AnigramEvolutionValidationAction = "prepare" | "advance_hold";
+
 export class AnigramGameError extends Error {
   constructor(readonly code: "INVALID_INPUT" | "NOT_FOUND" | "FORBIDDEN") {
     super(code);
@@ -204,6 +206,9 @@ async function settlePet(
     const settledFullness = Math.max(0, pet.fullness_points - decay);
     let zeroStartedAt = pet.zero_started_at;
     let status: LifeStatus = pet.status;
+    let lifeStage: LifeStage = pet.life_stage;
+    let evolutionStage = pet.evolution_stage;
+    let evolutionStartedAt = pet.evolution_started_at;
     let diedAt = pet.died_at;
 
     if (settledFullness <= 0) {
@@ -229,10 +234,21 @@ async function settlePet(
     }
 
     const fullnessRatio = settledFullness / pet.max_fullness_points;
-    const evolutionStartedAt =
-      fullnessRatio >= pet.evolution_fullness_threshold
-        ? (pet.evolution_started_at ?? now)
-        : null;
+    if (pet.life_stage === "baby" && status === "alive") {
+      if (fullnessRatio >= pet.evolution_fullness_threshold) {
+        evolutionStartedAt ??= pet.state_calculated_at;
+        const evolutionTime =
+          evolutionStartedAt + pet.evolution_hold_seconds * 1000;
+        if (now >= evolutionTime) {
+          lifeStage = "adult";
+          evolutionStage = "stage_2";
+        }
+      } else {
+        evolutionStartedAt = null;
+      }
+    } else if (status === "dead") {
+      evolutionStartedAt = null;
+    }
 
     await env.DB.prepare(
       `UPDATE anigram_pets
@@ -242,8 +258,10 @@ async function settlePet(
               zero_started_at = ?4,
               evolution_started_at = ?5,
               died_at = ?6,
+              life_stage = ?7,
+              evolution_stage = ?8,
               updated_at = ?1
-        WHERE owner_user_id = ?7`,
+        WHERE owner_user_id = ?9`,
     )
       .bind(
         now,
@@ -252,6 +270,8 @@ async function settlePet(
         zeroStartedAt,
         evolutionStartedAt,
         diedAt,
+        lifeStage,
+        evolutionStage,
         ownerUserId,
       )
       .run();
@@ -264,6 +284,32 @@ async function settlePet(
         status,
         "starvation_grace_elapsed",
         diedAt ?? now,
+      );
+    }
+    if (pet.life_stage !== lifeStage) {
+      const evolvedAt =
+        evolutionStartedAt === null
+          ? now
+          : evolutionStartedAt + pet.evolution_hold_seconds * 1000;
+      await recordStateHistory(
+        env,
+        pet,
+        "life_stage_changed",
+        pet.life_stage,
+        lifeStage,
+        "evolution_hold_elapsed",
+        evolvedAt,
+      );
+    }
+    if (pet.evolution_stage !== evolutionStage) {
+      await recordStateHistory(
+        env,
+        pet,
+        "evolution_stage_changed",
+        pet.evolution_stage,
+        evolutionStage,
+        "evolution_hold_elapsed",
+        now,
       );
     }
     pet = await loadPet(env, ownerUserId);
@@ -315,6 +361,32 @@ function serializePet(pet: AnigramPetRow, now = Date.now()) {
           ),
         )
       : null;
+  const evolutionDurationMilliseconds = pet.evolution_hold_seconds * 1000;
+  const evolutionElapsedMilliseconds =
+    pet.life_stage === "baby" && pet.evolution_started_at !== null
+      ? Math.max(0, now - pet.evolution_started_at)
+      : null;
+  const evolutionProgressPercent =
+    pet.life_stage === "adult"
+      ? 100
+      : evolutionElapsedMilliseconds === null
+        ? 0
+        : evolutionDurationMilliseconds <= 0
+          ? 100
+          : percentage(
+              evolutionElapsedMilliseconds,
+              evolutionDurationMilliseconds,
+            );
+  const evolutionRemainingSeconds =
+    pet.life_stage === "baby" && evolutionElapsedMilliseconds !== null
+      ? Math.max(
+          0,
+          Math.ceil(
+            (evolutionDurationMilliseconds - evolutionElapsedMilliseconds) /
+              1000,
+          ),
+        )
+      : null;
   const motion =
     pet.status === "dead"
       ? "dead"
@@ -347,6 +419,13 @@ function serializePet(pet: AnigramPetRow, now = Date.now()) {
     zeroStartedAt: pet.zero_started_at,
     starvationGraceSeconds: pet.starvation_grace_seconds,
     starvationRemainingSeconds,
+    evolutionStartedAt: pet.evolution_started_at,
+    evolutionThresholdPercent: Math.round(
+      pet.evolution_fullness_threshold * 100,
+    ),
+    evolutionHoldSeconds: pet.evolution_hold_seconds,
+    evolutionProgressPercent,
+    evolutionRemainingSeconds,
     diedAt: pet.died_at,
     updatedAt: pet.updated_at,
     displayState: {
@@ -360,6 +439,84 @@ function serializePet(pet: AnigramPetRow, now = Date.now()) {
       motion,
     },
   };
+}
+
+/**
+ * 管理者向けの進化フロー技術検証。
+ * 満腹状態の開始と維持期間経過を分け、通常の状態計算で成体へ遷移させる。
+ */
+export async function runAnigramEvolutionValidation(
+  env: AnigramEnv,
+  ownerUserId: string,
+  action: AnigramEvolutionValidationAction,
+) {
+  await ensurePet(env, ownerUserId);
+  const pet = await settlePet(env, ownerUserId);
+  const now = Date.now();
+
+  if (action === "prepare") {
+    await env.DB.prepare(
+      `UPDATE anigram_pets
+          SET status = 'alive',
+              life_stage = 'baby',
+              evolution_stage = 'base',
+              fullness_points = ?2,
+              state_calculated_at = ?1,
+              last_fed_at = ?1,
+              hatching_started_at = NULL,
+              hatched_at = COALESCE(hatched_at, ?1),
+              zero_started_at = NULL,
+              evolution_started_at = ?1,
+              died_at = NULL,
+              updated_at = ?1
+        WHERE id = ?3 AND owner_user_id = ?4`,
+    )
+      .bind(now, pet.max_fullness_points, pet.id, ownerUserId)
+      .run();
+    await recordStateHistory(
+      env,
+      pet,
+      "evolution_validation_prepared",
+      `${pet.life_stage}:${pet.evolution_stage}`,
+      "baby:base",
+      "manual_validation_prepare",
+      now,
+    );
+    return serializePet(await loadPet(env, ownerUserId), now);
+  }
+
+  if (
+    action === "advance_hold" &&
+    pet.status === "alive" &&
+    pet.life_stage === "baby" &&
+    pet.evolution_started_at !== null &&
+    pet.fullness_points / pet.max_fullness_points >=
+      pet.evolution_fullness_threshold
+  ) {
+    const elapsedMilliseconds = pet.evolution_hold_seconds * 1000 + 1_000;
+    await env.DB.prepare(
+      `UPDATE anigram_pets
+          SET evolution_started_at = evolution_started_at - ?1,
+              state_calculated_at = ?2,
+              updated_at = ?3
+        WHERE id = ?4 AND owner_user_id = ?5`,
+    )
+      .bind(elapsedMilliseconds, now - 1_000, now, pet.id, ownerUserId)
+      .run();
+    const settled = await settlePet(env, ownerUserId, now);
+    await recordStateHistory(
+      env,
+      settled,
+      "evolution_validation_advanced",
+      pet.evolution_stage,
+      settled.evolution_stage,
+      "manual_validation_advance_hold",
+      now,
+    );
+    return serializePet(settled, now);
+  }
+
+  throw new AnigramGameError("INVALID_INPUT");
 }
 
 /**
@@ -575,6 +732,7 @@ export async function addAnigramGrowthEvent(
   let hatchingStartedAt = pet.hatching_started_at;
   let lastFedAt = pet.last_fed_at;
   let zeroStartedAt = pet.zero_started_at;
+  let evolutionStartedAt = pet.evolution_started_at;
 
   if (pet.status === "alive" && pet.life_stage === "egg") {
     appliedTarget = "hatch";
@@ -593,6 +751,13 @@ export async function addAnigramGrowthEvent(
     nextFullnessPoints = pet.fullness_points + appliedPoints;
     if (appliedPoints > 0) lastFedAt = now;
     if (nextFullnessPoints > 0) zeroStartedAt = null;
+    if (pet.life_stage === "baby") {
+      evolutionStartedAt =
+        nextFullnessPoints / pet.max_fullness_points >=
+        pet.evolution_fullness_threshold
+          ? (evolutionStartedAt ?? now)
+          : null;
+    }
   }
   appliedPoints = Math.max(0, appliedPoints);
 
@@ -625,9 +790,10 @@ export async function addAnigramGrowthEvent(
               hatching_started_at = ?5,
               last_fed_at = ?6,
               zero_started_at = ?7,
+              evolution_started_at = ?8,
               state_calculated_at = ?1,
               updated_at = ?1
-        WHERE id = ?8 AND owner_user_id = ?9`,
+        WHERE id = ?9 AND owner_user_id = ?10`,
     ).bind(
       now,
       nextLifeStage,
@@ -636,6 +802,7 @@ export async function addAnigramGrowthEvent(
       hatchingStartedAt,
       lastFedAt,
       zeroStartedAt,
+      evolutionStartedAt,
       pet.id,
       ownerUserId,
     ),

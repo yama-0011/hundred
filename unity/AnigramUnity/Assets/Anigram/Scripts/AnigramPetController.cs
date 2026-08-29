@@ -25,6 +25,7 @@ namespace Hundred.Anigram
         [SerializeField] private Color hungryColor = new(0.48f, 0.40f, 0.35f);
         [SerializeField] private Color normalColor = new(0.64f, 0.52f, 0.42f);
         [SerializeField] private Color fullColor = new(0.48f, 0.88f, 0.76f);
+        [SerializeField] private Color adultColor = new(0.36f, 0.70f, 0.62f);
         [SerializeField] private Color deadColor = new(0.30f, 0.31f, 0.31f);
 
         private readonly PetViewState state = new();
@@ -78,7 +79,7 @@ namespace Hundred.Anigram
             transform.position = initialPosition + Vector3.up * offset;
 
             var pulse = 1f + Mathf.Sin(Time.time * speed) * 0.018f;
-            transform.localScale = initialScale * pulse;
+            transform.localScale = initialScale * (ResolveLifeStageScale() * pulse);
         }
 
         /// <summary>
@@ -113,7 +114,7 @@ namespace Hundred.Anigram
         private void ApplyVisualState()
         {
             transform.position = initialPosition;
-            transform.localScale = initialScale;
+            transform.localScale = initialScale * ResolveLifeStageScale();
             var showEgg = IsBeforeHatching();
             if (eggVisual != null)
             {
@@ -151,12 +152,33 @@ namespace Hundred.Anigram
                 return deadColor;
             }
 
+            Color fullnessColor;
             if (state.fullnessPercent <= 25f)
             {
-                return hungryColor;
+                fullnessColor = hungryColor;
+            }
+            else
+            {
+                fullnessColor = state.fullnessPercent >= 80f ? fullColor : normalColor;
             }
 
-            return state.fullnessPercent >= 80f ? fullColor : normalColor;
+            return IsAdult()
+                ? Color.Lerp(fullnessColor, adultColor, 0.45f)
+                : fullnessColor;
+        }
+
+        private float ResolveLifeStageScale()
+        {
+            return IsAdult() ? 1.18f : 1f;
+        }
+
+        private bool IsAdult()
+        {
+            return string.Equals(state.lifeStage, "adult", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(
+                    state.evolutionStage,
+                    "stage_2",
+                    StringComparison.OrdinalIgnoreCase);
         }
 
         private bool IsDead()

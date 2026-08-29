@@ -86,7 +86,9 @@ import {
   getAnigramPetState,
   listAnigramGrowthEvents,
   resetAnigramPetForValidation,
+  runAnigramEvolutionValidation,
   runAnigramStarvationValidation,
+  type AnigramEvolutionValidationAction,
   type AnigramStarvationValidationAction,
 } from "./anigram/game";
 
@@ -564,6 +566,46 @@ export default {
           );
         }
         return json(request, env, { error: "死亡フローを検証できませんでした" }, 500);
+      }
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/anigram/pet/evolution/validation"
+    ) {
+      try {
+        const { ownerUserId, groups } = await verifyCognitoAccessToken(request, env);
+        requireAnigramValidationAdmin(env, ownerUserId, groups);
+        const body = (await request.json()) as { action?: unknown };
+        const action = body.action;
+        if (action !== "prepare" && action !== "advance_hold") {
+          throw new AnigramGameError("INVALID_INPUT");
+        }
+        return json(request, env, {
+          pet: await runAnigramEvolutionValidation(
+            env,
+            ownerUserId,
+            action as AnigramEvolutionValidationAction,
+          ),
+        });
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        if (error instanceof AnigramGameError) {
+          return json(
+            request,
+            env,
+            {
+              error:
+                error.code === "FORBIDDEN"
+                  ? "管理者権限が必要です"
+                  : "現在の育成状態ではこの検証を実行できません",
+            },
+            error.code === "FORBIDDEN" ? 403 : 400,
+          );
+        }
+        return json(request, env, { error: "進化フローを検証できませんでした" }, 500);
       }
     }
 

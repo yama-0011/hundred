@@ -27,6 +27,11 @@ export type AnigramPetState = {
   zeroStartedAt: number | null
   starvationGraceSeconds: number
   starvationRemainingSeconds: number | null
+  evolutionStartedAt: number | null
+  evolutionThresholdPercent: number
+  evolutionHoldSeconds: number
+  evolutionProgressPercent: number
+  evolutionRemainingSeconds: number | null
   diedAt: number | null
   updatedAt: number
   canManageValidation: boolean
@@ -115,6 +120,22 @@ export async function runAnigramStarvationValidation(
   const response = await requestAnigramApi<{
     pet: Omit<AnigramPetState, 'canManageValidation'>
   }>('/api/anigram/pet/starvation/validation', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action }),
+  })
+  return { ...response.pet, canManageValidation: true }
+}
+
+export type AnigramEvolutionValidationAction = 'prepare' | 'advance_hold'
+
+/** 管理者向け。満腹状態の開始・維持期間経過・成体表示を段階的に検証する。 */
+export async function runAnigramEvolutionValidation(
+  action: AnigramEvolutionValidationAction,
+) {
+  const response = await requestAnigramApi<{
+    pet: Omit<AnigramPetState, 'canManageValidation'>
+  }>('/api/anigram/pet/evolution/validation', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action }),
