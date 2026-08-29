@@ -42,8 +42,13 @@ export interface AnigramGrowthEventInput {
   occurredAt?: number;
 }
 
+export type AnigramStarvationValidationAction =
+  | "prepare"
+  | "advance_to_zero"
+  | "advance_grace";
+
 export class AnigramGameError extends Error {
-  constructor(readonly code: "INVALID_INPUT" | "NOT_FOUND") {
+  constructor(readonly code: "INVALID_INPUT" | "NOT_FOUND" | "FORBIDDEN") {
     super(code);
     this.name = "AnigramGameError";
   }
@@ -300,6 +305,16 @@ function serializePet(pet: AnigramPetRow, now = Date.now()) {
   const fullnessPercent = beforeHatching
     ? null
     : percentage(pet.fullness_points, pet.max_fullness_points);
+  const starvationRemainingSeconds =
+    pet.status === "alive" && pet.zero_started_at !== null
+      ? Math.max(
+          0,
+          Math.ceil(
+            (pet.zero_started_at + pet.starvation_grace_seconds * 1000 - now) /
+              1000,
+          ),
+        )
+      : null;
   const motion =
     pet.status === "dead"
       ? "dead"
@@ -330,6 +345,8 @@ function serializePet(pet: AnigramPetRow, now = Date.now()) {
     hatchingRemainingSeconds,
     hatchedAt: pet.hatched_at,
     zeroStartedAt: pet.zero_started_at,
+    starvationGraceSeconds: pet.starvation_grace_seconds,
+    starvationRemainingSeconds,
     diedAt: pet.died_at,
     updatedAt: pet.updated_at,
     displayState: {
@@ -343,6 +360,119 @@ function serializePet(pet: AnigramPetRow, now = Date.now()) {
       motion,
     },
   };
+}
+
+/**
+ * 管理者向けの死亡フロー技術検証。
+ * ブラウザ時計や未来時刻を正本にせず、D1の計算基準時刻だけを過去へ移動する。
+ */
+export async function runAnigramStarvationValidation(
+  env: AnigramEnv,
+  ownerUserId: string,
+  action: AnigramStarvationValidationAction,
+) {
+  await ensurePet(env, ownerUserId);
+  let pet = await settlePet(env, ownerUserId);
+  const now = Date.now();
+
+  if (action === "prepare") {
+    const preparedFullness = pet.max_fullness_points * 0.01;
+    await env.DB.prepare(
+      `UPDATE anigram_pets
+          SET status = 'alive',
+              life_stage = 'baby',
+              fullness_points = ?1,
+              state_calculated_at = ?2,
+              hatching_started_at = NULL,
+              hatched_at = COALESCE(hatched_at, ?2),
+              zero_started_at = NULL,
+              evolution_started_at = NULL,
+              died_at = NULL,
+              updated_at = ?2
+        WHERE id = ?3 AND owner_user_id = ?4`,
+    )
+      .bind(preparedFullness, now, pet.id, ownerUserId)
+      .run();
+    await recordStateHistory(
+      env,
+      pet,
+      "starvation_validation_prepared",
+      String(pet.fullness_points),
+      String(preparedFullness),
+      "manual_validation_prepare",
+      now,
+    );
+    return serializePet(await loadPet(env, ownerUserId), now);
+  }
+
+  if (
+    pet.status !== "alive" ||
+    (pet.life_stage !== "baby" && pet.life_stage !== "adult")
+  ) {
+    throw new AnigramGameError("INVALID_INPUT");
+  }
+
+  if (action === "advance_to_zero") {
+    if (pet.fullness_points <= 0) {
+      return serializePet(pet, now);
+    }
+    const decayPerHour =
+      pet.max_fullness_points * pet.fullness_decay_rate_per_hour;
+    if (decayPerHour <= 0) {
+      throw new AnigramGameError("INVALID_INPUT");
+    }
+    const elapsedMilliseconds = Math.ceil(
+      (pet.fullness_points / decayPerHour) * 3_600_000,
+    );
+    await env.DB.prepare(
+      `UPDATE anigram_pets
+          SET state_calculated_at = state_calculated_at - ?1,
+              updated_at = ?2
+        WHERE id = ?3 AND owner_user_id = ?4`,
+    )
+      .bind(elapsedMilliseconds, now, pet.id, ownerUserId)
+      .run();
+    const settled = await settlePet(env, ownerUserId, now);
+    await recordStateHistory(
+      env,
+      settled,
+      "starvation_validation_advanced",
+      String(pet.fullness_points),
+      String(settled.fullness_points),
+      "manual_validation_advance_to_zero",
+      now,
+    );
+    return serializePet(settled, now);
+  }
+
+  if (action === "advance_grace") {
+    if (pet.zero_started_at === null || pet.fullness_points > 0) {
+      throw new AnigramGameError("INVALID_INPUT");
+    }
+    const elapsedMilliseconds = pet.starvation_grace_seconds * 1000 + 1_000;
+    await env.DB.prepare(
+      `UPDATE anigram_pets
+          SET state_calculated_at = state_calculated_at - ?1,
+              zero_started_at = zero_started_at - ?1,
+              updated_at = ?2
+        WHERE id = ?3 AND owner_user_id = ?4`,
+    )
+      .bind(elapsedMilliseconds, now, pet.id, ownerUserId)
+      .run();
+    const settled = await settlePet(env, ownerUserId, now);
+    await recordStateHistory(
+      env,
+      settled,
+      "starvation_validation_advanced",
+      "alive",
+      settled.status,
+      "manual_validation_advance_grace",
+      now,
+    );
+    return serializePet(settled, now);
+  }
+
+  throw new AnigramGameError("INVALID_INPUT");
 }
 
 export async function getAnigramPetState(

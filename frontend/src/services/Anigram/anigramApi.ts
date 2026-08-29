@@ -25,8 +25,11 @@ export type AnigramPetState = {
   hatchingRemainingSeconds: number | null
   hatchedAt: number | null
   zeroStartedAt: number | null
+  starvationGraceSeconds: number
+  starvationRemainingSeconds: number | null
   diedAt: number | null
   updatedAt: number
+  canManageValidation: boolean
   displayState: {
     species: string
     status: AnigramLifeStatus
@@ -57,16 +60,28 @@ async function requestAnigramApi<T>(path: string, options: RequestInit = {}) {
     },
   })
   if (!response.ok) {
-    throw new Error(response.status === 401 ? 'AUTH_REQUIRED' : 'API_FAILED')
+    throw new Error(
+      response.status === 401
+        ? 'AUTH_REQUIRED'
+        : response.status === 403
+          ? 'ADMIN_REQUIRED'
+          : 'API_FAILED',
+    )
   }
   return (await response.json()) as T
 }
 
 export async function getAnigramPet() {
-  const response = await requestAnigramApi<{ pet: AnigramPetState }>(
+  const response = await requestAnigramApi<{
+    pet: Omit<AnigramPetState, 'canManageValidation'>
+    validation?: { allowed: boolean }
+  }>(
     '/api/anigram/pet',
   )
-  return response.pet
+  return {
+    ...response.pet,
+    canManageValidation: response.validation?.allowed ?? false,
+  }
 }
 
 /** Phase 1の動作確認専用。公開版では通常の餌獲得導線へ置き換える。 */
@@ -76,7 +91,7 @@ export async function addAnigramValidationGrowthEvent() {
     appliedPoints: number
     pet: AnigramPetState
   }>('/api/anigram/pet/growth-events/validation', { method: 'POST' })
-  return response.pet
+  return { ...response.pet, canManageValidation: true }
 }
 
 /** Phase 1の孵化検証専用。成長履歴を残したまま現在のペットを卵へ戻す。 */
@@ -85,5 +100,24 @@ export async function resetAnigramPetForValidation() {
     '/api/anigram/pet/reset/validation',
     { method: 'POST' },
   )
-  return response.pet
+  return { ...response.pet, canManageValidation: true }
+}
+
+export type AnigramStarvationValidationAction =
+  | 'prepare'
+  | 'advance_to_zero'
+  | 'advance_grace'
+
+/** 管理者向け。満腹度低下・死亡猶予・死亡表示を段階的に検証する。 */
+export async function runAnigramStarvationValidation(
+  action: AnigramStarvationValidationAction,
+) {
+  const response = await requestAnigramApi<{
+    pet: Omit<AnigramPetState, 'canManageValidation'>
+  }>('/api/anigram/pet/starvation/validation', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action }),
+  })
+  return { ...response.pet, canManageValidation: true }
 }

@@ -86,6 +86,8 @@ import {
   getAnigramPetState,
   listAnigramGrowthEvents,
   resetAnigramPetForValidation,
+  runAnigramStarvationValidation,
+  type AnigramStarvationValidationAction,
 } from "./anigram/game";
 
 interface Env
@@ -96,6 +98,32 @@ interface Env
     GeminiEnv {
   COGNITO_USER_POOL_ID: string;
   COGNITO_USER_POOL_CLIENT_ID: string;
+  ANIGRAM_ADMIN_USER_IDS?: string;
+}
+
+function canManageAnigramValidation(
+  env: Env,
+  ownerUserId: string,
+  groups: string[],
+) {
+  const allowedUserIds = (env.ANIGRAM_ADMIN_USER_IDS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return (
+    groups.some((group) => group.toLowerCase() === "admin") ||
+    allowedUserIds.includes(ownerUserId)
+  );
+}
+
+function requireAnigramValidationAdmin(
+  env: Env,
+  ownerUserId: string,
+  groups: string[],
+) {
+  if (!canManageAnigramValidation(env, ownerUserId, groups)) {
+    throw new AnigramGameError("FORBIDDEN");
+  }
 }
 
 function handleInstagramPublicationError(
@@ -399,9 +427,12 @@ export default {
       url.pathname === "/api/anigram/pet"
     ) {
       try {
-        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        const { ownerUserId, groups } = await verifyCognitoAccessToken(request, env);
         return json(request, env, {
           pet: await getAnigramPetState(env, ownerUserId),
+          validation: {
+            allowed: canManageAnigramValidation(env, ownerUserId, groups),
+          },
         });
       } catch (error) {
         if (error instanceof CognitoAuthenticationError) {
@@ -438,7 +469,8 @@ export default {
       url.pathname === "/api/anigram/pet/growth-events/validation"
     ) {
       try {
-        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        const { ownerUserId, groups } = await verifyCognitoAccessToken(request, env);
+        requireAnigramValidationAdmin(env, ownerUserId, groups);
         return json(
           request,
           env,
@@ -454,7 +486,17 @@ export default {
           return json(request, env, { error: "認証が必要です" }, 401);
         }
         if (error instanceof AnigramGameError) {
-          return json(request, env, { error: "成長イベントを反映できませんでした" }, 400);
+          return json(
+            request,
+            env,
+            {
+              error:
+                error.code === "FORBIDDEN"
+                  ? "管理者権限が必要です"
+                  : "成長イベントを反映できませんでした",
+            },
+            error.code === "FORBIDDEN" ? 403 : 400,
+          );
         }
         return json(request, env, { error: "ごはんを反映できませんでした" }, 500);
       }
@@ -465,7 +507,8 @@ export default {
       url.pathname === "/api/anigram/pet/reset/validation"
     ) {
       try {
-        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        const { ownerUserId, groups } = await verifyCognitoAccessToken(request, env);
+        requireAnigramValidationAdmin(env, ownerUserId, groups);
         return json(request, env, {
           pet: await resetAnigramPetForValidation(env, ownerUserId),
         });
@@ -473,7 +516,54 @@ export default {
         if (error instanceof CognitoAuthenticationError) {
           return json(request, env, { error: "認証が必要です" }, 401);
         }
+        if (error instanceof AnigramGameError && error.code === "FORBIDDEN") {
+          return json(request, env, { error: "管理者権限が必要です" }, 403);
+        }
         return json(request, env, { error: "育成状態を初期化できませんでした" }, 500);
+      }
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/anigram/pet/starvation/validation"
+    ) {
+      try {
+        const { ownerUserId, groups } = await verifyCognitoAccessToken(request, env);
+        requireAnigramValidationAdmin(env, ownerUserId, groups);
+        const body = (await request.json()) as { action?: unknown };
+        const action = body.action;
+        if (
+          action !== "prepare" &&
+          action !== "advance_to_zero" &&
+          action !== "advance_grace"
+        ) {
+          throw new AnigramGameError("INVALID_INPUT");
+        }
+        return json(request, env, {
+          pet: await runAnigramStarvationValidation(
+            env,
+            ownerUserId,
+            action as AnigramStarvationValidationAction,
+          ),
+        });
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        if (error instanceof AnigramGameError) {
+          return json(
+            request,
+            env,
+            {
+              error:
+                error.code === "FORBIDDEN"
+                  ? "管理者権限が必要です"
+                  : "現在の育成状態ではこの検証を実行できません",
+            },
+            error.code === "FORBIDDEN" ? 403 : 400,
+          );
+        }
+        return json(request, env, { error: "死亡フローを検証できませんでした" }, 500);
       }
     }
 

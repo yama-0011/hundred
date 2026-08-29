@@ -7,6 +7,8 @@ import {
   addAnigramValidationGrowthEvent,
   getAnigramPet,
   resetAnigramPetForValidation,
+  runAnigramStarvationValidation,
+  type AnigramStarvationValidationAction,
   type AnigramPetState,
 } from '../../services/Anigram/anigramApi'
 import '../../styles/Anigram/anigram.css'
@@ -32,7 +34,7 @@ function formatDateTime(value: number | null) {
 
 function resolveStageMessage(pet: AnigramPetState | null) {
   if (!pet) return '準備中です'
-  if (pet.status === 'dead') return '眠っています'
+  if (pet.status === 'dead') return '死亡しています'
   if (pet.lifeStage === 'egg') return '卵を温めています'
   if (pet.lifeStage === 'hatching') return 'もうすぐ孵化します'
   if (pet.lifeStage === 'baby') return '元気な幼体です'
@@ -45,6 +47,7 @@ function AnigramPage() {
   const [loading, setLoading] = useState(true)
   const [feeding, setFeeding] = useState(false)
   const [resetting, setResetting] = useState(false)
+  const [validatingStarvation, setValidatingStarvation] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [motion, setMotion] = useState<AnigramDisplayState['motion'] | null>(null)
   const petRef = useRef<AnigramPetState | null>(null)
@@ -94,7 +97,8 @@ function AnigramPage() {
   }, [showGrowthMotion])
 
   useEffect(() => {
-    void loadPet(true)
+    const timeout = window.setTimeout(() => void loadPet(true), 0)
+    return () => window.clearTimeout(timeout)
   }, [loadPet])
 
   useEffect(() => {
@@ -167,6 +171,38 @@ function AnigramPage() {
     }
   }
 
+  const validateStarvation = async (
+    action: AnigramStarvationValidationAction,
+  ) => {
+    if (!pet || validatingStarvation) return
+    const messages = {
+      prepare: '死亡検証を開始し、幼体の満腹度を1%にします。よろしいですか？',
+      advance_to_zero:
+        '満腹度が0になるまでの時間経過をD1へ反映します。0になっても即死亡しないことを確認します。',
+      advance_grace:
+        '設定されている死亡猶予期間を経過させ、死亡状態へ移行します。よろしいですか？',
+    }
+    if (!window.confirm(messages[action])) return
+
+    setValidatingStarvation(true)
+    try {
+      const nextPet = await runAnigramStarvationValidation(action)
+      petRef.current = nextPet
+      setMotion(null)
+      setPet(nextPet)
+      setError(null)
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error &&
+          requestError.message === 'ADMIN_REQUIRED'
+          ? '死亡フローの検証には管理者権限が必要です。'
+          : '死亡フローを検証できませんでした。現在の育成状態を確認してください。',
+      )
+    } finally {
+      setValidatingStarvation(false)
+    }
+  }
+
   const isBeforeHatching =
     pet?.lifeStage === 'egg' || pet?.lifeStage === 'hatching'
   const progressValue = isBeforeHatching
@@ -224,30 +260,65 @@ function AnigramPage() {
             <span style={{ width: `${progressValue}%` }} />
           </div>
 
-          <div className="anigram-status__actions">
-            <button
-              type="button"
-              onClick={() => void feed()}
-              disabled={
-                loading ||
-                feeding ||
-                resetting ||
-                !pet ||
-                pet.lifeStage === 'hatching' ||
-                pet.status === 'dead'
-              }
-            >
-              {feeding ? '反映中です…' : actionLabel}
-            </button>
-            <button
-              type="button"
-              className="anigram-button--secondary"
-              onClick={() => void resetPet()}
-              disabled={loading || feeding || resetting || !pet}
-            >
-              {resetting ? '初期化中です…' : '育成状態を卵へ戻す'}
-            </button>
-          </div>
+          {pet?.canManageValidation ? (
+            <details className="anigram-validation">
+              <summary>管理者向け技術検証</summary>
+              <div className="anigram-status__actions">
+                <button
+                  type="button"
+                  onClick={() => void feed()}
+                  disabled={
+                    loading ||
+                    feeding ||
+                    resetting ||
+                    validatingStarvation ||
+                    !pet ||
+                    pet.lifeStage === 'hatching' ||
+                    pet.status === 'dead'
+                  }
+                >
+                  {feeding ? '反映中です…' : actionLabel}
+                </button>
+                {pet.status !== 'dead' ? (
+                  <button
+                    type="button"
+                    className="anigram-button--warning"
+                    onClick={() =>
+                      void validateStarvation(
+                        pet.zeroStartedAt !== null
+                          ? 'advance_grace'
+                          : pet.fullnessPoints !== null &&
+                              pet.fullnessPoints <= 1
+                            ? 'advance_to_zero'
+                            : 'prepare',
+                      )
+                    }
+                    disabled={
+                      loading || feeding || resetting || validatingStarvation
+                    }
+                  >
+                    {validatingStarvation
+                      ? '検証状態を反映中です…'
+                      : pet.zeroStartedAt !== null
+                        ? '死亡猶予を経過させる'
+                        : pet.fullnessPoints !== null && pet.fullnessPoints <= 1
+                          ? '満腹度0まで時間を進める'
+                          : '死亡検証を開始（満腹度1%）'}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="anigram-button--secondary"
+                  onClick={() => void resetPet()}
+                  disabled={
+                    loading || feeding || resetting || validatingStarvation || !pet
+                  }
+                >
+                  {resetting ? '初期化中です…' : '育成状態を卵へ戻す'}
+                </button>
+              </div>
+            </details>
+          ) : null}
 
           {error ? <p className="anigram-status__error">{error}</p> : null}
           {pet?.lifeStage === 'hatching' ? (
@@ -260,9 +331,20 @@ function AnigramPage() {
               最終給餌: {formatDateTime(pet.lastFedAt)}
             </p>
           ) : null}
+          {pet?.zeroStartedAt !== null && pet?.status === 'alive' ? (
+            <p className="anigram-status__warning" aria-live="polite">
+              満腹度0です。死亡までの猶予は残り約
+              {Math.ceil((pet.starvationRemainingSeconds ?? 0) / 60)}分です。
+            </p>
+          ) : null}
+          {pet?.status === 'dead' ? (
+            <p className="anigram-status__warning" aria-live="polite">
+              死亡日時: {formatDateTime(pet.diedAt)}
+            </p>
+          ) : null}
           <p className="anigram-status__note">
             Instagram反応はWorkerが定期取得し、D1を経由して自動反映します。
-            これらのボタンはPhase 1の動作確認用です。初期化しても反応履歴は残ります。
+            管理者向け操作で初期化しても反応履歴は残ります。
           </p>
         </aside>
       </section>

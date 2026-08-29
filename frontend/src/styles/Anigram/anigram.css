@@ -161,6 +161,22 @@
   margin-top: 24px;
 }
 
+.anigram-validation {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid rgb(255 255 255 / 9%);
+}
+
+.anigram-validation summary {
+  color: #9aaba5;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.anigram-validation .anigram-status__actions {
+  margin-top: 16px;
+}
+
 .anigram-status button {
   min-height: 48px;
   border: 1px solid #72d7be;
@@ -188,6 +204,12 @@
   border-color: rgb(255 255 255 / 14%);
 }
 
+.anigram-status .anigram-button--warning {
+  border-color: rgb(236 173 91 / 45%);
+  background: rgb(105 71 29 / 36%);
+  color: #efc98f;
+}
+
 .anigram-status__note {
   margin: 20px 0 0;
   color: #74817d;
@@ -210,6 +232,17 @@
   margin: 16px 0 0;
   color: #8fa19b;
   font-size: 12px;
+}
+
+.anigram-status__warning {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgb(236 173 91 / 22%);
+  border-radius: 10px;
+  background: rgb(105 71 29 / 18%);
+  color: #e1bd87;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 @media (max-width: 1050px) {
