@@ -18,6 +18,7 @@ namespace Hundred.Anigram
             public string motion = "egg_idle";
             public string evolutionStage = "base";
             public float hatchProgressPercent = 0f;
+            public float hatchingProgressPercent = 0f;
             public float fullnessPercent = 0f;
         }
 
@@ -30,6 +31,7 @@ namespace Hundred.Anigram
         private Renderer[] animalRenderers = Array.Empty<Renderer>();
         private GameObject eggVisual;
         private Renderer eggRenderer;
+        private GameObject[] eggCracks = Array.Empty<GameObject>();
         private Vector3 initialPosition;
         private Quaternion initialRotation;
         private Vector3 initialScale;
@@ -95,6 +97,10 @@ namespace Hundred.Anigram
             {
                 JsonUtility.FromJsonOverwrite(json, state);
                 state.hatchProgressPercent = Mathf.Clamp(state.hatchProgressPercent, 0f, 100f);
+                state.hatchingProgressPercent = Mathf.Clamp(
+                    state.hatchingProgressPercent,
+                    0f,
+                    100f);
                 state.fullnessPercent = Mathf.Clamp(state.fullnessPercent, 0f, 100f);
                 ApplyVisualState();
             }
@@ -124,6 +130,7 @@ namespace Hundred.Anigram
             if (showEgg)
             {
                 ApplyEggColor();
+                ApplyEggCracks();
                 return;
             }
 
@@ -184,6 +191,75 @@ namespace Hundred.Anigram
             if (eggCollider != null)
             {
                 Destroy(eggCollider);
+            }
+
+            eggCracks = new[]
+            {
+                CreateEggCrack(
+                    "Crack Top",
+                    new Vector3(-0.02f, 0.22f, -0.48f),
+                    new Vector3(0.035f, 0.22f, 0.018f),
+                    -28f),
+                CreateEggCrack(
+                    "Crack Middle",
+                    new Vector3(0.055f, 0.06f, -0.5f),
+                    new Vector3(0.035f, 0.19f, 0.018f),
+                    34f),
+                CreateEggCrack(
+                    "Crack Bottom",
+                    new Vector3(-0.015f, -0.08f, -0.49f),
+                    new Vector3(0.035f, 0.16f, 0.018f),
+                    -24f),
+            };
+        }
+
+        private GameObject CreateEggCrack(
+            string crackName,
+            Vector3 localPosition,
+            Vector3 localScale,
+            float angle)
+        {
+            var crack = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            crack.name = crackName;
+            crack.transform.SetParent(eggVisual.transform, false);
+            crack.transform.localPosition = localPosition;
+            crack.transform.localScale = localScale;
+            crack.transform.localRotation = Quaternion.Euler(0f, 0f, angle);
+
+            var shader = Shader.Find("Universal Render Pipeline/Unlit")
+                ?? Shader.Find("Unlit/Color")
+                ?? Shader.Find("Standard");
+            crack.GetComponent<Renderer>().material = new Material(shader)
+            {
+                name = $"Anigram {crackName}",
+                color = new Color(0.16f, 0.18f, 0.17f),
+            };
+
+            var crackCollider = crack.GetComponent<Collider>();
+            if (crackCollider != null)
+            {
+                Destroy(crackCollider);
+            }
+            crack.SetActive(false);
+            return crack;
+        }
+
+        private void ApplyEggCracks()
+        {
+            var isHatching = string.Equals(
+                state.lifeStage,
+                "hatching",
+                StringComparison.OrdinalIgnoreCase);
+            var visibleCracks = isHatching
+                ? Mathf.Clamp(
+                    Mathf.CeilToInt((state.hatchingProgressPercent / 100f) * eggCracks.Length),
+                    1,
+                    eggCracks.Length)
+                : 0;
+
+            for (var index = 0; index < eggCracks.Length; index += 1)
+            {
+                eggCracks[index].SetActive(index < visibleCracks);
             }
         }
 

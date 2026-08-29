@@ -21,6 +21,8 @@ export type AnigramPetState = {
   fullnessPercent: number | null
   lastFedAt: number | null
   hatchingStartedAt: number | null
+  hatchingProgressPercent: number | null
+  hatchingRemainingSeconds: number | null
   hatchedAt: number | null
   zeroStartedAt: number | null
   diedAt: number | null
@@ -31,6 +33,7 @@ export type AnigramPetState = {
     lifeStage: AnigramLifeStage
     evolutionStage: string
     hatchProgressPercent: number | null
+    hatchingProgressPercent: number | null
     fullnessPercent: number | null
     motion: 'egg_idle' | 'hatching' | 'idle' | 'dead'
   }

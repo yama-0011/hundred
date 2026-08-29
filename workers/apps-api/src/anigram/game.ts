@@ -267,12 +267,36 @@ async function settlePet(
   return pet;
 }
 
-function serializePet(pet: AnigramPetRow) {
+function serializePet(pet: AnigramPetRow, now = Date.now()) {
   const beforeHatching =
     pet.life_stage === "egg" || pet.life_stage === "hatching";
   const hatchProgressPercent = beforeHatching
     ? percentage(pet.hatch_points, pet.hatch_required_points)
     : null;
+  const hatchingElapsedMilliseconds =
+    pet.life_stage === "hatching" && pet.hatching_started_at !== null
+      ? Math.max(0, now - pet.hatching_started_at)
+      : null;
+  const hatchingDurationMilliseconds = pet.hatching_duration_seconds * 1000;
+  const hatchingProgressPercent =
+    hatchingElapsedMilliseconds === null
+      ? null
+      : hatchingDurationMilliseconds <= 0
+        ? 100
+        : percentage(
+            hatchingElapsedMilliseconds,
+            hatchingDurationMilliseconds,
+          );
+  const hatchingRemainingSeconds =
+    hatchingElapsedMilliseconds === null
+      ? null
+      : Math.max(
+          0,
+          Math.ceil(
+            (hatchingDurationMilliseconds - hatchingElapsedMilliseconds) /
+              1000,
+          ),
+        );
   const fullnessPercent = beforeHatching
     ? null
     : percentage(pet.fullness_points, pet.max_fullness_points);
@@ -302,6 +326,8 @@ function serializePet(pet: AnigramPetRow) {
     fullnessPercent,
     lastFedAt: pet.last_fed_at,
     hatchingStartedAt: pet.hatching_started_at,
+    hatchingProgressPercent,
+    hatchingRemainingSeconds,
     hatchedAt: pet.hatched_at,
     zeroStartedAt: pet.zero_started_at,
     diedAt: pet.died_at,
@@ -312,6 +338,7 @@ function serializePet(pet: AnigramPetRow) {
       lifeStage: pet.life_stage,
       evolutionStage: pet.evolution_stage,
       hatchProgressPercent,
+      hatchingProgressPercent,
       fullnessPercent,
       motion,
     },

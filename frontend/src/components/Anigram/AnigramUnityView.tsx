@@ -7,6 +7,7 @@ export type AnigramDisplayState = {
   motion: 'egg_idle' | 'hatching' | 'idle' | 'feed' | 'dead'
   evolutionStage: string
   hatchProgressPercent: number | null
+  hatchingProgressPercent: number | null
   fullnessPercent: number | null
 }
 
@@ -73,7 +74,9 @@ function AnigramUnityView({ displayState }: AnigramUnityViewProps) {
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
-  displayStateRef.current = displayState
+  useEffect(() => {
+    displayStateRef.current = displayState
+  }, [displayState])
 
   useEffect(() => {
     let cancelled = false
@@ -130,7 +133,6 @@ function AnigramUnityView({ displayState }: AnigramUnityViewProps) {
       if (instance) void instance.Quit()
     }
     // Unityの起動はマウント時だけ行い、状態変更は下のeffectで反映する。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {

@@ -16,6 +16,7 @@ const initialDisplayState: AnigramDisplayState = {
   lifeStage: 'egg',
   evolutionStage: 'base',
   hatchProgressPercent: 0,
+  hatchingProgressPercent: null,
   fullnessPercent: null,
   motion: 'egg_idle',
 }
@@ -213,6 +214,11 @@ function AnigramPage() {
           </div>
 
           {error ? <p className="anigram-status__error">{error}</p> : null}
+          {pet?.lifeStage === 'hatching' ? (
+            <p className="anigram-status__meta" aria-live="polite">
+              孵化まであと約{pet.hatchingRemainingSeconds ?? 0}秒
+            </p>
+          ) : null}
           {!isBeforeHatching && pet ? (
             <p className="anigram-status__meta">
               最終給餌: {formatDateTime(pet.lastFedAt)}
