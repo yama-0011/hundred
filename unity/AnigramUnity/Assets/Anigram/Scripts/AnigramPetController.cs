@@ -221,13 +221,16 @@ namespace Hundred.Anigram
         {
             var crack = GameObject.CreatePrimitive(PrimitiveType.Cube);
             crack.name = crackName;
+            // 生成直後の1フレームにひびが描画されないよう、先に無効化する。
+            crack.SetActive(false);
             crack.transform.SetParent(eggVisual.transform, false);
             crack.transform.localPosition = localPosition;
             crack.transform.localScale = localScale;
             crack.transform.localRotation = Quaternion.Euler(0f, 0f, angle);
 
-            var shader = Shader.Find("Universal Render Pipeline/Unlit")
-                ?? Shader.Find("Unlit/Color")
+            // WebGLでUnlitがビルドから除外されるとマゼンタ表示になるため、
+            // 卵本体と同じURP/Litを優先する。
+            var shader = Shader.Find("Universal Render Pipeline/Lit")
                 ?? Shader.Find("Standard");
             crack.GetComponent<Renderer>().material = new Material(shader)
             {
@@ -240,7 +243,6 @@ namespace Hundred.Anigram
             {
                 Destroy(crackCollider);
             }
-            crack.SetActive(false);
             return crack;
         }
 
@@ -259,7 +261,13 @@ namespace Hundred.Anigram
 
             for (var index = 0; index < eggCracks.Length; index += 1)
             {
-                eggCracks[index].SetActive(index < visibleCracks);
+                var visible = index < visibleCracks;
+                eggCracks[index].SetActive(visible);
+                var crackRenderer = eggCracks[index].GetComponent<Renderer>();
+                if (crackRenderer != null)
+                {
+                    crackRenderer.enabled = visible;
+                }
             }
         }
 
