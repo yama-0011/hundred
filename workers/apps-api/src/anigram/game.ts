@@ -353,6 +353,51 @@ export async function getAnigramPetState(
 }
 
 /**
+ * Phase 1の技術検証用に、ログイン中ユーザーのペットだけを初期状態へ戻す。
+ * 成長イベントは削除せず、Instagram反応の重複加算防止を維持する。
+ */
+export async function resetAnigramPetForValidation(
+  env: AnigramEnv,
+  ownerUserId: string,
+) {
+  await ensurePet(env, ownerUserId);
+  const pet = await loadPet(env, ownerUserId);
+  const now = Date.now();
+
+  await env.DB.prepare(
+    `UPDATE anigram_pets
+        SET status = 'alive',
+            life_stage = 'egg',
+            evolution_stage = 'base',
+            hatch_points = 0,
+            fullness_points = 0,
+            state_calculated_at = ?1,
+            last_fed_at = NULL,
+            hatching_started_at = NULL,
+            hatched_at = NULL,
+            zero_started_at = NULL,
+            evolution_started_at = NULL,
+            died_at = NULL,
+            updated_at = ?1
+      WHERE id = ?2 AND owner_user_id = ?3`,
+  )
+    .bind(now, pet.id, ownerUserId)
+    .run();
+
+  await recordStateHistory(
+    env,
+    pet,
+    "validation_reset",
+    `${pet.status}:${pet.life_stage}`,
+    "alive:egg",
+    "manual_validation_reset",
+    now,
+  );
+
+  return serializePet(await loadPet(env, ownerUserId), now);
+}
+
+/**
  * InstagramやHundred内操作を、共通形式の成長イベントとして反映する。
  * source + externalEventIdの一意制約により、同じ反応を二重加算しない。
  */

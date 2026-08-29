@@ -85,6 +85,7 @@ import {
   AnigramGameError,
   getAnigramPetState,
   listAnigramGrowthEvents,
+  resetAnigramPetForValidation,
 } from "./anigram/game";
 
 interface Env
@@ -456,6 +457,23 @@ export default {
           return json(request, env, { error: "成長イベントを反映できませんでした" }, 400);
         }
         return json(request, env, { error: "ごはんを反映できませんでした" }, 500);
+      }
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/anigram/pet/reset/validation"
+    ) {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, {
+          pet: await resetAnigramPetForValidation(env, ownerUserId),
+        });
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        return json(request, env, { error: "育成状態を初期化できませんでした" }, 500);
       }
     }
 

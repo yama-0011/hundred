@@ -78,3 +78,12 @@ export async function addAnigramValidationGrowthEvent() {
   }>('/api/anigram/pet/growth-events/validation', { method: 'POST' })
   return response.pet
 }
+
+/** Phase 1の孵化検証専用。成長履歴を残したまま現在のペットを卵へ戻す。 */
+export async function resetAnigramPetForValidation() {
+  const response = await requestAnigramApi<{ pet: AnigramPetState }>(
+    '/api/anigram/pet/reset/validation',
+    { method: 'POST' },
+  )
+  return response.pet
+}

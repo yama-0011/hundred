@@ -6,6 +6,7 @@ import AnigramUnityView, {
 import {
   addAnigramValidationGrowthEvent,
   getAnigramPet,
+  resetAnigramPetForValidation,
   type AnigramPetState,
 } from '../../services/Anigram/anigramApi'
 import '../../styles/Anigram/anigram.css'
@@ -43,6 +44,7 @@ function AnigramPage() {
   const [pet, setPet] = useState<AnigramPetState | null>(null)
   const [loading, setLoading] = useState(true)
   const [feeding, setFeeding] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [motion, setMotion] = useState<AnigramDisplayState['motion'] | null>(null)
   const petRef = useRef<AnigramPetState | null>(null)
@@ -140,6 +142,31 @@ function AnigramPage() {
     }
   }
 
+  const resetPet = async () => {
+    if (!pet || resetting) return
+    const confirmed = window.confirm(
+      '育成状態を卵（0ポイント）へ戻します。過去の反応履歴は削除されません。よろしいですか？',
+    )
+    if (!confirmed) return
+
+    setResetting(true)
+    try {
+      const nextPet = await resetAnigramPetForValidation()
+      if (motionTimerRef.current !== null) {
+        window.clearTimeout(motionTimerRef.current)
+        motionTimerRef.current = null
+      }
+      setMotion(null)
+      petRef.current = nextPet
+      setPet(nextPet)
+      setError(null)
+    } catch {
+      setError('育成状態を卵へ戻せませんでした。')
+    } finally {
+      setResetting(false)
+    }
+  }
+
   const isBeforeHatching =
     pet?.lifeStage === 'egg' || pet?.lifeStage === 'hatching'
   const progressValue = isBeforeHatching
@@ -204,12 +231,21 @@ function AnigramPage() {
               disabled={
                 loading ||
                 feeding ||
+                resetting ||
                 !pet ||
                 pet.lifeStage === 'hatching' ||
                 pet.status === 'dead'
               }
             >
               {feeding ? '反映中です…' : actionLabel}
+            </button>
+            <button
+              type="button"
+              className="anigram-button--secondary"
+              onClick={() => void resetPet()}
+              disabled={loading || feeding || resetting || !pet}
+            >
+              {resetting ? '初期化中です…' : '育成状態を卵へ戻す'}
             </button>
           </div>
 
@@ -226,7 +262,7 @@ function AnigramPage() {
           ) : null}
           <p className="anigram-status__note">
             Instagram反応はWorkerが定期取得し、D1を経由して自動反映します。
-            このボタンはPhase 1の動作確認用です。
+            これらのボタンはPhase 1の動作確認用です。初期化しても反応履歴は残ります。
           </p>
         </aside>
       </section>
