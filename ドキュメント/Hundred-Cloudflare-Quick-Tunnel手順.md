@@ -37,7 +37,7 @@ HundredのフロントエンドはViteを使用する。
 対象ディレクトリ:
 
 ``` text
-/Users/yama/Desktop/ひまつぶし/Workspace/hundred/frontend
+/Users/yama/Workspace/hundred/frontend
 ```
 
 ------------------------------------------------------------------------
@@ -90,7 +90,7 @@ TunnelではURLが起動ごとに変わる可能性があるため、特定の�
 ターミナル1でHundredのフロントエンドを起動する。
 
 ``` bash
-cd "/Users/yama/Desktop/ひまつぶし/Workspace/hundred/frontend"
+cd "/Users/yama/Workspace/hundred/frontend"
 npm run dev
 ```
 

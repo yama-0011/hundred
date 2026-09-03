@@ -229,7 +229,7 @@ Google連携を作成しただけではApp Clientから利用できない。続�
 ### 9.1 Amplifyを追加する
 
 ```bash
-cd "/Users/yama/Desktop/ひまつぶし/Workspace/hundred/frontend"
+cd "/Users/yama/Workspace/hundred/frontend"
 npm install aws-amplify
 ```
 
@@ -326,7 +326,7 @@ Hundredのサインイン選択画面は、Hundredアカウントを主体とし
 ### 10.1 起動
 
 ```bash
-cd "/Users/yama/Desktop/ひまつぶし/Workspace/hundred/frontend"
+cd "/Users/yama/Workspace/hundred/frontend"
 npm run dev
 ```
 
@@ -487,7 +487,7 @@ Cognitoの標準ドメインを使用しているため正常な表示である�
 ### 12.1 デプロイ前確認
 
 ```bash
-cd "/Users/yama/Desktop/ひまつぶし/Workspace/hundred/frontend"
+cd "/Users/yama/Workspace/hundred/frontend"
 npm ci
 npm run lint
 npm run build

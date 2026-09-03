@@ -30,7 +30,7 @@ Tailscale側でIPアドレスが変更された場合は、現在のMacのIPv4�
 ## 3. Vite開発サーバーの起動
 
 ``` bash
-cd /Users/yama/Desktop/ひまつぶし/Workspace/hundred/frontend
+cd /Users/yama/Workspace/hundred/frontend
 npm run dev
 ```
 

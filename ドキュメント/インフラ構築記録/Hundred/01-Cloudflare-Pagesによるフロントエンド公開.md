@@ -73,7 +73,7 @@ RDS PostgreSQL
 プロジェクトのフロントエンドディレクトリで、依存関係の取得、Lint、ビルドを確認する。
 
 ```bash
-cd "/Users/yama/Desktop/ひまつぶし/Workspace/hundred/frontend"
+cd "/Users/yama/Workspace/hundred/frontend"
 npm ci
 npm run lint
 npm run build
@@ -211,7 +211,7 @@ Cloudflare Pages と GitHub の接続後は、`main` ブランチへの push を
 基本的な流れは次のとおり。
 
 ```bash
-cd "/Users/yama/Desktop/ひまつぶし/Workspace/hundred/frontend"
+cd "/Users/yama/Workspace/hundred/frontend"
 npm run lint
 npm run build
 ```
