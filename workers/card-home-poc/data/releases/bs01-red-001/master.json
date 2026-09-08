@@ -1,0 +1,754 @@
+{
+  "schemaVersion": 1,
+  "masterVersion": "bs01-red-001",
+  "rulesVersion": "core-1",
+  "cards": [
+    {
+      "cardId": "BS01-001",
+      "name": "ゴラドン",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 0,
+      "tribe": "爬獣",
+      "reductions": [],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 1000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 3000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    },
+    {
+      "cardId": "BS01-003",
+      "name": "テラノセイバー",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 2,
+      "tribe": "空牙",
+      "reductions": [],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 4000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 6000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    },
+    {
+      "cardId": "BS01-006",
+      "name": "メラット",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 2,
+      "tribe": "漂精",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 3000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 6000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    },
+    {
+      "cardId": "BS01-007",
+      "name": "ハンマドレイク",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 2,
+      "tribe": "地竜",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 4000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 5000
+        },
+        {
+          "level": 3,
+          "requiredCores": 7,
+          "bp": 9000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    },
+    {
+      "cardId": "BS01-008",
+      "name": "メタルバーン",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "機竜",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 3000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 4000
+        },
+        {
+          "level": 3,
+          "requiredCores": 8,
+          "bp": 8000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    },
+    {
+      "cardId": "BS01-009",
+      "name": "ヴォルク・バブーン",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "皇獣",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 4000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 6000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    },
+    {
+      "cardId": "BS01-010",
+      "name": "チャクラムバット",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "空牙",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 1000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 2000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    },
+    {
+      "cardId": "BS01-012",
+      "name": "トライソードン",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 4,
+      "tribe": "地竜",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 1000
+        },
+        {
+          "level": 2,
+          "requiredCores": 4,
+          "bp": 7000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    },
+    {
+      "cardId": "BS01-013",
+      "name": "タウロスナイト",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 4,
+      "tribe": "戦騎",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 3000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 5000
+        },
+        {
+          "level": 3,
+          "requiredCores": 6,
+          "bp": 9000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    },
+    {
+      "cardId": "BS01-014",
+      "name": "ドラグノ祈祷師",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 4,
+      "tribe": "竜人",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 2000
+        },
+        {
+          "level": 2,
+          "requiredCores": 4,
+          "bp": 5000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    },
+    {
+      "cardId": "BS01-015",
+      "name": "スピノアックス",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 4,
+      "tribe": "地竜",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 3000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 4000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    },
+    {
+      "cardId": "BS01-016",
+      "name": "スケルトン・ジョウ",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 5,
+      "tribe": "翼竜",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 5000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 7000
+        },
+        {
+          "level": 3,
+          "requiredCores": 7,
+          "bp": 10000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    },
+    {
+      "cardId": "BS01-018",
+      "name": "リザードマン",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 5,
+      "tribe": "爬獣",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 3
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 4000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 6000
+        },
+        {
+          "level": 3,
+          "requiredCores": 5,
+          "bp": 9000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    },
+    {
+      "cardId": "BS01-019",
+      "name": "ジュラシックル",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 5,
+      "tribe": "地竜",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 4
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 2000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 4000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    },
+    {
+      "cardId": "BS01-020",
+      "name": "翼刃竜スティラノドン",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 6,
+      "tribe": "翼竜",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 4000
+        },
+        {
+          "level": 2,
+          "requiredCores": 6,
+          "bp": 10000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    },
+    {
+      "cardId": "BS01-021",
+      "name": "焔竜魔人マ・グー",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 6,
+      "tribe": "竜人・古竜",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 3000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 5000
+        },
+        {
+          "level": 3,
+          "requiredCores": 7,
+          "bp": 9000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    },
+    {
+      "cardId": "BS01-022",
+      "name": "大鎌フール・ジョーカー",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 6,
+      "tribe": "道化",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 3
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 3000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 4000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    },
+    {
+      "cardId": "BS01-024",
+      "name": "晶輝龍ディアマット",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 7,
+      "tribe": "巨獣",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 3
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 4000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 6000
+        },
+        {
+          "level": 3,
+          "requiredCores": 5,
+          "bp": 9000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    },
+    {
+      "cardId": "BS01-025",
+      "name": "要塞龍ギガ",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 8,
+      "tribe": "機竜",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 4
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 5000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 10000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    }
+  ]
+}

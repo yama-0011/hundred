@@ -1,0 +1,1270 @@
+{
+  "authoringSchemaVersion": 1,
+  "setId": "BS01",
+  "status": "DRAFT",
+  "effectPolicy": "DISABLED",
+  "cards": [
+    {
+      "cardId": "BS01-001",
+      "name": "ゴラドン",
+      "englishName": "Goradon",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 0,
+      "tribe": "爬獣",
+      "reductions": [],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 1000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 3000
+        }
+      ],
+      "effectText": "",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-001.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      }
+    },
+    {
+      "cardId": "BS01-003",
+      "name": "テラノセイバー",
+      "englishName": "Teranosaber",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 2,
+      "tribe": "空牙",
+      "reductions": [],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 4000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 6000
+        }
+      ],
+      "effectText": "Lv1『相手のアタックステップ』\nこのスピリットは、相手のスピリットをブロックできない。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-003.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      }
+    },
+    {
+      "cardId": "BS01-006",
+      "name": "メラット",
+      "englishName": "Merat",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 2,
+      "tribe": "漂精",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 3000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 6000
+        }
+      ],
+      "effectText": "Lv1・Lv2『自分のスタートステップ』\nこのスピリット上のコア1個をリザーブに置く。\nスピリット/ネクサス/マジックの効果以外で、このスピリットにコアを置いたターンはアタックできない。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-006.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      }
+    },
+    {
+      "cardId": "BS01-007",
+      "name": "ハンマドレイク",
+      "englishName": "Hummerdrake",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 2,
+      "tribe": "地竜",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 4000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 5000
+        },
+        {
+          "level": 3,
+          "requiredCores": 7,
+          "bp": 9000
+        }
+      ],
+      "effectText": "Lv1・Lv2・Lv3『このスピリットの召喚時』\n自分のフィールド上、またはトラッシュにあるコア1個をボイドに置く。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-007.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      }
+    },
+    {
+      "cardId": "BS01-008",
+      "name": "メタルバーン",
+      "englishName": "Metalburn",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "機竜",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 3000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 4000
+        },
+        {
+          "level": 3,
+          "requiredCores": 8,
+          "bp": 8000
+        }
+      ],
+      "effectText": "",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-008.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      }
+    },
+    {
+      "cardId": "BS01-009",
+      "name": "ヴォルク・バブーン",
+      "englishName": "Volc-Baboon",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "皇獣",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 4000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 6000
+        }
+      ],
+      "effectText": "Lv1・Lv2『相手のアタックステップ』\nこのスピリットは、相手のスピリットをブロックできない。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-009.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      }
+    },
+    {
+      "cardId": "BS01-010",
+      "name": "チャクラムバット",
+      "englishName": "Chakrambat",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "空牙",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 1000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 2000
+        }
+      ],
+      "effectText": "Lv1・Lv2『このスピリットのアタック時』\nこのスピリットをBP+4000する。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-010.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      }
+    },
+    {
+      "cardId": "BS01-012",
+      "name": "トライソードン",
+      "englishName": "Tryswordon",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 4,
+      "tribe": "地竜",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 1000
+        },
+        {
+          "level": 2,
+          "requiredCores": 4,
+          "bp": 7000
+        }
+      ],
+      "effectText": "Lv2『相手のアタックステップ』\nこのスピリットは、このスピリットよりBPが低いスピリットをブロックできない。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-012.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      }
+    },
+    {
+      "cardId": "BS01-013",
+      "name": "タウロスナイト",
+      "englishName": "Taurusknight",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 4,
+      "tribe": "戦騎",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 3000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 5000
+        },
+        {
+          "level": 3,
+          "requiredCores": 6,
+          "bp": 9000
+        }
+      ],
+      "effectText": "Lv1・Lv2・Lv3：フラッシュ【覚醒】\n自分のスピリット上から、コアを好きなだけこのスピリット上に置くことができる。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-013.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      }
+    },
+    {
+      "cardId": "BS01-014",
+      "name": "ドラグノ祈祷師",
+      "englishName": "The Shaman Dragno",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 4,
+      "tribe": "竜人",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 2000
+        },
+        {
+          "level": 2,
+          "requiredCores": 4,
+          "bp": 5000
+        }
+      ],
+      "effectText": "Lv1・Lv2『このスピリットの召喚時』\n自分のトラッシュにあるスピリットカード1枚を手札に戻す。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-014.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      },
+      "nameRuby": [
+        {
+          "text": "祈祷師",
+          "reading": "きとうし"
+        }
+      ]
+    },
+    {
+      "cardId": "BS01-015",
+      "name": "スピノアックス",
+      "englishName": "Spinoaxe",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 4,
+      "tribe": "地竜",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 3000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 4000
+        }
+      ],
+      "effectText": "Lv1・Lv2『このスピリットのアタック時』\nこのスピリットは、【神速】を持つスピリットからブロックされない。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-015.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      }
+    },
+    {
+      "cardId": "BS01-016",
+      "name": "スケルトン・ジョウ",
+      "englishName": "Skelton-Jaw",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 5,
+      "tribe": "翼竜",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 5000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 7000
+        },
+        {
+          "level": 3,
+          "requiredCores": 7,
+          "bp": 10000
+        }
+      ],
+      "effectText": "Lv1・Lv2・Lv3『相手のアタックステップ』\nこのスピリットは、相手のスピリットをブロックできない。\nLv2・Lv3『このスピリットのアタック時』\n相手の回復状態のスピリット1体につき、このスピリットをBP+1000する。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-016.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      }
+    },
+    {
+      "cardId": "BS01-018",
+      "name": "リザードマン",
+      "englishName": "Lizardman",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 5,
+      "tribe": "爬獣",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 3
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 4000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 6000
+        },
+        {
+          "level": 3,
+          "requiredCores": 5,
+          "bp": 9000
+        }
+      ],
+      "effectText": "Lv1・Lv2・Lv3『相手のアタックステップ』\nこのスピリットは、このスピリットよりBPが低いスピリットをブロックできない。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-018.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      }
+    },
+    {
+      "cardId": "BS01-019",
+      "name": "ジュラシックル",
+      "englishName": "Jurassickle",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 5,
+      "tribe": "地竜",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 4
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 2000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 4000
+        }
+      ],
+      "effectText": "Lv1・Lv2『このスピリットのアタック時』\nこのスピリットをBP+4000する。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-019.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      }
+    },
+    {
+      "cardId": "BS01-020",
+      "name": "翼刃竜スティラノドン",
+      "englishName": "The BladeDragon Steelanodon",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 6,
+      "tribe": "翼竜",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 4000
+        },
+        {
+          "level": 2,
+          "requiredCores": 6,
+          "bp": 10000
+        }
+      ],
+      "effectText": "Lv1・Lv2：フラッシュ【覚醒】\n自分のスピリット上から、コアを好きなだけこのスピリット上に置くことができる。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-020.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      },
+      "nameRuby": [
+        {
+          "text": "翼刃竜",
+          "reading": "よくじんりゅう"
+        }
+      ]
+    },
+    {
+      "cardId": "BS01-021",
+      "name": "焔竜魔人マ・グー",
+      "englishName": "The FlameDragon Ma-Gwo",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 6,
+      "tribe": "竜人・古竜",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 3000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 5000
+        },
+        {
+          "level": 3,
+          "requiredCores": 7,
+          "bp": 9000
+        }
+      ],
+      "effectText": "Lv1・Lv2・Lv3\n自分のフィールドの系統：「竜人」を持つスピリット1体につき、このスピリットをBP+1000する。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-021.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      },
+      "nameRuby": [
+        {
+          "text": "焔竜魔人",
+          "reading": "えんりゅうまじん"
+        }
+      ]
+    },
+    {
+      "cardId": "BS01-022",
+      "name": "大鎌フール・ジョーカー",
+      "englishName": "The Sickle Fool-Joker",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 6,
+      "tribe": "道化",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 3
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 3000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 4000
+        }
+      ],
+      "effectText": "Lv2『このスピリットのアタック時』\nBP3000以下のスピリット1体を破壊できる。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-022.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      },
+      "nameRuby": [
+        {
+          "text": "大鎌",
+          "reading": "おおがま"
+        }
+      ]
+    },
+    {
+      "cardId": "BS01-024",
+      "name": "晶輝龍ディアマット",
+      "englishName": "The CrystalDragon Diamat",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 7,
+      "tribe": "巨獣",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 3
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 4000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 6000
+        },
+        {
+          "level": 3,
+          "requiredCores": 5,
+          "bp": 9000
+        }
+      ],
+      "effectText": "Lv1・Lv2『このスピリットの召喚時』\n【神速】を持つスピリット1体を破壊できる。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-024.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      },
+      "nameRuby": [
+        {
+          "text": "晶輝龍",
+          "reading": "しょうきりゅう"
+        }
+      ]
+    },
+    {
+      "cardId": "BS01-025",
+      "name": "要塞龍ギガ",
+      "englishName": "The DragonicFortress Giga",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 8,
+      "tribe": "機竜",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 4
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 5000
+        },
+        {
+          "level": 2,
+          "requiredCores": 3,
+          "bp": 10000
+        }
+      ],
+      "effectText": "Lv1・Lv2『このスピリットの召喚時』\nBP6000以下のスピリット1体を破壊できる。\nLv2『このスピリットのバトル時』\nBPを比べ相手のスピリットだけを破壊したとき、このスピリット上のコアを他のスピリットかネクサスに自由に置くことができる。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-025.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      },
+      "nameRuby": [
+        {
+          "text": "要塞龍",
+          "reading": "ようさいりゅう"
+        }
+      ]
+    },
+    {
+      "cardId": "BS01-099",
+      "name": "百識の谷",
+      "englishName": "The Canyon Where Sage lives",
+      "cardType": "NEXUS",
+      "color": "RED",
+      "cost": 4,
+      "tribe": "",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 0
+        },
+        {
+          "level": 2,
+          "requiredCores": 3
+        }
+      ],
+      "effectText": "Lv1『自分のドローステップ』\nドローの枚数を+1枚する。\nドロー後、自分は手札1枚を破棄する。\nLv2『自分のドローステップ』\nドローの枚数を+1枚する。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-099.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      },
+      "nameRuby": [
+        {
+          "text": "百識",
+          "reading": "ひゃくしき"
+        },
+        {
+          "text": "谷",
+          "reading": "たに"
+        }
+      ]
+    },
+    {
+      "cardId": "BS01-101",
+      "name": "古龍の縄張り",
+      "englishName": "The Ancient Dragon Territory",
+      "cardType": "NEXUS",
+      "color": "RED",
+      "cost": 6,
+      "tribe": "",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 3
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 0
+        },
+        {
+          "level": 2,
+          "requiredCores": 3
+        }
+      ],
+      "effectText": "Lv1・Lv2『自分のターン』\nスピリットが破壊されたとき、そのスピリット上に置かれているコアは、リザーブではなくトラッシュに置かれる。\nLv2『自分のアタックステップ』\nBPを比べ相手のスピリットだけを破壊したとき、自分はデッキから1枚ドローする。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-101.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      },
+      "nameRuby": [
+        {
+          "text": "古龍",
+          "reading": "こりゅう"
+        },
+        {
+          "text": "縄張",
+          "reading": "なわばり"
+        }
+      ]
+    },
+    {
+      "cardId": "BS01-115",
+      "name": "アウェイクン",
+      "englishName": "Awaken",
+      "cardType": "MAGIC",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "symbols": [],
+      "levels": [],
+      "effectText": "フラッシュ：\n自分のリザーブにあるコア3個までを、自分のスピリット1体に置き、デッキから1枚ドローする。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-115.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      }
+    },
+    {
+      "cardId": "BS01-116",
+      "name": "オフェンシブオーラ",
+      "englishName": "Offensive Aura",
+      "cardType": "MAGIC",
+      "color": "RED",
+      "cost": 4,
+      "tribe": "",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [],
+      "levels": [],
+      "effectText": "フラッシュ：\nこのターンの間、アタックしている自分のスピリットすべてをBP+5000する。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-116.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "needs-confirmation",
+        "edition": "BS01 original",
+        "discrepancies": [
+          {
+            "field": "effectText",
+            "providedText": "BP+5000",
+            "referenceImageText": "BP+2000",
+            "resolution": "UNRESOLVED",
+            "note": "提供テキストを暫定保持。採用する値は未確定。"
+          }
+        ]
+      }
+    },
+    {
+      "cardId": "BS01-117",
+      "name": "ダブルドロー",
+      "englishName": "Double Draw",
+      "cardType": "MAGIC",
+      "color": "RED",
+      "cost": 4,
+      "tribe": "",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [],
+      "levels": [],
+      "effectText": "メイン：\n自分はデッキから2枚ドローする。\nフラッシュ：\nこのターンの間、スピリット1体をBP+2000する。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-117.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      }
+    },
+    {
+      "cardId": "BS01-118",
+      "name": "コールオブロスト",
+      "englishName": "Call of Lost",
+      "cardType": "MAGIC",
+      "color": "RED",
+      "cost": 4,
+      "tribe": "",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [],
+      "levels": [],
+      "effectText": "メイン：\n自分のトラッシュのスピリットカード1枚を選んで、手札に戻す。\nフラッシュ：\nこのターンの間、スピリット1体をBP+2000する。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-118.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      }
+    },
+    {
+      "cardId": "BS01-119",
+      "name": "バーストファイア",
+      "englishName": "Burst Fire",
+      "cardType": "MAGIC",
+      "color": "RED",
+      "cost": 4,
+      "tribe": "",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [],
+      "levels": [],
+      "effectText": "フラッシュ：\n自分のスピリット1体の『ブロックできない』効果1つを無効にする。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-119.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      }
+    },
+    {
+      "cardId": "BS01-120",
+      "name": "バスターファランクス",
+      "englishName": "Buster Phalanx",
+      "cardType": "MAGIC",
+      "color": "RED",
+      "cost": 5,
+      "tribe": "",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [],
+      "levels": [],
+      "effectText": "メイン：\nネクサスすべてを破壊する。\nフラッシュ：\nこのターンの間、スピリット1体をBP+4000する。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-120.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      }
+    },
+    {
+      "cardId": "BS01-122",
+      "name": "フレイムテンペスト",
+      "englishName": "Flame Tempest",
+      "cardType": "MAGIC",
+      "color": "RED",
+      "cost": 6,
+      "tribe": "",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [],
+      "levels": [],
+      "effectText": "フラッシュ：\nBP3000以下のスピリットすべてを破壊する。",
+      "effects": [],
+      "effectExecution": "DISABLED",
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      },
+      "referenceImage": "references/BS01-122.png",
+      "source": {
+        "kind": "user-provided-text-and-card-image",
+        "reviewStatus": "transcribed",
+        "edition": "BS01 original"
+      }
+    }
+  ]
+}

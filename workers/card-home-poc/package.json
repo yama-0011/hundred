@@ -1,0 +1,11 @@
+{
+  "name": "@hundred/card-home-poc",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "wrangler dev --local --ip 127.0.0.1 --port 8788",
+    "db:seed": "node scripts/seed.mjs"
+  },
+  "devDependencies": { "wrangler": "4.124.0" }
+}

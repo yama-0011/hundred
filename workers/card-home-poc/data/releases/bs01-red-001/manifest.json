@@ -1,0 +1,76 @@
+{
+  "masterVersion": "bs01-red-001",
+  "source": "data/authoring/bs01/bs01-red.authoring.json",
+  "sourceSha256": "0102e1504698af85c4315be156966fcd482be43c262b7d1dfe8e985b2fa302d0",
+  "runtimeSha256": "fdfcb574a97a806b63def3979664d672f52fdeef0ae4761d782adca4fc34335f",
+  "effectPolicy": "DISABLED",
+  "includedCardIds": [
+    "BS01-001",
+    "BS01-003",
+    "BS01-006",
+    "BS01-007",
+    "BS01-008",
+    "BS01-009",
+    "BS01-010",
+    "BS01-012",
+    "BS01-013",
+    "BS01-014",
+    "BS01-015",
+    "BS01-016",
+    "BS01-018",
+    "BS01-019",
+    "BS01-020",
+    "BS01-021",
+    "BS01-022",
+    "BS01-024",
+    "BS01-025"
+  ],
+  "excludedCards": [
+    {
+      "cardId": "BS01-099",
+      "cardType": "NEXUS",
+      "reason": "Runtime currently supports spirits only"
+    },
+    {
+      "cardId": "BS01-101",
+      "cardType": "NEXUS",
+      "reason": "Runtime currently supports spirits only"
+    },
+    {
+      "cardId": "BS01-115",
+      "cardType": "MAGIC",
+      "reason": "Runtime currently supports spirits only"
+    },
+    {
+      "cardId": "BS01-116",
+      "cardType": "MAGIC",
+      "reason": "Runtime currently supports spirits only"
+    },
+    {
+      "cardId": "BS01-117",
+      "cardType": "MAGIC",
+      "reason": "Runtime currently supports spirits only"
+    },
+    {
+      "cardId": "BS01-118",
+      "cardType": "MAGIC",
+      "reason": "Runtime currently supports spirits only"
+    },
+    {
+      "cardId": "BS01-119",
+      "cardType": "MAGIC",
+      "reason": "Runtime currently supports spirits only"
+    },
+    {
+      "cardId": "BS01-120",
+      "cardType": "MAGIC",
+      "reason": "Runtime currently supports spirits only"
+    },
+    {
+      "cardId": "BS01-122",
+      "cardType": "MAGIC",
+      "reason": "Runtime currently supports spirits only"
+    }
+  ],
+  "imagePolicy": "Only illustration object keys; full-card reference images are not delivery art"
+}

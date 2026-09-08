@@ -1,0 +1,83 @@
+{
+  "deckId": "deck-bs01-red-001",
+  "name": "BS01 赤19種・効果無効",
+  "masterVersion": "bs01-red-001",
+  "cards": [
+    {
+      "cardId": "BS01-001",
+      "count": 3
+    },
+    {
+      "cardId": "BS01-003",
+      "count": 3
+    },
+    {
+      "cardId": "BS01-006",
+      "count": 2
+    },
+    {
+      "cardId": "BS01-007",
+      "count": 2
+    },
+    {
+      "cardId": "BS01-008",
+      "count": 2
+    },
+    {
+      "cardId": "BS01-009",
+      "count": 2
+    },
+    {
+      "cardId": "BS01-010",
+      "count": 2
+    },
+    {
+      "cardId": "BS01-012",
+      "count": 2
+    },
+    {
+      "cardId": "BS01-013",
+      "count": 2
+    },
+    {
+      "cardId": "BS01-014",
+      "count": 2
+    },
+    {
+      "cardId": "BS01-015",
+      "count": 2
+    },
+    {
+      "cardId": "BS01-016",
+      "count": 2
+    },
+    {
+      "cardId": "BS01-018",
+      "count": 2
+    },
+    {
+      "cardId": "BS01-019",
+      "count": 2
+    },
+    {
+      "cardId": "BS01-020",
+      "count": 2
+    },
+    {
+      "cardId": "BS01-021",
+      "count": 2
+    },
+    {
+      "cardId": "BS01-022",
+      "count": 2
+    },
+    {
+      "cardId": "BS01-024",
+      "count": 2
+    },
+    {
+      "cardId": "BS01-025",
+      "count": 2
+    }
+  ]
+}

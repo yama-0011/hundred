@@ -1,0 +1,10 @@
+import {existsSync,writeFileSync,readFileSync} from 'node:fs';
+import {randomBytes} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+process.chdir(fileURLToPath(new URL('..',import.meta.url)));
+if(!existsSync('.dev.vars')) writeFileSync('.dev.vars','BATTLE_SHARED_KEY='+randomBytes(32).toString('hex')+'\n',{mode:0o600});
+if(!/^BATTLE_SHARED_KEY=[a-f0-9]{64}$/m.test(readFileSync('.dev.vars','utf8'))) throw new Error('.dev.vars の BATTLE_SHARED_KEY を確認してください。');
+execFileSync('node',['node_modules/wrangler/bin/wrangler.js','d1','migrations','apply','hundred-card-home-local','--local'],{stdio:'inherit'});
+execFileSync('node',['scripts/seed.mjs'],{stdio:'inherit'});
+console.log('ローカルD1と内部API用キーを準備しました。npm run dev で起動してください。');

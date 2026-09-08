@@ -1,0 +1,20 @@
+{
+  "cardId": "BS01-027",
+  "name": "ウィル・オーブ",
+  "englishName": "Will-Orb",
+  "tribe": "幽魔",
+  "attribute": "PURPLE",
+  "cost": 1,
+  "imageResource": "CardQuality/Art/WillOrb",
+  "effectHeading": "Lv1",
+  "effectText": "このスピリットはアタックできるとき、必ずアタックする。",
+  "flavor": "",
+  "levels": [
+    { "level": 1, "requiredCores": 1, "bp": 3000 },
+    { "level": 2, "requiredCores": 3, "bp": 4000 },
+    { "level": 3, "requiredCores": 4, "bp": 5000 }
+  ],
+  "focalX": 0.45,
+  "focalY": 0.5,
+  "zoom": 1.0
+}

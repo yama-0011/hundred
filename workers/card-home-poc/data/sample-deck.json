@@ -1,0 +1,63 @@
+{
+  "deckId": "deck-poc",
+  "name": "初期検証デッキ",
+  "masterVersion": "poc-001",
+  "cards": [
+    {
+      "cardId": "POC-001",
+      "count": 3
+    },
+    {
+      "cardId": "POC-002",
+      "count": 3
+    },
+    {
+      "cardId": "POC-003",
+      "count": 3
+    },
+    {
+      "cardId": "POC-004",
+      "count": 3
+    },
+    {
+      "cardId": "POC-005",
+      "count": 3
+    },
+    {
+      "cardId": "POC-006",
+      "count": 3
+    },
+    {
+      "cardId": "POC-007",
+      "count": 3
+    },
+    {
+      "cardId": "POC-008",
+      "count": 3
+    },
+    {
+      "cardId": "POC-009",
+      "count": 3
+    },
+    {
+      "cardId": "POC-010",
+      "count": 3
+    },
+    {
+      "cardId": "POC-011",
+      "count": 3
+    },
+    {
+      "cardId": "POC-012",
+      "count": 3
+    },
+    {
+      "cardId": "POC-013",
+      "count": 3
+    },
+    {
+      "cardId": "POC-014",
+      "count": 1
+    }
+  ]
+}

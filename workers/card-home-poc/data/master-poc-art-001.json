@@ -1,0 +1,695 @@
+{
+  "schemaVersion": 1,
+  "masterVersion": "poc-art-001",
+  "rulesVersion": "core-1",
+  "cards": [
+    {
+      "cardId": "POC-001",
+      "name": "緋の幼竜 01",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "未設定",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 2000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 4000
+        },
+        {
+          "level": 3,
+          "requiredCores": 4,
+          "bp": 6000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "cards/poc/goradon/v1.png",
+        "version": 1
+      }
+    },
+    {
+      "cardId": "POC-002",
+      "name": "緋の幼竜 02",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "未設定",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 3000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 5000
+        },
+        {
+          "level": 3,
+          "requiredCores": 4,
+          "bp": 7000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "cards/poc/goradon/v1.png",
+        "version": 1
+      }
+    },
+    {
+      "cardId": "POC-003",
+      "name": "緋の幼竜 03",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "未設定",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 4000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 6000
+        },
+        {
+          "level": 3,
+          "requiredCores": 4,
+          "bp": 8000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "cards/poc/goradon/v1.png",
+        "version": 1
+      }
+    },
+    {
+      "cardId": "POC-004",
+      "name": "緋の幼竜 04",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "未設定",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 2000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 4000
+        },
+        {
+          "level": 3,
+          "requiredCores": 4,
+          "bp": 6000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "cards/poc/goradon/v1.png",
+        "version": 1
+      }
+    },
+    {
+      "cardId": "POC-005",
+      "name": "緋の幼竜 05",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "未設定",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 3000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 5000
+        },
+        {
+          "level": 3,
+          "requiredCores": 4,
+          "bp": 7000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "cards/poc/goradon/v1.png",
+        "version": 1
+      }
+    },
+    {
+      "cardId": "POC-006",
+      "name": "緋の幼竜 06",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "未設定",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 4000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 6000
+        },
+        {
+          "level": 3,
+          "requiredCores": 4,
+          "bp": 8000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "cards/poc/goradon/v1.png",
+        "version": 1
+      }
+    },
+    {
+      "cardId": "POC-007",
+      "name": "緋の幼竜 07",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "未設定",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 2000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 4000
+        },
+        {
+          "level": 3,
+          "requiredCores": 4,
+          "bp": 6000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "cards/poc/goradon/v1.png",
+        "version": 1
+      }
+    },
+    {
+      "cardId": "POC-008",
+      "name": "緋の幼竜 08",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "未設定",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 3000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 5000
+        },
+        {
+          "level": 3,
+          "requiredCores": 4,
+          "bp": 7000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "cards/poc/goradon/v1.png",
+        "version": 1
+      }
+    },
+    {
+      "cardId": "POC-009",
+      "name": "緋の幼竜 09",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "未設定",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 4000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 6000
+        },
+        {
+          "level": 3,
+          "requiredCores": 4,
+          "bp": 8000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "cards/poc/goradon/v1.png",
+        "version": 1
+      }
+    },
+    {
+      "cardId": "POC-010",
+      "name": "緋の幼竜 10",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "未設定",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 2000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 4000
+        },
+        {
+          "level": 3,
+          "requiredCores": 4,
+          "bp": 6000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "cards/poc/goradon/v1.png",
+        "version": 1
+      }
+    },
+    {
+      "cardId": "POC-011",
+      "name": "緋の幼竜 11",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "未設定",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 3000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 5000
+        },
+        {
+          "level": 3,
+          "requiredCores": 4,
+          "bp": 7000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "cards/poc/goradon/v1.png",
+        "version": 1
+      }
+    },
+    {
+      "cardId": "POC-012",
+      "name": "緋の幼竜 12",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "未設定",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 4000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 6000
+        },
+        {
+          "level": 3,
+          "requiredCores": 4,
+          "bp": 8000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "cards/poc/goradon/v1.png",
+        "version": 1
+      }
+    },
+    {
+      "cardId": "POC-013",
+      "name": "緋の幼竜 13",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "未設定",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 2000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 4000
+        },
+        {
+          "level": 3,
+          "requiredCores": 4,
+          "bp": 6000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "cards/poc/goradon/v1.png",
+        "version": 1
+      }
+    },
+    {
+      "cardId": "POC-014",
+      "name": "緋の幼竜 14",
+      "cardType": "SPIRIT",
+      "color": "RED",
+      "cost": 3,
+      "tribe": "未設定",
+      "reductions": [
+        {
+          "color": "RED",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "RED",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 3000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 5000
+        },
+        {
+          "level": 3,
+          "requiredCores": 4,
+          "bp": 7000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "cards/poc/goradon/v1.png",
+        "version": 1
+      }
+    },
+    {
+      "cardId": "POC-015",
+      "name": "検証用の紫スピリット",
+      "cardType": "SPIRIT",
+      "color": "PURPLE",
+      "cost": 0,
+      "tribe": "未設定",
+      "reductions": [
+        {
+          "color": "PURPLE",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "PURPLE",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 4000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 6000
+        },
+        {
+          "level": 3,
+          "requiredCores": 4,
+          "bp": 8000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "cards/poc/will-orb/v1.png",
+        "version": 1
+      }
+    },
+    {
+      "cardId": "POC-016",
+      "name": "検証用の緑スピリット",
+      "cardType": "SPIRIT",
+      "color": "GREEN",
+      "cost": 1,
+      "tribe": "未設定",
+      "reductions": [
+        {
+          "color": "GREEN",
+          "count": 2
+        }
+      ],
+      "symbols": [
+        {
+          "color": "GREEN",
+          "count": 1
+        }
+      ],
+      "levels": [
+        {
+          "level": 1,
+          "requiredCores": 1,
+          "bp": 2000
+        },
+        {
+          "level": 2,
+          "requiredCores": 2,
+          "bp": 4000
+        },
+        {
+          "level": 3,
+          "requiredCores": 4,
+          "bp": 6000
+        }
+      ],
+      "effectText": "効果なし",
+      "effects": [],
+      "illustration": {
+        "objectKey": "",
+        "version": 0
+      }
+    }
+  ]
+}
