@@ -5,7 +5,10 @@
   "scripts": {
     "setup": "node scripts/setup.mjs",
     "dev": "wrangler dev --local --ip 127.0.0.1 --port 8788",
-    "db:seed": "node scripts/seed.mjs"
+    "db:seed": "node scripts/seed.mjs",
+    "predev": "node scripts/build-home.mjs"
   },
-  "devDependencies": { "wrangler": "4.124.0" }
+  "devDependencies": {
+    "wrangler": "4.124.0"
+  }
 }

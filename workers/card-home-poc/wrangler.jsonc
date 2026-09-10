@@ -5,7 +5,15 @@
   "compatibility_date": "2026-08-22",
   "workers_dev": false,
   "vars": { "MASTER_VERSION": "poc-001" },
-  "rules": [{ "type": "Text", "globs": ["**/*.html"], "fallthrough": true }],
+  "rules": [
+    { "type": "Text", "globs": ["**/*.html"], "fallthrough": true },
+    { "type": "Data", "globs": ["**/*.png"], "fallthrough": true }
+  ],
+  "r2_buckets": [{
+    "binding": "CARD_ART",
+    "bucket_name": "hundred-card-art-local",
+    "remote": false
+  }],
   "d1_databases": [{
     "binding": "DB",
     "database_name": "hundred-card-home-local",

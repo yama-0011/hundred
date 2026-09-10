@@ -19,6 +19,11 @@ namespace Hundred.CardBattle
         Vector2 arenaHandScroll, arenaModalScroll;
         GUIStyle arenaText, arenaSmall, arenaNumber, arenaButton;
         readonly Color arenaPaper = new Color(.88f,.85f,.73f);
+        readonly Color arenaBackground = new Color(.105f,.145f,.14f);
+        readonly Color arenaSurface = new Color(.045f,.09f,.105f,.94f);
+        readonly Color arenaSurfaceSoft = new Color(.075f,.135f,.14f,.92f);
+        readonly Color arenaGold = new Color(.76f,.62f,.30f);
+        readonly Color arenaCyan = new Color(.34f,.88f,.9f);
         bool ArenaIdle => !busy && pendingId == null && state != null && state.ready && !state.finished && !state.paused;
         bool ArenaMain => ArenaIdle && state.isYourTurn && state.phase == "MAIN";
         void ArenaStyles()
@@ -28,14 +33,35 @@ namespace Hundred.CardBattle
             var arenaFont=Resources.Load<Font>("CardQuality/Fonts/BIZUDGothic-Bold");
             if(arenaFont!=null){arenaText.font=arenaFont;arenaSmall.font=arenaFont;arenaNumber.font=arenaFont;}
             arenaButton=new GUIStyle(button){font=arenaText.font,fontSize=14,wordWrap=true};
+            arenaButton.normal.textColor=new Color(.94f,.94f,.88f);
+            arenaButton.hover.textColor=Color.white;
+            arenaButton.active.textColor=Color.white;
         }
         void ArenaBox(Rect r,Color color){var old=GUI.color;GUI.color=color;GUI.DrawTexture(r,Texture2D.whiteTexture);GUI.color=old;}
+        void ArenaOutline(Rect r,Color color,float size=1)
+        {
+            ArenaBox(new Rect(r.x,r.y,r.width,size),color);ArenaBox(new Rect(r.x,r.yMax-size,r.width,size),color);
+            ArenaBox(new Rect(r.x,r.y,size,r.height),color);ArenaBox(new Rect(r.xMax-size,r.y,size,r.height),color);
+        }
+        void ArenaPanel(Rect r,bool strong=false)
+        {
+            ArenaBox(r,strong?arenaSurface:arenaSurfaceSoft);
+            ArenaOutline(r,new Color(arenaGold.r,arenaGold.g,arenaGold.b,strong ? .55f : .24f));
+        }
         void ArenaLabel(Rect r,string text,int size=14,Color? color=null)
         {
             var style=new GUIStyle(arenaText){fontSize=Math.Max(13,size)};style.normal.textColor=color??new Color(.88f,.91f,.83f);GUI.Label(r,text,style);
         }
-        bool ArenaButton(Rect r,string text,bool enabled=true)
-        {bool old=GUI.enabled;GUI.enabled=old&&enabled;bool hit=GUI.Button(r,text,arenaButton);GUI.enabled=old;return hit;}
+        bool ArenaButton(Rect r,string text,bool enabled=true,bool primary=false)
+        {
+            bool old=GUI.enabled;GUI.enabled=old&&enabled;
+            bool hover=GUI.enabled&&r.Contains(Event.current.mousePosition);
+            ArenaBox(r,!GUI.enabled?new Color(.10f,.13f,.13f,.85f):primary?new Color(.14f,.38f,.34f,.96f):hover?new Color(.15f,.25f,.25f,.98f):new Color(.08f,.15f,.16f,.96f));
+            ArenaOutline(r,!GUI.enabled?new Color(.28f,.30f,.29f):primary||hover?arenaGold:new Color(.38f,.42f,.4f));
+            var style=new GUIStyle(arenaButton){alignment=TextAnchor.MiddleCenter};
+            GUI.Label(r,text,style);
+            bool hit=GUI.Button(r,GUIContent.none,GUIStyle.none);GUI.enabled=old;return hit;
+        }
         void ArenaInspect(Rect r,string text,string note)
         {
             if(!GUI.enabled)return;
@@ -56,6 +82,15 @@ namespace Hundred.CardBattle
         Texture2D ArenaImage(Card c)
         {
             string key=c.illustration==null?"":c.illustration.objectKey;
+            return ArenaTexture(key);
+        }
+        Texture2D ArenaFace(Card c)
+        {
+            if(c.cardId!="BS01-001"&&c.cardId!="BS01-007")return null;
+            return ArenaTexture("faces/v1/"+c.cardId+".png");
+        }
+        Texture2D ArenaTexture(string key)
+        {
             if(string.IsNullOrEmpty(key)||key.Contains("..")||!System.Text.RegularExpressions.Regex.IsMatch(key,@"^[A-Za-z0-9_-]+(/[A-Za-z0-9_.-]+)+$"))return null;
             if(arenaArt.TryGetValue(key,out var texture))return texture;
             if(arenaArt.Count<64&&!arenaLoading.Contains(key)&&(!arenaFailures.TryGetValue(key,out var failed)||Time.realtimeSinceStartup-failed>15))
@@ -75,9 +110,27 @@ namespace Hundred.CardBattle
         void OnDestroy(){foreach(var t in arenaArt.Values)if(t!=null)Destroy(t);}
         void ArenaCard(Rect r,Card c,int zone,bool compact=false)
         {
+            bool hovered=GUI.enabled&&r.Contains(Event.current.mousePosition);
+            bool selected=c.instanceId==arenaCardId;
+            if(hovered&&zone!=2){r.y-=4;r.width+=4;r.height+=6;r.x-=2;}
             var saved=GUI.matrix;
             if(zone==1&&c.exhausted)GUIUtility.RotateAroundPivot(-90,r.center);
-            ArenaBox(r,new Color(.66f,.55f,.34f));var inner=new Rect(r.x+2,r.y+2,r.width-4,r.height-4);ArenaBox(inner,arenaPaper);
+            if(hovered||selected){ArenaBox(new Rect(r.x-4,r.y-4,r.width+8,r.height+8),new Color(arenaCyan.r,arenaCyan.g,arenaCyan.b,selected ? .9f : .45f));}
+            ArenaBox(r,arenaGold);var inner=new Rect(r.x+2,r.y+2,r.width-4,r.height-4);ArenaBox(inner,arenaPaper);
+            var face=ArenaFace(c);
+            if(face!=null)
+            {
+                GUI.DrawTexture(r,face,ScaleMode.ScaleToFit);
+                if(zone==1)
+                {
+                    var stats=new Rect(r.x+4,r.yMax-25,r.width-8,22);
+                    ArenaBox(stats,new Color(0,0,0,.8f));
+                    ArenaLabel(stats,"Lv"+c.level+" BP"+c.bp,12,Color.white);
+                    ArenaCores(new Rect(r.x+r.width*.52f,r.y+r.height*.7f,r.width*.4f,r.height*.15f),c.cores);
+                }
+            }
+            else
+            {
             var artRect=new Rect(inner.x,inner.y,inner.width,inner.height*(compact?.76f:.57f));var art=ArenaImage(c);
             if(art!=null)GUI.DrawTexture(artRect,art,ScaleMode.ScaleAndCrop);else ArenaBox(artRect,new Color(.14f,.23f,.25f));
             float nameY=artRect.yMax;
@@ -89,6 +142,8 @@ namespace Hundred.CardBattle
                 ArenaCores(new Rect(r.x+r.width*.52f,nameY+23,r.width*.43f,Math.Max(15,r.yMax-nameY-28)),c.cores);
                 ArenaLabel(new Rect(r.x+5,r.y+3,30,24),c.cost.ToString(),19);
             }
+            }
+            if(hovered)ArenaOutline(r,Color.white,2);
             if(GUI.Button(r,GUIContent.none,GUIStyle.none))
             {
                 if(arenaPlaceCore&&zone==1&&ArenaMain&&state.self.reserve>0){arenaPlaceCore=false;MoveCore("",c.instanceId);}
@@ -113,19 +168,20 @@ namespace Hundred.CardBattle
             ArenaStyles();float scale=Screen.width<700?Screen.width/540f:Screen.height/900f;
             float w=Screen.width/scale,h=Screen.height/scale;bool portrait=w<h;
             GUI.matrix=Matrix4x4.Scale(Vector3.one*scale);
-            ArenaBox(new Rect(0,0,w,h),new Color(.20f,.27f,.25f));
+            ArenaBox(new Rect(0,0,w,h),arenaBackground);
 
             float nav=portrait?92:Math.Max(140,w*.1f),rail=portrait?100:Math.Max(135,w*.1f);
+            ArenaBox(new Rect(nav,0,1,h),new Color(arenaGold.r,arenaGold.g,arenaGold.b,.22f));
             float x=nav+15,fieldW=w-nav-rail-30,enemyH=portrait?145:160,handH=portrait?150:160;
             bool modal=arenaCardId!=null||arenaMenu;
             GUI.enabled=!modal;
-            ArenaBox(new Rect(8,8,nav-16,36),new Color(.06f,.13f,.16f));
+            ArenaPanel(new Rect(8,8,nav-16,36),true);
             ArenaLabel(new Rect(15,14,nav-25,26),state.ready?(state.isYourTurn?"Your Turn ":"Opponent ")+state.turn:"参加待ち",14);
-            ArenaBox(new Rect(8,53,nav-16,110),new Color(.06f,.13f,.16f));
+            ArenaPanel(new Rect(8,53,nav-16,110));
             var op=state.ready?state.opponent:null;
             ArenaLabel(new Rect(15,60,nav-26,100),"相手\nライフ "+(op==null?"—":op.life.ToString())+"\nリザーブ "+(op==null?"—":op.reserve.ToString())+"\n手札 "+(op==null?"—":op.handCount.ToString()),13);
             float infoH=Math.Max(155,h-545);
-            ArenaBox(new Rect(8,173,nav-16,infoH),new Color(.06f,.13f,.16f));
+            ArenaPanel(new Rect(8,173,nav-16,infoH));
             ArenaLabel(new Rect(15,181,nav-30,24),"エリア情報",11);
             ArenaLabel(new Rect(15,212,nav-30,infoH-38),arenaInfo+"\n\n"+arenaNote,12);
             float ly=183+infoH;
@@ -135,7 +191,8 @@ namespace Hundred.CardBattle
             ArenaInspect(lifeRect,"自分のライフ "+state.self.life+" 個","コアの描画は最大6個。実際のライフ数に表示上の上限はありません。");
             var reserveRect=new Rect(12,ly+105,nav-24,100);
             ArenaLabel(new Rect(12,ly+84,nav-20,22),"リザーブ "+state.self.reserve,12);ArenaCores(reserveRect,state.self.reserve,30);
-            if(ArenaButton(reserveRect,arenaPlaceCore?"置くカードを選択":"",ArenaMain&&state.self.reserve>0))arenaPlaceCore=!arenaPlaceCore;
+            ArenaPanel(reserveRect,arenaPlaceCore);
+            if(ArenaButton(reserveRect,arenaPlaceCore?"配置先を選択中":"コアを配置",ArenaMain&&state.self.reserve>0,arenaPlaceCore))arenaPlaceCore=!arenaPlaceCore;
             if(ArenaButton(new Rect(12,h-37,nav-24,29),"ルーム / 操作"))arenaMenu=true;
             ArenaLabel(new Rect(x,8,fieldW,20),state.ready?"対戦相手":"相手の参加待ち",11);
             int backs=op==null?0:Math.Min(op.handCount,10);
@@ -146,7 +203,7 @@ namespace Hundred.CardBattle
                 for(int i=0;i<n;i++)ArenaCard(new Rect(x+fieldW/2-n*(cw+9)/2+i*(cw+9),38,cw,enemyH-52),cards[i],2,true);
             }
             ArenaLabel(new Rect(x+fieldW-Math.Min(105,fieldW*.22f),38,Math.Min(105,fieldW*.22f),24),"ネクサス",11);
-            ArenaBox(new Rect(x,enemyH,fieldW,1),new Color(.55f,.56f,.40f));
+            ArenaBox(new Rect(x,enemyH,fieldW,1),new Color(arenaGold.r,arenaGold.g,arenaGold.b,.55f));
             ArenaField(new Rect(x,enemyH+10,fieldW,h-enemyH-handH-48),state.self.field,1);
             float handY=h-handH-28;ArenaLabel(new Rect(x,handY,fieldW,22),"自分の手札",11);
             float nexusWidth=Math.Min(105,fieldW*.22f);ArenaLabel(new Rect(x+fieldW-nexusWidth,handY+25,nexusWidth,24),"ネクサス",11);ArenaInspect(new Rect(x+fieldW-nexusWidth,handY+25,nexusWidth,handH-30),"自分のネクサス 0 / 4 枚","現在の対戦マスターはスピリットのみです。");var handArea=new Rect(x,handY+24,fieldW-nexusWidth-8,handH-15);var hands=state.self.hand??new Card[0];
@@ -162,10 +219,10 @@ namespace Hundred.CardBattle
             ArenaInspect(trashRect,"捨て札 "+state.self.trashCount+"枚 / 使用コア "+state.self.trashCores,"支払ったコアは自分のリフレッシュでリザーブへ戻ります。");
             float py=trashY+96;string[] phases={"START","CORE","DRAW","REFRESH","MAIN","ATTACK","END"};
             foreach(var phase in phases){if(state.phase==phase)ArenaBox(new Rect(rx,py,rw,23),new Color(.14f,.35f,.31f));ArenaLabel(new Rect(rx+3,py,rw-5,23),PhaseName(phase),12);py+=24;}
-            if(ArenaButton(new Rect(rx,py+7,rw,42),state.canDefend?"ライフで受ける":state.phase=="END"?"相手のターンへ":"次のステップ",ArenaIdle&&(state.canDefend||state.isYourTurn&&!state.waitingForDefense)))
+            if(ArenaButton(new Rect(rx,py+7,rw,42),state.canDefend?"ライフで受ける":state.phase=="END"?"相手のターンへ":"次のステップ",ArenaIdle&&(state.canDefend||state.isYourTurn&&!state.waitingForDefense),true))
             {if(state.canDefend)Defend(true,"");else{var id=Guid.NewGuid().ToString();Submit("/api/game/next-step",new StepCommand{requestId=id,expectedVersion=state.version},id);}}
             string status=state.finished?(state.winner==state.playerNumber?"あなたの勝利":"あなたの敗北"):state.paused?"検証停止："+state.pauseReason:state.canDefend?"攻撃を受けています。ブロックするカード、またはライフで受けるを選択。":message;
-            ArenaLabel(new Rect(x,h-25,w-x-10,25),status,11);
+            var statusRect=new Rect(x-4,h-29,w-x-7,27);ArenaBox(statusRect,new Color(.025f,.06f,.07f,.94f));ArenaBox(new Rect(statusRect.x,statusRect.y,4,statusRect.height),state.canDefend?new Color(.95f,.42f,.28f):arenaCyan);ArenaLabel(new Rect(x+8,h-26,w-x-24,23),status,11);
             GUI.enabled=true;
             if(arenaMenu)ArenaMenu(w,h);
             else if(arenaCardId!=null)ArenaDialog(w,h);
@@ -203,7 +260,7 @@ namespace Hundred.CardBattle
             if(Event.current.type==EventType.MouseDown&&!box.Contains(Event.current.mousePosition)||Event.current.type==EventType.KeyDown&&Event.current.keyCode==KeyCode.Escape){arenaCardId=null;Event.current.Use();return;}
             ArenaBox(box,new Color(.07f,.14f,.17f));
             if(ArenaButton(new Rect(box.xMax-42,box.y+8,32,30),"×")){arenaCardId=null;return;}
-            var image=ArenaImage(c);if(image!=null)GUI.DrawTexture(new Rect(box.x+18,box.y+48,box.width-36,170),image,ScaleMode.ScaleAndCrop);
+            var face=ArenaFace(c);var image=face!=null?face:ArenaImage(c);if(image!=null)GUI.DrawTexture(new Rect(box.x+18,box.y+48,box.width-36,170),image,face!=null?ScaleMode.ScaleToFit:ScaleMode.ScaleAndCrop);
             ArenaLabel(new Rect(box.x+18,box.y+224,box.width-36,32),c.name,21);
             ArenaLabel(new Rect(box.x+18,box.y+263,box.width-36,70),ColorName(c.color)+" / "+c.family+" / コスト "+c.cost+"\n軽減 "+ColorCounts(c.reductions)+" / シンボル "+ColorCounts(c.symbolDefinitions),13);
             float y=box.y+335;
@@ -234,7 +291,7 @@ namespace Hundred.CardBattle
             if(ArenaButton(new Rect(x,y,bw,36),"ルームIDをコピー"))CopyRoomId();y+=45;
             if(ArenaButton(new Rect(x,y,bw,36),"カード・捨て札一覧")){detailsOpen=true;arenaMenu=false;}y+=45;
             if(ArenaButton(new Rect(x,y,bw,36),"操作を再試行",!busy&&pendingId!=null))StartCoroutine(Send(pendingPath,pendingJson));y+=45;
-            if(ArenaButton(new Rect(x,y,bw,36),"ロビーへ戻る",!busy)){state=null;token=null;ClearPending();arenaMenu=false;arenaCardId=null;}y+=45;
+            if(ArenaButton(new Rect(x,y,bw,36),"カードホームへ戻る",!busy))ReturnHome();y+=45;
             if(ArenaButton(new Rect(x,y,bw,36),"閉じる"))arenaMenu=false;
         }
     }

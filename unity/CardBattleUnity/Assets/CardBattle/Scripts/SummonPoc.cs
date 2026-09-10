@@ -22,8 +22,6 @@ namespace Hundred.CardBattle
         [Serializable] public class StepCommand { public string requestId; public int expectedVersion; }
         [Serializable] public class AttackCommand { public string requestId, cardInstanceId; public int expectedVersion; }
         [Serializable] public class DefenseCommand { public string requestId, battleId, cardInstanceId; public int expectedVersion; public bool takeLife; }
-        [Serializable] public class CreateRoomCommand { public string deckId; }
-        [Serializable] public class JoinCommand { public string roomCode, deckId; }
         bool detailsOpen;
         int detailsZone;
         string detailCardId;
@@ -36,6 +34,8 @@ namespace Hundred.CardBattle
 #if UNITY_WEBGL && !UNITY_EDITOR
         [System.Runtime.InteropServices.DllImport("__Internal")]
         private static extern void HundredCopyRoomId(string value, string receiver);
+        [System.Runtime.InteropServices.DllImport("__Internal")]
+        private static extern void HundredReturnHome(string url);
 #endif
         public void OnRoomIdCopied(string result)
         {
@@ -51,17 +51,46 @@ namespace Hundred.CardBattle
 #endif
         }
         State state;
-        string deckInput = "deck-poc";
-        string token, roomInput = "", message = "片方でルームを作り、もう片方でコードを入力してください。";
+        string token, homeUrl = "http://127.0.0.1:8788/?section=battle", message = "";
         bool busy;
         string selectedId, selectedFieldId, pendingPath, pendingJson, pendingId;
         Vector2 handScroll, ownScroll, opponentScroll;
         float lastSync;
-        GUIStyle title, heading, label, small, button, card, input;
+        GUIStyle title, heading, label, small, button, card;
         Font font;
         string BaseUrl => Application.platform == RuntimePlatform.WebGLPlayer
             ? new Uri(Application.absoluteURL).GetLeftPart(UriPartial.Authority) : "http://127.0.0.1:5080";
-        void Start() { Application.runInBackground = true; StartCoroutine(Poll()); }
+        void Start() {
+            Application.runInBackground = true;
+            if(Application.platform == RuntimePlatform.WebGLPlayer) {
+                var uri=new Uri(Application.absoluteURL);
+                foreach(var item in uri.Query.TrimStart('?').Split('&')) {
+                    var pair=item.Split(new[]{'='},2);
+                    if(pair.Length==2&&pair[0]=="home") {
+                        var candidate=Uri.UnescapeDataString(pair[1]);
+                        Uri parsed;
+                        if(Uri.TryCreate(candidate,UriKind.Absolute,out parsed)&&(parsed.Host=="127.0.0.1"||parsed.Host=="localhost"||parsed.Host.EndsWith(".trycloudflare.com",StringComparison.Ordinal))&&(parsed.Scheme==Uri.UriSchemeHttp||parsed.Scheme==Uri.UriSchemeHttps))homeUrl=candidate;
+                    }
+                }
+                var fragment=uri.Fragment;
+                if(fragment.StartsWith("#session=")) {
+                    token=Uri.UnescapeDataString(fragment.Substring(9));
+                    if(token.Length>0&&token.Length<512)StartCoroutine(Send("/api/game",null));
+                    else token=null;
+                }
+            }
+            if(string.IsNullOrEmpty(token)){ReturnHome();return;}
+            CreateArenaUgui();
+            StartCoroutine(Poll());
+        }
+        void ReturnHome()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            HundredReturnHome(homeUrl);
+#else
+            Application.OpenURL(homeUrl);
+#endif
+        }
         IEnumerator Poll()
         {
             while (true)
@@ -106,7 +135,7 @@ namespace Hundred.CardBattle
                         }
                     }
                     else if (!poll) message = ErrorText(result == null ? "" : result.error);
-                    else if (request.responseCode == 401) message = "ルーム情報が無効です。ロビーに戻って作り直してください。";
+                    else if (request.responseCode == 401) message = "ルーム情報が無効です。カードホームへ戻って作り直してください。";
                 }
             }
             busy = false;
@@ -155,7 +184,6 @@ namespace Hundred.CardBattle
             title = Style(27, FontStyle.Bold); heading = Style(20, FontStyle.Bold); label = Style(18); small = Style(15);
             button = new GUIStyle(GUI.skin.button) { font = font, fontSize = 18 };
             card = new GUIStyle(button) { alignment = TextAnchor.MiddleCenter, wordWrap = true, fontSize = 19 };
-            input = new GUIStyle(GUI.skin.textField) { font = font, fontSize = 26, alignment = TextAnchor.MiddleLeft };
         }
         GUIStyle Style(int size, FontStyle weight = FontStyle.Normal) => new GUIStyle(GUI.skin.label) { font = font, fontSize = size, fontStyle = weight, wordWrap = true, normal = { textColor = new Color(.88f,.92f,.95f) } };
         void Panel(Rect r, string text)
@@ -182,10 +210,11 @@ namespace Hundred.CardBattle
         {
             if (Hundred.CardBattle.Presentation.CardQualityPreview.IsOpen) return;
             InitStyles();
+            if (state != null && summonDraft == null && !detailsOpen && arenaUguiRoot != null && arenaUguiRoot.activeSelf) return;
             if(state!=null && summonDraft==null && !detailsOpen){DrawArena();return;}
             GUI.matrix = Matrix4x4.Scale(new Vector3(Screen.width / 1200f, Screen.height / 760f, 1));
             GUI.Label(new Rect(32,18,650,40), "HUNDRED / CARD BATTLE", title);
-            if (state == null) { Lobby(); return; }
+            if (state == null) return;
             if (summonDraft != null) { DrawSummonPlan(); return; }
             if (detailsOpen) { DrawCardDetails(); return; }
             if (GUI.Button(new Rect(480,20,190,34), "カード一覧・詳細", button))
@@ -289,11 +318,7 @@ namespace Hundred.CardBattle
             }
             GUI.enabled = !busy;
             if (pendingId != null && GUI.Button(new Rect(278,680,196,44), "操作を再試行", button)) StartCoroutine(Send(pendingPath, pendingJson));
-            if (GUI.Button(new Rect(980,680,188,44), "ロビーへ戻る", button))
-            {
-                state = null; token = null; ClearPending(); selectedId = null; selectedFieldId = null;
-                message = "新しいルームを作成できます。元の席は保持されます。";
-            }
+            if (GUI.Button(new Rect(980,680,188,44), "カードホームへ戻る", button)) ReturnHome();
             GUI.enabled = true;
             if (state != null)
             {
@@ -463,31 +488,6 @@ namespace Hundred.CardBattle
                 else GUI.Box(rect, text, card);
             }
             GUI.EndScrollView();
-        }
-        void Lobby()
-        {
-            if (GUI.Button(new Rect(1030,18,138,36), "カード表示試作", button))
-            {
-                Hundred.CardBattle.Presentation.CardQualityPreview.Open();
-                return;
-            }
-            GUI.Label(new Rect(34,65,900,32), "2人対戦・アタック／ブロックPoC", heading);
-            GUI.Label(new Rect(160,109,130,38), "保存デッキID", label);
-            GUI.enabled = !busy;
-            deckInput = GUI.TextField(new Rect(300,104,540,44), deckInput, 80, new GUIStyle(input) { fontSize = 18 });
-            if (GUI.Button(new Rect(852,104,188,44), "ホームを開く", button)) Application.OpenURL("http://127.0.0.1:8788");
-            GUI.Label(new Rect(160,155,880,28), "ホームで保存したIDを指定。初期デッキは deck-poc。対戦開始時に内容を固定します。", small);
-            Panel(new Rect(160,185,880,365), "同じルームで接続する");
-            GUI.Label(new Rect(192,245,780,52), "最初のブラウザではルームを作成します。", label);
-            GUI.enabled = !busy;
-            if (GUI.Button(new Rect(192,290,300,62), "ルームを作成", button)) StartCoroutine(Send("/api/rooms", JsonUtility.ToJson(new CreateRoomCommand { deckId = deckInput.Trim() }), true));
-            GUI.Label(new Rect(192,378,780,50), "もう片方では、表示された8文字のルームコードを入力します。", label);
-            roomInput = GUI.TextField(new Rect(192,437,440,62), roomInput, 8, input).ToUpperInvariant();
-            GUI.enabled = !busy && roomInput.Trim().Length == 8;
-            if (GUI.Button(new Rect(664,437,300,62), "ルームに参加", button)) StartCoroutine(Send("/api/rooms/join", JsonUtility.ToJson(new JoinCommand { roomCode = roomInput.Trim(), deckId = deckInput.Trim() }), true));
-            GUI.enabled = true;
-            GUI.Label(new Rect(160,578,880,90), busy ? "接続中…" : message, label);
-            GUI.Label(new Rect(160,680,880,55), "同じPCの別タブ・別ウィンドウで確認できます。ページ再読込後は新しいルームを作成してください。", small);
         }
     }
 }

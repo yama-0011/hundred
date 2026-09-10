@@ -1,0 +1,4 @@
+CREATE TABLE card_archives (
+  card_id TEXT PRIMARY KEY,
+  archived_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

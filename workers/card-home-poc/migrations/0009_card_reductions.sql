@@ -1,0 +1,6 @@
+CREATE TABLE card_reductions (
+  card_id TEXT PRIMARY KEY,
+  color TEXT NOT NULL CHECK(color IN ('RED','PURPLE','GREEN','WHITE','YELLOW','BLUE')),
+  count INTEGER NOT NULL CHECK(count BETWEEN 0 AND 6)
+);
+

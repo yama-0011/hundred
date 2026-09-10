@@ -1,4 +1,7 @@
 mergeInto(LibraryManager.library, {
+  HundredReturnHome: function (urlPtr) {
+    window.location.assign(UTF8ToString(urlPtr));
+  },
   HundredCopyRoomId: function (valuePtr, receiverPtr) {
     var value = UTF8ToString(valuePtr);
     var receiver = UTF8ToString(receiverPtr);

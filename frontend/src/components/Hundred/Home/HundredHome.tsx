@@ -54,7 +54,7 @@ import '../../../styles/Hundred/hundred-home-settings.css'
 
 // IDを文字列の自由入力にせず、扱えるカテゴリとAppを型で限定する。
 type CategoryId = 'profile' | 'apps' | 'store' | 'mail' | 'settings'
-type AppId = 'record-hub' | 'creative-ia' | 'memo' | 'anigram'
+type AppId = 'record-hub' | 'creative-ia' | 'memo' | 'anigram' | 'card-home'
 
 type Category = {
   id: CategoryId
@@ -82,6 +82,7 @@ const categories: Category[] = [
 ]
 
 const installedApps: InstalledApp[] = [
+  { id: 'card-home', name: 'カードホーム', detail: 'デッキを組んでカードバトルへ' },
   { id: 'record-hub', name: 'Record Hub', detail: '記録をひとつの場所に' },
   {
     id: 'creative-ia',
@@ -271,6 +272,12 @@ function CategoryIcon({ id }: { id: CategoryId }) {
 function AppIcon({ id }: { id: AppId }) {
   // Appごとのアイコンを同じ大きさのSVGとして描画する。
   const paths: Record<AppId, ReactNode> = {
+    'card-home': (
+      <>
+        <rect x="8" y="3" width="12" height="17" rx="2" />
+        <path d="M5 7H4a1 1 0 0 0-1 1v12a2 2 0 0 0 2 2h10M14 8l3 4-3 4-3-4 3-4Z" />
+      </>
+    ),
     'record-hub': (
       <>
         <path d="M7 5.5h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Z" />
@@ -684,6 +691,10 @@ function HundredHome() {
     const appRoutes: Partial<Record<AppId, string>> = {
       'creative-ia': '/creative-ia',
       anigram: '/anigram',
+    }
+    if (app.id === 'card-home' && index === selectedAppIndexRef.current) {
+      window.location.assign(import.meta.env.VITE_CARD_HOME_URL || 'http://127.0.0.1:8788/')
+      return
     }
     const route = appRoutes[app.id]
 

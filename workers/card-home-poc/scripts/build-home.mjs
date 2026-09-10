@@ -1,0 +1,11 @@
+import {createRequire} from 'node:module';
+import {readFile,writeFile} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
+const require=createRequire(import.meta.url);
+const {build}=require('esbuild');
+const result=await build({entryPoints:[fileURLToPath(new URL('../src/home.jsx',import.meta.url))],bundle:true,write:false,minify:true,format:'iife',nodePaths:[fileURLToPath(new URL('../../../frontend/node_modules',import.meta.url))],define:{'process.env.NODE_ENV':'"production"'}});
+const css=await readFile(new URL('../src/home.css',import.meta.url),'utf8');
+const templateCss=await readFile(new URL('../src/template.css',import.meta.url),'utf8');
+const setsCss=await readFile(new URL('../src/sets.css',import.meta.url),'utf8');
+const metadataCss=await readFile(new URL('../src/metadata.css',import.meta.url),'utf8');
+await writeFile(new URL('../src/home.html',import.meta.url),`<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HUNDRED カードホーム</title><style>${css}\n${templateCss}\n${setsCss}\n${metadataCss}</style><div id="root"></div><script>${result.outputFiles[0].text.replaceAll('</script','<\\/script')}</script></html>`);

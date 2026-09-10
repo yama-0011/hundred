@@ -1,0 +1,32 @@
+/* Red spirit template. Keep these measurements together for later visual tuning. */
+.face{aspect-ratio:1040/1512;border:0;border-radius:10px;background:#171717;box-shadow:0 24px 65px #000c;color:#080808}
+.artbox{position:absolute;z-index:1;left:8.8%;right:8.8%;top:9.5%;bottom:auto;height:46%;overflow:hidden}
+.artbox .art{background-size:contain;background-position:center;background-repeat:no-repeat}
+.detail-layer{position:absolute;z-index:2;left:8.8%;top:55%;width:82.4%;height:39.2%;object-fit:cover;object-position:20% center}
+.frame-layer{position:absolute;z-index:5;inset:0;width:100%;height:100%;pointer-events:none}
+.cost{--cost-x:0px;--cost-y:0px;z-index:7;top:1.8%;left:4.2%;width:13%;height:auto;aspect-ratio:1;background:none;color:#f7f7f7;font-family:Georgia,"Times New Roman",serif;font-size:29px;font-style:italic;font-weight:700;font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"lnum" 1,"tnum" 1;line-height:1;-webkit-text-stroke:.8px #080808;paint-order:stroke fill;text-shadow:0 1px 0 #000,1px 2px 1px #000;transform:translate(var(--cost-x),var(--cost-y)) scale(.9,1.06);transform-origin:center}
+.cost-1{--cost-x:1px}
+.cost-2,.cost-3,.cost-4,.cost-7{--cost-x:1px}
+.cost-6,.cost-9{--cost-y:-.5px}
+.cost-10,.cost-11,.cost-12{--cost-x:-1px;font-size:22px;letter-spacing:-1.5px;transform:translate(var(--cost-x),var(--cost-y)) scale(.88,1.04)}
+.name{z-index:7;left:9.2%;right:9.2%;top:55%;height:5.15%;padding:0 2.5% 0 19%;background:none;display:flex;align-items:center;justify-content:flex-start;text-align:left;overflow:hidden;white-space:nowrap}
+.name strong{font-family:"Noto Serif JP","Yu Mincho",serif;font-size:14px;font-weight:900;line-height:1;text-shadow:0 1px 0 #fff}
+.type-label{position:absolute;z-index:8;left:8.8%;top:55.85%;width:18%;height:4.3%;display:flex;align-items:center;justify-content:flex-start;overflow:hidden}
+.type-label img{position:absolute;inset:0;width:100%;height:100%;object-fit:fill}
+.type-label strong{position:relative;padding:0 0 0 28%;color:#fff;font-family:"Noto Sans JP",sans-serif;font-size:6.5px;font-weight:800;line-height:1;text-align:left;text-shadow:0 1px 2px #000,0 0 2px #000;white-space:nowrap;transform:translateY(-1px)}
+.stats{z-index:7;left:9.2%;top:calc(60% + 5px);bottom:auto;width:auto;height:auto;padding:0;background:none;display:flex;flex-direction:column;gap:0}
+.stats span{position:relative;height:34px;width:48px;display:grid;grid-template-rows:15px 19px;row-gap:0;justify-items:start}
+.stats img{width:45px;height:15px;object-fit:contain}
+.stats strong{display:block;width:48px;font-family:"Arial Black","Helvetica Neue",Arial,sans-serif;font-size:17px;font-weight:900;font-variant-numeric:lining-nums tabular-nums;line-height:20px;letter-spacing:-.04em;text-align:left;transform:translateY(-2px) scaleX(1.05);transform-origin:left top}
+.stats .required-cores{position:absolute;z-index:2;left:1px;top:2px;width:13px;color:#151515;font-family:"Arial Black","Helvetica Neue",Arial,sans-serif;font-size:8px;font-weight:900;line-height:12px;text-align:center;text-shadow:0 1px #fff;pointer-events:none}
+.stats strong.bp-long{font-size:17px;line-height:20px;letter-spacing:-.04em;transform:translateY(-2px) scaleX(.84)}
+.symbol{z-index:7;right:11%;bottom:7.6%;width:11%;height:auto;color:initial;font-size:initial}
+
+.reductions{position:absolute;z-index:7;left:22%;top:3.1%;width:48px;height:31px}
+.reductions img{position:absolute;width:14px;height:14px;object-fit:contain;filter:drop-shadow(0 1px 1px #0008)}
+.reductions-1 img:nth-child(1){left:4px;top:7px}
+.reductions-2 img:nth-child(1){left:4px;top:7px}.reductions-2 img:nth-child(2){left:15px;top:-6px}
+.reductions-3 img:nth-child(1){left:4px;top:7px}.reductions-3 img:nth-child(2){left:15px;top:-6px}.reductions-3 img:nth-child(3){left:33px;top:-6px}
+.reductions-4 img:nth-child(1){left:4px;top:7px}.reductions-4 img:nth-child(2){left:15px;top:-6px}.reductions-4 img:nth-child(3){left:33px;top:-6px}.reductions-4 img:nth-child(4){left:15px;top:20px}
+.reductions-5 img:nth-child(1){left:4px;top:7px}.reductions-5 img:nth-child(2){left:15px;top:-6px}.reductions-5 img:nth-child(3){left:33px;top:-6px}.reductions-5 img:nth-child(4){left:15px;top:20px}.reductions-5 img:nth-child(5){left:33px;top:20px}
+.reductions-6 img:nth-child(1){left:4px;top:7px}.reductions-6 img:nth-child(2){left:15px;top:-6px}.reductions-6 img:nth-child(3){left:33px;top:-6px}.reductions-6 img:nth-child(4){left:15px;top:20px}.reductions-6 img:nth-child(5){left:33px;top:20px}.reductions-6 img:nth-child(6){left:44px;top:7px}
