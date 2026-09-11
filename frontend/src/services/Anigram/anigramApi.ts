@@ -87,6 +87,7 @@ export type AnigramAdminSettings = {
   hatchingDurationSeconds: number
   initialFullnessPoints: number
   maxFullnessPoints: number
+  fullnessStorageLimitPercent: number
   fullnessDecayPercentPerHour: number
   starvationGraceSeconds: number
   evolutionFullnessThresholdPercent: number

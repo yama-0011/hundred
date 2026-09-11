@@ -7,6 +7,7 @@ interface AnigramSettingsRow {
   hatching_duration_seconds: number;
   initial_fullness_points: number;
   max_fullness_points: number;
+  fullness_storage_limit_percent: number;
   fullness_decay_rate_per_hour: number;
   starvation_grace_seconds: number;
   evolution_fullness_threshold: number;
@@ -152,6 +153,7 @@ function serializeSettings(row: AnigramSettingsRow) {
     hatchingDurationSeconds: row.hatching_duration_seconds,
     initialFullnessPoints: row.initial_fullness_points,
     maxFullnessPoints: row.max_fullness_points,
+    fullnessStorageLimitPercent: row.fullness_storage_limit_percent,
     fullnessDecayPercentPerHour: row.fullness_decay_rate_per_hour * 100,
     starvationGraceSeconds: row.starvation_grace_seconds,
     evolutionFullnessThresholdPercent:
@@ -166,7 +168,8 @@ async function loadSettings(env: AnigramEnv, species: string) {
   const row = await env.DB.prepare(
     `SELECT species, display_name, hatch_required_points,
             hatching_duration_seconds, initial_fullness_points,
-            max_fullness_points, fullness_decay_rate_per_hour,
+            max_fullness_points, fullness_storage_limit_percent,
+            fullness_decay_rate_per_hour,
             starvation_grace_seconds, evolution_fullness_threshold,
             evolution_hold_seconds, next_evolution_stage, updated_at
        FROM anigram_species_settings
@@ -188,7 +191,8 @@ export async function getAnigramAdminSettings(env: AnigramEnv) {
     env.DB.prepare(
       `SELECT species, display_name, hatch_required_points,
               hatching_duration_seconds, initial_fullness_points,
-              max_fullness_points, fullness_decay_rate_per_hour,
+              max_fullness_points, fullness_storage_limit_percent,
+              fullness_decay_rate_per_hour,
               starvation_grace_seconds, evolution_fullness_threshold,
               evolution_hold_seconds, next_evolution_stage, updated_at
          FROM anigram_species_settings
@@ -441,6 +445,10 @@ export async function updateAnigramAdminSettings(
       maxFullnessPoints,
     ),
     maxFullnessPoints,
+    fullnessStorageLimitPercent:
+      value.fullnessStorageLimitPercent === undefined
+        ? previousRow.fullness_storage_limit_percent
+        : requiredNumber(value.fullnessStorageLimitPercent, 100, 500),
     fullnessDecayPercentPerHour: requiredNumber(
       value.fullnessDecayPercentPerHour,
       0,
@@ -495,12 +503,13 @@ export async function updateAnigramAdminSettings(
               hatching_duration_seconds = ?3,
               initial_fullness_points = ?4,
               max_fullness_points = ?5,
-              fullness_decay_rate_per_hour = ?6,
-              starvation_grace_seconds = ?7,
-              evolution_fullness_threshold = ?8,
-              evolution_hold_seconds = ?9,
-              next_evolution_stage = ?10,
-              updated_at = ?11
+              fullness_storage_limit_percent = ?6,
+              fullness_decay_rate_per_hour = ?7,
+              starvation_grace_seconds = ?8,
+              evolution_fullness_threshold = ?9,
+              evolution_hold_seconds = ?10,
+              next_evolution_stage = ?11,
+              updated_at = ?12
         WHERE species = ?1`,
     ).bind(
       species,
@@ -508,6 +517,7 @@ export async function updateAnigramAdminSettings(
       nextSettings.hatchingDurationSeconds,
       nextSettings.initialFullnessPoints,
       nextSettings.maxFullnessPoints,
+      nextSettings.fullnessStorageLimitPercent,
       nextSettings.fullnessDecayPercentPerHour / 100,
       nextSettings.starvationGraceSeconds,
       nextSettings.evolutionFullnessThresholdPercent / 100,
@@ -518,7 +528,7 @@ export async function updateAnigramAdminSettings(
     env.DB.prepare(
       `UPDATE anigram_pets
           SET hatch_points = MIN(hatch_points, ?2),
-              fullness_points = MIN(fullness_points, ?3),
+              fullness_points = MIN(fullness_points, ?3 * ?4 / 100.0),
               life_stage = CASE
                 WHEN status = 'alive' AND life_stage = 'egg'
                   AND hatch_points >= ?2 THEN 'hatching'
@@ -526,15 +536,16 @@ export async function updateAnigramAdminSettings(
               END,
               hatching_started_at = CASE
                 WHEN status = 'alive' AND life_stage = 'egg'
-                  AND hatch_points >= ?2 THEN ?4
+                  AND hatch_points >= ?2 THEN ?5
                 ELSE hatching_started_at
               END,
-              updated_at = ?4
+              updated_at = ?5
         WHERE species = ?1`,
     ).bind(
       species,
       nextSettings.hatchRequiredPoints,
       nextSettings.maxFullnessPoints,
+      nextSettings.fullnessStorageLimitPercent,
       now,
     ),
     env.DB.prepare(

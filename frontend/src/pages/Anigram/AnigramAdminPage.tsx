@@ -34,6 +34,7 @@ type SettingsDraft = {
   hatchingDurationSeconds: number
   initialFullnessPoints: number
   maxFullnessPoints: number
+  fullnessStorageLimitPercent: number
   fullnessDecayPercentPerHour: number
   starvationGraceHours: number
   evolutionFullnessThresholdPercent: number
@@ -73,6 +74,7 @@ function createDraft(settings: AnigramAdminSettings): SettingsDraft {
     hatchingDurationSeconds: settings.hatchingDurationSeconds,
     initialFullnessPoints: settings.initialFullnessPoints,
     maxFullnessPoints: settings.maxFullnessPoints,
+    fullnessStorageLimitPercent: settings.fullnessStorageLimitPercent ?? 120,
     fullnessDecayPercentPerHour: settings.fullnessDecayPercentPerHour,
     starvationGraceHours: settings.starvationGraceSeconds / 3_600,
     evolutionFullnessThresholdPercent: settings.evolutionFullnessThresholdPercent,
@@ -203,6 +205,7 @@ function AnigramAdminPage() {
         hatchingDurationSeconds: draft.hatchingDurationSeconds,
         initialFullnessPoints: draft.initialFullnessPoints,
         maxFullnessPoints: draft.maxFullnessPoints,
+        fullnessStorageLimitPercent: draft.fullnessStorageLimitPercent,
         fullnessDecayPercentPerHour: draft.fullnessDecayPercentPerHour,
         starvationGraceSeconds: Math.round(draft.starvationGraceHours * 3_600),
         evolutionFullnessThresholdPercent:
@@ -455,9 +458,22 @@ function AnigramAdminPage() {
                     )
                   }}
                 />
+                <NumberField
+                  label="満腹ポイント蓄積上限（%）"
+                  min={100}
+                  max={500}
+                  step={1}
+                  value={draft.fullnessStorageLimitPercent}
+                  onChange={(value) =>
+                    setNumber('fullnessStorageLimitPercent', value)
+                  }
+                />
                 <NumberField label="1時間あたりの減少率（%）" min={0} max={100} step={0.01} value={draft.fullnessDecayPercentPerHour} onChange={(value) => setNumber('fullnessDecayPercentPerHour', value)} />
                 <NumberField label="満腹度0から死亡まで（時間）" min={0} max={8760} step={0.25} value={draft.starvationGraceHours} onChange={(value) => setNumber('starvationGraceHours', value)} />
               </div>
+              <p className="anigram-instagram-note">
+                100%を超えて蓄積したポイントは内部で保持します。利用者画面の満腹度は常に100%以下で表示します。
+              </p>
             </section>
 
             <div className="anigram-admin-form__actions">

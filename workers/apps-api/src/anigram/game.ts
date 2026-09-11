@@ -28,6 +28,7 @@ interface AnigramPetRow {
   hatching_duration_seconds: number;
   initial_fullness_points: number;
   max_fullness_points: number;
+  fullness_storage_limit_percent: number;
   fullness_decay_rate_per_hour: number;
   starvation_grace_seconds: number;
   evolution_fullness_threshold: number;
@@ -103,6 +104,7 @@ async function loadPet(env: AnigramEnv, ownerUserId: string) {
        settings.hatching_duration_seconds,
        settings.initial_fullness_points,
        settings.max_fullness_points,
+       settings.fullness_storage_limit_percent,
        settings.fullness_decay_rate_per_hour,
        settings.starvation_grace_seconds,
        settings.evolution_fullness_threshold,
@@ -749,7 +751,9 @@ export async function addAnigramGrowthEvent(
     (pet.life_stage === "baby" || pet.life_stage === "adult")
   ) {
     appliedTarget = "fullness";
-    appliedPoints = Math.min(points, pet.max_fullness_points - pet.fullness_points);
+    const fullnessStorageLimit =
+      pet.max_fullness_points * (pet.fullness_storage_limit_percent / 100);
+    appliedPoints = Math.min(points, fullnessStorageLimit - pet.fullness_points);
     nextFullnessPoints = pet.fullness_points + appliedPoints;
     if (appliedPoints > 0) lastFedAt = now;
     if (nextFullnessPoints > 0) zeroStartedAt = null;
