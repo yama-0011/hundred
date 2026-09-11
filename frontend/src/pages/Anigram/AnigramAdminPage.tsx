@@ -12,6 +12,10 @@ import {
   type AnigramInstagramDeliverySettings,
   type AnigramSettingsHistory,
 } from '../../services/Anigram/anigramApi'
+import {
+  getInstagramConnectionStatus,
+  type InstagramConnectionStatus,
+} from '../../services/Instagram/instagramConnectionApi'
 import '../../styles/Anigram/anigram.css'
 
 type AdminTab = 'anigram' | 'instagram' | 'administrators'
@@ -98,6 +102,10 @@ function AnigramAdminPage() {
     useState<InstagramDeliveryDraft | null>(null)
   const [newAdministratorId, setNewAdministratorId] = useState('')
   const [canManage, setCanManage] = useState(false)
+  const [instagramConnection, setInstagramConnection] =
+    useState<InstagramConnectionStatus | null>(null)
+  const [instagramConnectionLoading, setInstagramConnectionLoading] =
+    useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [updatingAdministrator, setUpdatingAdministrator] = useState(false)
@@ -141,8 +149,25 @@ function AnigramAdminPage() {
     try {
       const access = await getAnigramAdminAccess()
       setCanManage(access.allowed)
+      if (access.allowed) {
+        setInstagramConnectionLoading(true)
+        try {
+          setInstagramConnection(
+            await getInstagramConnectionStatus('anigramAdmin'),
+          )
+        } catch {
+          setInstagramConnection(null)
+        } finally {
+          setInstagramConnectionLoading(false)
+        }
+      } else {
+        setInstagramConnection(null)
+        setInstagramConnectionLoading(false)
+      }
     } catch {
       setCanManage(false)
+      setInstagramConnection(null)
+      setInstagramConnectionLoading(false)
     } finally {
       setLoading(false)
     }
@@ -433,10 +458,54 @@ function AnigramAdminPage() {
       activeTab === 'instagram' &&
       instagramDraft &&
       instagramDelivery ? (
-        <form
-          className="anigram-admin-form"
-          onSubmit={(event) => void saveInstagramDelivery(event)}
-        >
+        <>
+          <section className="anigram-panel anigram-instagram-connection-card">
+            <div className="anigram-panel__heading">
+              <div>
+                <p className="anigram-eyebrow">INSTAGRAM CONNECTION</p>
+                <h2>Instagram接続</h2>
+              </div>
+              {canManage ? (
+                <span className="anigram-connection-status">
+                  <i
+                    data-connected={instagramConnection?.connected === true}
+                    aria-hidden="true"
+                  />
+                  {instagramConnectionLoading
+                    ? '確認中'
+                    : instagramConnection?.connected
+                      ? '接続済み'
+                      : instagramConnection?.tokenExpired
+                        ? '再接続が必要'
+                        : '未接続'}
+                </span>
+              ) : (
+                <span>管理者のみ確認できます</span>
+              )}
+            </div>
+
+            {canManage && instagramConnection?.account ? (
+              <p className="anigram-instagram-account">
+                接続先 @{instagramConnection.account.username}
+              </p>
+            ) : null}
+            <p className="anigram-instagram-note">
+              接続情報はCreative IAと共通です。同じHundredユーザーで接続先を変更・解除すると、Creative IA側にも反映されます。
+            </p>
+            {canManage ? (
+              <Link
+                className="anigram-link-button"
+                to="/anigram/settings/instagram"
+              >
+                接続を管理
+              </Link>
+            ) : null}
+          </section>
+
+          <form
+            className="anigram-admin-form"
+            onSubmit={(event) => void saveInstagramDelivery(event)}
+          >
           <fieldset
             className="anigram-admin-fieldset"
             disabled={!canManage || saving}
@@ -629,7 +698,8 @@ function AnigramAdminPage() {
               </button>
             </div>
           </fieldset>
-        </form>
+          </form>
+        </>
       ) : null}
 
       {!loading && activeTab === 'administrators' ? (

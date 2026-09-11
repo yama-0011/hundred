@@ -942,10 +942,19 @@ Unityが読み込めない場合でも、満腹度、生死状態、最終給餌
 | GET | `/api/anigram/admin/access` | ログイン中ユーザーの変更権限を取得 |
 | PUT | `/api/anigram/admin/settings/:species` | 指定したペットの設定を更新 |
 | PUT | `/api/anigram/admin/instagram` | Instagram自動配信条件を更新 |
+| GET | `/api/anigram/admin/instagram/status` | 管理者のInstagram接続状態を取得 |
+| GET | `/api/anigram/admin/instagram/oauth/start` | 管理者のInstagram接続を開始 |
+| DELETE | `/api/anigram/admin/instagram/connection` | 管理者のInstagram接続を解除 |
 | POST | `/api/anigram/admin/users` | 管理者を登録 |
 | DELETE | `/api/anigram/admin/users` | 管理者を削除 |
 
 Instagram設定では、自動配信の有効・無効、対象ペット、配信時刻を`anigram_instagram_delivery_settings`へ保存する。時刻は`Asia/Tokyo`として扱う。初期段階では条件の保存だけを提供し、意図しない投稿を避けるため自動投稿処理には接続しない。メッセージと画像の設定・プレビュー・投稿監査を追加した後に配信処理へ接続する。
+
+Instagram設定タブには、ログイン中の登録済み管理者に限って現在の接続状態と接続アカウントを表示し、`/anigram/settings/instagram`の専用画面へ遷移する導線を設ける。専用画面では接続状態、アカウント名、アカウントID、接続日時、トークン有効期限を確認し、Instagram Business Loginによる接続・再接続・接続解除を行える。非管理者は接続情報を取得せず、専用画面の操作も許可しない。
+
+OAuth処理、トークンの暗号化保存、接続状態取得はCreative IAと共通化する。接続情報はD1の`instagram_connections`へHundredユーザー単位で保存する。共通処理を呼び出すAnigram管理APIでは、登録済み管理者であることをWorkerでも検証する。Creative IA向けの既存APIパスと共通APIの`/api/instagram/*`は互換性維持のため残す。Metaへ登録済みのOAuthコールバックURLは`/api/creative-ia/instagram/oauth/callback`を継続利用し、OAuth開始時の`returnTo`に応じてAnigramまたはCreative IAへ戻す。
+
+同じHundredユーザーがCreative IAとAnigramを利用する場合、Instagram接続は両機能で共有される。Anigramから接続先を変更または解除するとCreative IAにも反映されるため、専用画面と解除確認ダイアログへ影響範囲を明示する。アクセストークンはWorker内で暗号化し、ブラウザへ返さない。
 
 同じ画面でInstagram反応同期の稼働・停止を管理する。停止時は理由、操作した管理者、停止日時を保存する。Cron Triggerは維持し、`scheduled()`の開始時にD1の`reaction_sync_enabled`を確認する。停止中はInstagram APIを呼び出さず終了する。設定取得に失敗した場合も同期を開始しないフェイルクローズとする。
 

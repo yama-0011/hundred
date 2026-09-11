@@ -6,6 +6,7 @@ import HundredHomePage from './pages/Hundred/HundredHomePage'
 import AnigramPage from './pages/Anigram/AnigramPage'
 import AnigramAdminPage from './pages/Anigram/AnigramAdminPage'
 import AnigramHistoryPage from './pages/Anigram/AnigramHistoryPage'
+import AnigramInstagramConnectionPage from './pages/Anigram/AnigramInstagramConnectionPage'
 
 /**
  * アプリケーション全体のルーティング定義。
@@ -23,6 +24,10 @@ function App() {
       <Route path="/anigram" element={<AnigramPage />} />
       <Route path="/anigram/history" element={<AnigramHistoryPage />} />
       <Route path="/anigram/admin" element={<AnigramAdminPage />} />
+      <Route
+        path="/anigram/settings/instagram"
+        element={<AnigramInstagramConnectionPage />}
+      />
       <Route
         path="/creative-ia/settings/wordpress"
         element={<CreativeIAConnectionPage />}

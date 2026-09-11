@@ -864,13 +864,22 @@ export default {
 
     if (
       request.method === "GET" &&
-      url.pathname === "/api/creative-ia/instagram/status"
+      (url.pathname === "/api/instagram/status" ||
+        url.pathname === "/api/creative-ia/instagram/status" ||
+        url.pathname === "/api/anigram/admin/instagram/status")
     ) {
       try {
+        if (url.pathname === "/api/anigram/admin/instagram/status") {
+          const { ownerUserId, username } = await verifyCognitoAccessToken(request, env);
+          await requireAnigramValidationAdmin(env, ownerUserId, username);
+        }
         return await handleInstagramStatus(request, env);
       } catch (error) {
         if (error instanceof CognitoAuthenticationError) {
           return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        if (error instanceof AnigramGameError && error.code === "FORBIDDEN") {
+          return json(request, env, { error: "管理者権限が必要です" }, 403);
         }
         return json(request, env, { error: "接続状態を取得できませんでした" }, 500);
       }
@@ -878,7 +887,8 @@ export default {
 
     if (
       request.method === "GET" &&
-      url.pathname === "/api/creative-ia/instagram/stories"
+      (url.pathname === "/api/instagram/stories" ||
+        url.pathname === "/api/creative-ia/instagram/stories")
     ) {
       try {
         const { ownerUserId } = await verifyCognitoAccessToken(request, env);
@@ -1539,10 +1549,15 @@ export default {
 
     if (
       request.method === "GET" &&
-      url.pathname === "/api/creative-ia/instagram/oauth/start"
+      (url.pathname === "/api/instagram/oauth/start" ||
+        url.pathname === "/api/creative-ia/instagram/oauth/start" ||
+        url.pathname === "/api/anigram/admin/instagram/oauth/start")
     ) {
       try {
-        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        const { ownerUserId, username } = await verifyCognitoAccessToken(request, env);
+        if (url.pathname === "/api/anigram/admin/instagram/oauth/start") {
+          await requireAnigramValidationAdmin(env, ownerUserId, username);
+        }
         const authorizationUrl = await createInstagramAuthorizationUrl(
           env,
           ownerUserId,
@@ -1552,6 +1567,9 @@ export default {
       } catch (error) {
         if (error instanceof CognitoAuthenticationError) {
           return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        if (error instanceof AnigramGameError && error.code === "FORBIDDEN") {
+          return json(request, env, { error: "管理者権限が必要です" }, 403);
         }
         return json(
           request,
@@ -1580,10 +1598,15 @@ export default {
 
     if (
       request.method === "DELETE" &&
-      url.pathname === "/api/creative-ia/instagram/connection"
+      (url.pathname === "/api/instagram/connection" ||
+        url.pathname === "/api/creative-ia/instagram/connection" ||
+        url.pathname === "/api/anigram/admin/instagram/connection")
     ) {
       try {
-        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        const { ownerUserId, username } = await verifyCognitoAccessToken(request, env);
+        if (url.pathname === "/api/anigram/admin/instagram/connection") {
+          await requireAnigramValidationAdmin(env, ownerUserId, username);
+        }
         await env.DB.prepare(
           "DELETE FROM instagram_connections WHERE owner_user_id = ?1",
         )
@@ -1593,6 +1616,9 @@ export default {
       } catch (error) {
         if (error instanceof CognitoAuthenticationError) {
           return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        if (error instanceof AnigramGameError && error.code === "FORBIDDEN") {
+          return json(request, env, { error: "管理者権限が必要です" }, 403);
         }
         return json(request, env, { error: "接続を解除できませんでした" }, 500);
       }
