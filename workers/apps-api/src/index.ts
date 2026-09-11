@@ -91,6 +91,18 @@ import {
   type AnigramEvolutionValidationAction,
   type AnigramStarvationValidationAction,
 } from "./anigram/game";
+import {
+  AnigramAdminSettingsError,
+  getAnigramInstagramReactionSyncControl,
+  getAnigramAdminSettings,
+  isAnigramAdministrator,
+  recordAnigramInstagramSyncResult,
+  registerAnigramAdministrator,
+  removeAnigramAdministrator,
+  updateAnigramAdminSettings,
+  updateAnigramInstagramDeliverySettings,
+} from "./anigram/admin";
+import { getAnigramHistory } from "./anigram/history";
 
 interface Env
   extends WordPressOAuthEnv,
@@ -100,30 +112,26 @@ interface Env
     GeminiEnv {
   COGNITO_USER_POOL_ID: string;
   COGNITO_USER_POOL_CLIENT_ID: string;
-  ANIGRAM_ADMIN_USER_IDS?: string;
 }
 
-function canManageAnigramValidation(
+async function canManageAnigramValidation(
   env: Env,
   ownerUserId: string,
-  groups: string[],
+  username = ownerUserId,
 ) {
-  const allowedUserIds = (env.ANIGRAM_ADMIN_USER_IDS ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
   return (
-    groups.some((group) => group.toLowerCase() === "admin") ||
-    allowedUserIds.includes(ownerUserId)
+    (await isAnigramAdministrator(env, username)) ||
+    (username !== ownerUserId &&
+      (await isAnigramAdministrator(env, ownerUserId)))
   );
 }
 
-function requireAnigramValidationAdmin(
+async function requireAnigramValidationAdmin(
   env: Env,
   ownerUserId: string,
-  groups: string[],
+  username = ownerUserId,
 ) {
-  if (!canManageAnigramValidation(env, ownerUserId, groups)) {
+  if (!(await canManageAnigramValidation(env, ownerUserId, username))) {
     throw new AnigramGameError("FORBIDDEN");
   }
 }
@@ -397,9 +405,16 @@ export default {
     context: ExecutionContext,
   ): Promise<void> {
     context.waitUntil(
-      syncAllInstagramStoryInsights(env).then((summary) => {
+      (async () => {
+        const syncEnabled = await getAnigramInstagramReactionSyncControl(env);
+        if (!syncEnabled) {
+          console.log("Instagram Story sync skipped: service paused");
+          return;
+        }
+        const summary = await syncAllInstagramStoryInsights(env);
+        await recordAnigramInstagramSyncResult(env, summary);
         console.log("Instagram Story sync completed", summary);
-      }),
+      })(),
     );
   },
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -429,11 +444,11 @@ export default {
       url.pathname === "/api/anigram/pet"
     ) {
       try {
-        const { ownerUserId, groups } = await verifyCognitoAccessToken(request, env);
+        const { ownerUserId, username } = await verifyCognitoAccessToken(request, env);
         return json(request, env, {
           pet: await getAnigramPetState(env, ownerUserId),
           validation: {
-            allowed: canManageAnigramValidation(env, ownerUserId, groups),
+            allowed: await canManageAnigramValidation(env, ownerUserId, username),
           },
         });
       } catch (error) {
@@ -441,6 +456,217 @@ export default {
           return json(request, env, { error: "認証が必要です" }, 401);
         }
         return json(request, env, { error: "動物の状態を取得できませんでした" }, 500);
+      }
+    }
+
+    if (
+      request.method === "GET" &&
+      url.pathname === "/api/anigram/history"
+    ) {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        const requestedLimit = Number(url.searchParams.get("limit") ?? 50);
+        return json(
+          request,
+          env,
+          await getAnigramHistory(
+            env,
+            ownerUserId,
+            Number.isFinite(requestedLimit) ? requestedLimit : 50,
+          ),
+        );
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        return json(request, env, { error: "Anigramの履歴を取得できませんでした" }, 500);
+      }
+    }
+
+    if (
+      request.method === "GET" &&
+      url.pathname === "/api/anigram/admin/settings"
+    ) {
+      try {
+        return json(request, env, await getAnigramAdminSettings(env));
+      } catch (error) {
+        return json(request, env, { error: "Anigram設定を取得できませんでした" }, 500);
+      }
+    }
+
+    if (
+      request.method === "GET" &&
+      url.pathname === "/api/anigram/admin/access"
+    ) {
+      try {
+        const { ownerUserId, username } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, {
+          allowed: await canManageAnigramValidation(env, ownerUserId, username),
+        });
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        return json(request, env, { error: "管理者権限を確認できませんでした" }, 500);
+      }
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/anigram/admin/users"
+    ) {
+      try {
+        const { ownerUserId, username } = await verifyCognitoAccessToken(request, env);
+        await requireAnigramValidationAdmin(env, ownerUserId, username);
+        return json(
+          request,
+          env,
+          {
+            administrator: await registerAnigramAdministrator(
+              env,
+              ownerUserId,
+              await request.json(),
+            ),
+          },
+          201,
+        );
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        if (error instanceof AnigramGameError && error.code === "FORBIDDEN") {
+          return json(request, env, { error: "管理者権限が必要です" }, 403);
+        }
+        if (
+          error instanceof AnigramAdminSettingsError ||
+          error instanceof SyntaxError
+        ) {
+          return json(request, env, { error: "ユーザーIDが正しくありません" }, 400);
+        }
+        return json(request, env, { error: "管理者を登録できませんでした" }, 500);
+      }
+    }
+
+    if (
+      request.method === "PUT" &&
+      url.pathname === "/api/anigram/admin/instagram"
+    ) {
+      try {
+        const { ownerUserId, username } =
+          await verifyCognitoAccessToken(request, env);
+        await requireAnigramValidationAdmin(env, ownerUserId, username);
+        return json(request, env, {
+          instagramDelivery: await updateAnigramInstagramDeliverySettings(
+            env,
+            ownerUserId,
+            await request.json(),
+          ),
+        });
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        if (error instanceof AnigramGameError && error.code === "FORBIDDEN") {
+          return json(request, env, { error: "管理者権限が必要です" }, 403);
+        }
+        if (
+          error instanceof AnigramAdminSettingsError ||
+          error instanceof SyntaxError
+        ) {
+          return json(
+            request,
+            env,
+            { error: "Instagram配信設定が正しくありません" },
+            400,
+          );
+        }
+        return json(
+          request,
+          env,
+          { error: "Instagram配信設定を更新できませんでした" },
+          500,
+        );
+      }
+    }
+
+    if (
+      request.method === "DELETE" &&
+      url.pathname === "/api/anigram/admin/users"
+    ) {
+      try {
+        const { ownerUserId, username } = await verifyCognitoAccessToken(request, env);
+        await requireAnigramValidationAdmin(env, ownerUserId, username);
+        await removeAnigramAdministrator(env, await request.json());
+        return new Response(null, {
+          status: 204,
+          headers: getCorsHeaders(request, env),
+        });
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        if (error instanceof AnigramGameError && error.code === "FORBIDDEN") {
+          return json(request, env, { error: "管理者権限が必要です" }, 403);
+        }
+        if (error instanceof AnigramAdminSettingsError) {
+          return json(
+            request,
+            env,
+            {
+              error:
+                error.code === "LAST_ADMIN"
+                  ? "最後の管理者は削除できません"
+                  : "対象の管理者が見つかりません",
+            },
+            error.code === "NOT_FOUND" ? 404 : 400,
+          );
+        }
+        return json(request, env, { error: "管理者を削除できませんでした" }, 500);
+      }
+    }
+
+    const anigramAdminSettingsMatch = url.pathname.match(
+      /^\/api\/anigram\/admin\/settings\/([a-z][a-z0-9_]{0,39})$/u,
+    );
+    if (request.method === "PUT" && anigramAdminSettingsMatch) {
+      try {
+        const { ownerUserId, username } = await verifyCognitoAccessToken(request, env);
+        await requireAnigramValidationAdmin(env, ownerUserId, username);
+        const settings = await updateAnigramAdminSettings(
+          env,
+          ownerUserId,
+          anigramAdminSettingsMatch[1],
+          await request.json(),
+        );
+        return json(request, env, { settings });
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        if (error instanceof AnigramGameError && error.code === "FORBIDDEN") {
+          return json(request, env, { error: "管理者権限が必要です" }, 403);
+        }
+        if (
+          error instanceof AnigramAdminSettingsError ||
+          error instanceof SyntaxError
+        ) {
+          return json(
+            request,
+            env,
+            {
+              error:
+                error instanceof AnigramAdminSettingsError &&
+                error.code === "NOT_FOUND"
+                  ? "対象のペット設定がありません"
+                  : "設定値が正しくありません",
+            },
+            error instanceof AnigramAdminSettingsError &&
+              error.code === "NOT_FOUND"
+              ? 404
+              : 400,
+          );
+        }
+        return json(request, env, { error: "Anigram設定を更新できませんでした" }, 500);
       }
     }
 
@@ -471,8 +697,8 @@ export default {
       url.pathname === "/api/anigram/pet/growth-events/validation"
     ) {
       try {
-        const { ownerUserId, groups } = await verifyCognitoAccessToken(request, env);
-        requireAnigramValidationAdmin(env, ownerUserId, groups);
+        const { ownerUserId, username } = await verifyCognitoAccessToken(request, env);
+        await requireAnigramValidationAdmin(env, ownerUserId, username);
         return json(
           request,
           env,
@@ -509,8 +735,8 @@ export default {
       url.pathname === "/api/anigram/pet/reset/validation"
     ) {
       try {
-        const { ownerUserId, groups } = await verifyCognitoAccessToken(request, env);
-        requireAnigramValidationAdmin(env, ownerUserId, groups);
+        const { ownerUserId, username } = await verifyCognitoAccessToken(request, env);
+        await requireAnigramValidationAdmin(env, ownerUserId, username);
         return json(request, env, {
           pet: await resetAnigramPetForValidation(env, ownerUserId),
         });
@@ -530,8 +756,8 @@ export default {
       url.pathname === "/api/anigram/pet/starvation/validation"
     ) {
       try {
-        const { ownerUserId, groups } = await verifyCognitoAccessToken(request, env);
-        requireAnigramValidationAdmin(env, ownerUserId, groups);
+        const { ownerUserId, username } = await verifyCognitoAccessToken(request, env);
+        await requireAnigramValidationAdmin(env, ownerUserId, username);
         const body = (await request.json()) as { action?: unknown };
         const action = body.action;
         if (
@@ -574,8 +800,8 @@ export default {
       url.pathname === "/api/anigram/pet/evolution/validation"
     ) {
       try {
-        const { ownerUserId, groups } = await verifyCognitoAccessToken(request, env);
-        requireAnigramValidationAdmin(env, ownerUserId, groups);
+        const { ownerUserId, username } = await verifyCognitoAccessToken(request, env);
+        await requireAnigramValidationAdmin(env, ownerUserId, username);
         const body = (await request.json()) as { action?: unknown };
         const action = body.action;
         if (action !== "prepare" && action !== "advance_hold") {

@@ -71,7 +71,7 @@ function AnigramUnityView({ displayState }: AnigramUnityViewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const unityInstanceRef = useRef<UnityInstance | null>(null)
   const displayStateRef = useRef(displayState)
-  const [progress, setProgress] = useState(0)
+  const [isReady, setIsReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -100,7 +100,7 @@ function AnigramUnityView({ displayState }: AnigramUnityViewProps) {
             productName: 'Anigram',
             productVersion: '0.1.0',
           },
-          setProgress,
+          () => undefined,
         )
 
         if (cancelled) {
@@ -109,12 +109,12 @@ function AnigramUnityView({ displayState }: AnigramUnityViewProps) {
         }
 
         unityInstanceRef.current = instance
-        setProgress(1)
         instance.SendMessage(
           'AnigramPet',
           'ApplyStateJson',
           JSON.stringify(displayStateRef.current),
         )
+        setIsReady(true)
       } catch {
         if (!cancelled) {
           setError(
@@ -151,10 +151,9 @@ function AnigramUnityView({ displayState }: AnigramUnityViewProps) {
         className="anigram-unity__canvas"
         tabIndex={0}
       />
-      {progress < 1 && !error ? (
-        <div className="anigram-unity__loading">
-          <span>3Dを準備しています</span>
-          <progress value={progress} max={1} />
+      {!isReady && !error ? (
+        <div className="anigram-unity__loading" role="status" aria-live="polite">
+          <span>ロード中</span>
         </div>
       ) : null}
       {error ? (

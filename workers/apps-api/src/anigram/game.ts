@@ -32,6 +32,7 @@ interface AnigramPetRow {
   starvation_grace_seconds: number;
   evolution_fullness_threshold: number;
   evolution_hold_seconds: number;
+  next_evolution_stage: string;
 }
 
 export interface AnigramGrowthEventInput {
@@ -105,7 +106,8 @@ async function loadPet(env: AnigramEnv, ownerUserId: string) {
        settings.fullness_decay_rate_per_hour,
        settings.starvation_grace_seconds,
        settings.evolution_fullness_threshold,
-       settings.evolution_hold_seconds
+       settings.evolution_hold_seconds,
+       settings.next_evolution_stage
      FROM anigram_pets AS pet
      JOIN anigram_species_settings AS settings
        ON settings.species = pet.species
@@ -241,7 +243,7 @@ async function settlePet(
           evolutionStartedAt + pet.evolution_hold_seconds * 1000;
         if (now >= evolutionTime) {
           lifeStage = "adult";
-          evolutionStage = "stage_2";
+          evolutionStage = pet.next_evolution_stage;
         }
       } else {
         evolutionStartedAt = null;

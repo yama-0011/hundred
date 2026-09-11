@@ -179,7 +179,7 @@ function AnigramPage() {
   ) => {
     if (!pet || validatingStarvation) return
     const messages = {
-      prepare: '死亡検証を開始し、幼体の満腹度を1%にします。よろしいですか？',
+      prepare: '空腹状態の確認を開始し、幼体の満腹度を1%にします。よろしいですか？',
       advance_to_zero:
         '満腹度が0になるまでの時間経過をD1へ反映します。0になっても即死亡しないことを確認します。',
       advance_grace:
@@ -198,8 +198,8 @@ function AnigramPage() {
       setError(
         requestError instanceof Error &&
           requestError.message === 'ADMIN_REQUIRED'
-          ? '死亡フローの検証には管理者権限が必要です。'
-          : '死亡フローを検証できませんでした。現在の育成状態を確認してください。',
+          ? '空腹状態の確認には管理者権限が必要です。'
+          : '空腹状態を確認できませんでした。現在の育成状態を確認してください。',
       )
     } finally {
       setValidatingStarvation(false)
@@ -212,7 +212,7 @@ function AnigramPage() {
     if (!pet || validatingEvolution) return
     const messages = {
       prepare:
-        '進化検証を開始し、幼体の満腹度を100%にします。現在の育成状態は上書きされます。よろしいですか？',
+        '進化状態の確認を開始し、幼体の満腹度を100%にします。現在の育成状態は上書きされます。よろしいですか？',
       advance_hold:
         '設定されている満腹維持期間を経過させ、成体への進化判定を実行します。よろしいですか？',
     }
@@ -229,8 +229,8 @@ function AnigramPage() {
       setError(
         requestError instanceof Error &&
           requestError.message === 'ADMIN_REQUIRED'
-          ? '進化フローの検証には管理者権限が必要です。'
-          : '進化フローを検証できませんでした。現在の育成状態を確認してください。',
+          ? '進化状態の確認には管理者権限が必要です。'
+          : '進化状態を確認できませんでした。現在の育成状態を確認してください。',
       )
     } finally {
       setValidatingEvolution(false)
@@ -254,19 +254,21 @@ function AnigramPage() {
     <main className="anigram-page">
       <header className="anigram-header">
         <Link to="/">← Hundredへ戻る</Link>
-        <span>技術検証</span>
+        <nav className="anigram-header__nav" aria-label="Anigramメニュー">
+          <Link to="/anigram/history">育成履歴</Link>
+          <Link to="/anigram/admin">管理設定</Link>
+        </nav>
       </header>
 
       <section className="anigram-hero">
         <div className="anigram-hero__copy">
-          <p className="anigram-eyebrow">USER APP</p>
           <h1>Anigram</h1>
-          <p>みんなの反応で、ハリネズミを育てる。</p>
         </div>
 
-        <AnigramUnityView displayState={displayState} />
+        <div className="anigram-hero__content">
+          <AnigramUnityView displayState={displayState} />
 
-        <aside className="anigram-status">
+          <aside className="anigram-status">
           <div className="anigram-status__heading">
             <div>
               <p>{pet?.displayName ?? 'ハリネズミ'}</p>
@@ -296,7 +298,7 @@ function AnigramPage() {
 
           {pet?.canManageValidation ? (
             <details className="anigram-validation">
-              <summary>管理者向け技術検証</summary>
+              <summary>管理者操作</summary>
               <div className="anigram-status__actions">
                 <button
                   type="button"
@@ -338,10 +340,10 @@ function AnigramPage() {
                       : pet.lifeStage === 'baby' &&
                           pet.evolutionStartedAt !== null
                         ? '満腹維持期間を経過させる'
-                        : '進化検証を開始（満腹度100%）'}
+                        : '進化状態を確認（満腹度100%）'}
                   </button>
                 ) : (
-                  <p className="anigram-status__meta">進化検証: 成体へ進化済み</p>
+                  <p className="anigram-status__meta">進化状態: 成体へ進化済み</p>
                 )}
                 {pet.status !== 'dead' ? (
                   <button
@@ -366,12 +368,12 @@ function AnigramPage() {
                     }
                   >
                     {validatingStarvation
-                      ? '検証状態を反映中です…'
+                      ? '状態を反映中です…'
                       : pet.zeroStartedAt !== null
                         ? '死亡猶予を経過させる'
                         : pet.fullnessPoints !== null && pet.fullnessPoints <= 1
                           ? '満腹度0まで時間を進める'
-                          : '死亡検証を開始（満腹度1%）'}
+                          : '空腹状態を確認（満腹度1%）'}
                   </button>
                 ) : null}
                 <button
@@ -425,11 +427,8 @@ function AnigramPage() {
               死亡日時: {formatDateTime(pet.diedAt)}
             </p>
           ) : null}
-          <p className="anigram-status__note">
-            Instagram反応はWorkerが定期取得し、D1を経由して自動反映します。
-            管理者向け操作で初期化しても反応履歴は残ります。
-          </p>
-        </aside>
+          </aside>
+        </div>
       </section>
     </main>
   )

@@ -47,6 +47,84 @@ export type AnigramPetState = {
   }
 }
 
+export type AnigramGrowthHistoryEvent = {
+  id: string
+  source: string
+  reactionType: string | null
+  appliedTarget: 'hatch' | 'fullness' | 'ignored'
+  requestedPoints: number
+  appliedPoints: number
+  occurredAt: number
+  appliedAt: number
+}
+
+export type AnigramStateHistoryEvent = {
+  id: string
+  eventType: string
+  previousValue: string | null
+  nextValue: string | null
+  reason: string
+  occurredAt: number
+}
+
+export type AnigramHistory = {
+  pet: Omit<AnigramPetState, 'canManageValidation'>
+  today: {
+    startedAt: number
+    instagramReactions: number
+    requestedPoints: number
+    appliedPoints: number
+    eventCount: number
+  }
+  growthEvents: AnigramGrowthHistoryEvent[]
+  stateEvents: AnigramStateHistoryEvent[]
+}
+
+export type AnigramAdminSettings = {
+  species: string
+  displayName: string
+  hatchRequiredPoints: number
+  hatchingDurationSeconds: number
+  initialFullnessPoints: number
+  maxFullnessPoints: number
+  fullnessDecayPercentPerHour: number
+  starvationGraceSeconds: number
+  evolutionFullnessThresholdPercent: number
+  evolutionHoldSeconds: number
+  nextEvolutionStage: string
+  updatedAt: number
+}
+
+export type AnigramSettingsHistory = {
+  id: string
+  species: string
+  updatedByUserId: string
+  previousSettings: unknown
+  nextSettings: unknown
+  updatedAt: number
+}
+
+export type AnigramAdministrator = {
+  userId: string
+  registeredByUserId: string | null
+  createdAt: number
+}
+
+export type AnigramInstagramDeliverySettings = {
+  enabled: boolean
+  species: string
+  deliveryTime: string
+  timezone: string
+  reactionSyncEnabled: boolean
+  syncPauseReason: string | null
+  syncPausedByUserId: string | null
+  syncPausedAt: number | null
+  lastSyncAt: number | null
+  lastSyncStatus: 'success' | 'partial' | 'failed' | null
+  updatedByUserId: string | null
+  updatedAt: number
+}
+
 async function getAccessToken() {
   const session = await fetchAuthSession()
   const accessToken = session.tokens?.accessToken?.toString()
@@ -73,6 +151,15 @@ async function requestAnigramApi<T>(path: string, options: RequestInit = {}) {
           : 'API_FAILED',
     )
   }
+  if (response.status === 204) return undefined as T
+  return (await response.json()) as T
+}
+
+async function requestPublicAnigramApi<T>(path: string) {
+  const response = await fetch(new URL(path, anigramApiOrigin), {
+    headers: { Accept: 'application/json' },
+  })
+  if (!response.ok) throw new Error('API_FAILED')
   return (await response.json()) as T
 }
 
@@ -87,6 +174,74 @@ export async function getAnigramPet() {
     ...response.pet,
     canManageValidation: response.validation?.allowed ?? false,
   }
+}
+
+export async function getAnigramHistory() {
+  return requestAnigramApi<AnigramHistory>('/api/anigram/history?limit=50')
+}
+
+export async function getAnigramAdminSettings() {
+  return requestPublicAnigramApi<{
+    settings: AnigramAdminSettings[]
+    history: AnigramSettingsHistory[]
+    administrators: AnigramAdministrator[]
+    instagramDelivery: AnigramInstagramDeliverySettings
+  }>('/api/anigram/admin/settings')
+}
+
+export async function getAnigramAdminAccess() {
+  return requestAnigramApi<{ allowed: boolean }>('/api/anigram/admin/access')
+}
+
+export async function registerAnigramAdministrator(userId: string) {
+  const response = await requestAnigramApi<{
+    administrator: AnigramAdministrator
+  }>('/api/anigram/admin/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId }),
+  })
+  return response.administrator
+}
+
+export async function removeAnigramAdministrator(userId: string) {
+  await requestAnigramApi<void>('/api/anigram/admin/users', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId }),
+  })
+}
+
+export async function updateAnigramInstagramDeliverySettings(settings: {
+  enabled: boolean
+  species: string
+  deliveryTime: string
+  reactionSyncEnabled: boolean
+  syncPauseReason: string | null
+}) {
+  const response = await requestAnigramApi<{
+    instagramDelivery: AnigramInstagramDeliverySettings
+  }>('/api/anigram/admin/instagram', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  })
+  return response.instagramDelivery
+}
+
+export async function updateAnigramAdminSettings(
+  species: string,
+  settings: Omit<AnigramAdminSettings, 'species' | 'displayName' | 'updatedAt'>,
+) {
+  const response = await requestAnigramApi<{ settings: AnigramAdminSettings }>(
+    `/api/anigram/admin/settings/${encodeURIComponent(species)}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    },
+  )
+  return response.settings
 }
 
 /** Phase 1の動作確認専用。公開版では通常の餌獲得導線へ置き換える。 */

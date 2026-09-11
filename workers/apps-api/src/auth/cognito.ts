@@ -47,7 +47,7 @@ function getBearerToken(request: Request): string | undefined {
 export async function verifyCognitoAccessToken(
   request: Request,
   env: CognitoEnv,
-): Promise<{ ownerUserId: string; groups: string[] }> {
+): Promise<{ ownerUserId: string; username: string; groups: string[] }> {
   const accessToken = getBearerToken(request);
 
   if (!accessToken) {
@@ -66,8 +66,10 @@ export async function verifyCognitoAccessToken(
           (group): group is string => typeof group === "string",
         )
       : [];
+    const username =
+      typeof payload.username === "string" ? payload.username : payload.sub;
 
-    return { ownerUserId: payload.sub, groups };
+    return { ownerUserId: payload.sub, username, groups };
   } catch {
     // JWTや検証エラーの詳細、およびトークン本体をログへ出力しない。
     throw new CognitoAuthenticationError();

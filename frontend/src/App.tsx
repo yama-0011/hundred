@@ -4,6 +4,8 @@ import CreativeIAInstagramConnectionPage from './pages/CreativeIA/CreativeIAInst
 import CreativeIAWorkspacePage from './pages/CreativeIA/CreativeIAWorkspacePage'
 import HundredHomePage from './pages/Hundred/HundredHomePage'
 import AnigramPage from './pages/Anigram/AnigramPage'
+import AnigramAdminPage from './pages/Anigram/AnigramAdminPage'
+import AnigramHistoryPage from './pages/Anigram/AnigramHistoryPage'
 
 /**
  * アプリケーション全体のルーティング定義。
@@ -19,6 +21,8 @@ function App() {
       <Route path="/auth/callback" element={<HundredHomePage />} />
       <Route path="/creative-ia" element={<CreativeIAWorkspacePage />} />
       <Route path="/anigram" element={<AnigramPage />} />
+      <Route path="/anigram/history" element={<AnigramHistoryPage />} />
+      <Route path="/anigram/admin" element={<AnigramAdminPage />} />
       <Route
         path="/creative-ia/settings/wordpress"
         element={<CreativeIAConnectionPage />}
