@@ -189,6 +189,12 @@ function AnigramAdminPage() {
   const save = async (event: FormEvent) => {
     event.preventDefault()
     if (!canManage || !draft || !selectedSettings || saving) return
+    if (draft.initialFullnessPoints > draft.maxFullnessPoints) {
+      setError(
+        '孵化後の初期満腹ポイントは、満腹ポイント最大値以下にしてください。',
+      )
+      return
+    }
     setSaving(true)
     setMessage(null)
     try {
@@ -212,8 +218,15 @@ function AnigramAdminPage() {
       setHistory(refreshed.history)
       setMessage('Anigram設定を保存しました。')
       setError(null)
-    } catch {
-      setError('設定を保存できませんでした。権限と入力値を確認してください。')
+    } catch (requestError) {
+      const responseMessage = (
+        requestError as Error & { responseMessage?: string }
+      ).responseMessage
+      setError(
+        responseMessage
+          ? `設定を保存できませんでした。${responseMessage}`
+          : '設定を保存できませんでした。権限と入力値を確認してください。',
+      )
     } finally {
       setSaving(false)
     }

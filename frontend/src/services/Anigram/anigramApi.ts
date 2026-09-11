@@ -143,13 +143,19 @@ async function requestAnigramApi<T>(path: string, options: RequestInit = {}) {
     },
   })
   if (!response.ok) {
-    throw new Error(
+    const body = (await response.json().catch(() => null)) as {
+      error?: unknown
+    } | null
+    const error = new Error(
       response.status === 401
         ? 'AUTH_REQUIRED'
         : response.status === 403
           ? 'ADMIN_REQUIRED'
           : 'API_FAILED',
-    )
+    ) as Error & { responseMessage?: string; status?: number }
+    error.status = response.status
+    if (typeof body?.error === 'string') error.responseMessage = body.error
+    throw error
   }
   if (response.status === 204) return undefined as T
   return (await response.json()) as T

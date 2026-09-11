@@ -666,6 +666,10 @@ export default {
               : 400,
           );
         }
+        console.error(
+          "Anigram settings update failed",
+          error instanceof Error ? error.message : "unknown error",
+        );
         return json(request, env, { error: "Anigram設定を更新できませんでした" }, 500);
       }
     }
