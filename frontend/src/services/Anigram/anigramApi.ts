@@ -126,6 +126,30 @@ export type AnigramInstagramDeliverySettings = {
   updatedAt: number
 }
 
+export type AnigramInstagramSyncFailure = {
+  accountUsername: string | null
+  code: string
+  stage: 'stories' | 'interactions' | null
+  providerCode: string | null
+  message: string | null
+}
+
+export type AnigramInstagramSyncRun = {
+  id: string
+  triggerType: 'cron' | 'manual'
+  triggeredByUserId: string | null
+  status: 'success' | 'partial' | 'failed'
+  processedConnections: number
+  succeededConnections: number
+  failedConnections: number
+  storiesChecked: number
+  reactionIncrease: number
+  appliedPoints: number
+  failures: AnigramInstagramSyncFailure[]
+  startedAt: number
+  completedAt: number
+}
+
 async function getAccessToken() {
   const session = await fetchAuthSession()
   const accessToken = session.tokens?.accessToken?.toString()
@@ -198,6 +222,20 @@ export async function getAnigramAdminSettings() {
 
 export async function getAnigramAdminAccess() {
   return requestAnigramApi<{ allowed: boolean }>('/api/anigram/admin/access')
+}
+
+export async function getAnigramInstagramSyncRuns(limit = 20) {
+  const response = await requestAnigramApi<{
+    runs: AnigramInstagramSyncRun[]
+  }>(`/api/anigram/admin/instagram/sync-runs?limit=${limit}`)
+  return response.runs
+}
+
+export async function runAnigramInstagramSync() {
+  const response = await requestAnigramApi<{
+    run: AnigramInstagramSyncRun
+  }>('/api/anigram/admin/instagram/sync', { method: 'POST' })
+  return response.run
 }
 
 export async function registerAnigramAdministrator(userId: string) {

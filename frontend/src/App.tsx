@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import CreativeIAConnectionPage from './pages/CreativeIA/CreativeIAConnectionPage'
 import CreativeIAInstagramConnectionPage from './pages/CreativeIA/CreativeIAInstagramConnectionPage'
@@ -7,6 +8,10 @@ import AnigramPage from './pages/Anigram/AnigramPage'
 import AnigramAdminPage from './pages/Anigram/AnigramAdminPage'
 import AnigramHistoryPage from './pages/Anigram/AnigramHistoryPage'
 import AnigramInstagramConnectionPage from './pages/Anigram/AnigramInstagramConnectionPage'
+
+const AnigramInstagramSyncPage = lazy(
+  () => import('./pages/Anigram/AnigramInstagramSyncPage'),
+)
 
 /**
  * アプリケーション全体のルーティング定義。
@@ -27,6 +32,14 @@ function App() {
       <Route
         path="/anigram/settings/instagram"
         element={<AnigramInstagramConnectionPage />}
+      />
+      <Route
+        path="/anigram/admin/instagram-sync"
+        element={
+          <Suspense fallback={<p>同期管理画面を読み込んでいます…</p>}>
+            <AnigramInstagramSyncPage />
+          </Suspense>
+        }
       />
       <Route
         path="/creative-ia/settings/wordpress"

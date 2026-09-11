@@ -661,6 +661,15 @@ function AnigramAdminPage() {
                 ) : null}
               </dl>
 
+              {canManage ? (
+                <Link
+                  className="anigram-link-button"
+                  to="/anigram/admin/instagram-sync"
+                >
+                  同期管理の詳細を見る
+                </Link>
+              ) : null}
+
               <aside className="anigram-emergency-note">
                 <h3>停止時の注意事項：緊急時の完全停止</h3>
                 <p>

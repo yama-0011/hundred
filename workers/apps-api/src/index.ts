@@ -96,6 +96,7 @@ import {
   getAnigramInstagramReactionSyncControl,
   getAnigramAdminSettings,
   isAnigramAdministrator,
+  listAnigramInstagramSyncRuns,
   recordAnigramInstagramSyncResult,
   registerAnigramAdministrator,
   removeAnigramAdministrator,
@@ -411,8 +412,14 @@ export default {
           console.log("Instagram Story sync skipped: service paused");
           return;
         }
+        const startedAt = Date.now();
         const summary = await syncAllInstagramStoryInsights(env);
-        await recordAnigramInstagramSyncResult(env, summary);
+        await recordAnigramInstagramSyncResult(
+          env,
+          summary,
+          "cron",
+          startedAt,
+        );
         console.log("Instagram Story sync completed", summary);
       })(),
     );
@@ -508,6 +515,67 @@ export default {
           return json(request, env, { error: "認証が必要です" }, 401);
         }
         return json(request, env, { error: "管理者権限を確認できませんでした" }, 500);
+      }
+    }
+
+    if (
+      request.method === "GET" &&
+      url.pathname === "/api/anigram/admin/instagram/sync-runs"
+    ) {
+      try {
+        const { ownerUserId, username } = await verifyCognitoAccessToken(request, env);
+        await requireAnigramValidationAdmin(env, ownerUserId, username);
+        const requestedLimit = Number(url.searchParams.get("limit") ?? 20);
+        return json(request, env, {
+          runs: await listAnigramInstagramSyncRuns(
+            env,
+            Number.isFinite(requestedLimit) ? requestedLimit : 20,
+          ),
+        });
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        if (error instanceof AnigramGameError && error.code === "FORBIDDEN") {
+          return json(request, env, { error: "管理者権限が必要です" }, 403);
+        }
+        return json(request, env, { error: "同期履歴を取得できませんでした" }, 500);
+      }
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/anigram/admin/instagram/sync"
+    ) {
+      try {
+        const { ownerUserId, username } = await verifyCognitoAccessToken(request, env);
+        await requireAnigramValidationAdmin(env, ownerUserId, username);
+        if (!(await getAnigramInstagramReactionSyncControl(env))) {
+          return json(request, env, { error: "Instagram反応同期は停止中です" }, 409);
+        }
+        const startedAt = Date.now();
+        const summary = await syncAllInstagramStoryInsights(env);
+        return json(request, env, {
+          run: await recordAnigramInstagramSyncResult(
+            env,
+            summary,
+            "manual",
+            startedAt,
+            ownerUserId,
+          ),
+        });
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        if (error instanceof AnigramGameError && error.code === "FORBIDDEN") {
+          return json(request, env, { error: "管理者権限が必要です" }, 403);
+        }
+        console.error(
+          "Manual Instagram sync failed",
+          error instanceof Error ? error.message : "unknown error",
+        );
+        return json(request, env, { error: "Instagram同期を実行できませんでした" }, 500);
       }
     }
 

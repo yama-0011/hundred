@@ -1,4 +1,5 @@
 import { getAnigramPetState, type AnigramEnv } from "./game";
+import type { InstagramSyncSummary } from "../instagram/insights";
 
 interface AnigramSettingsRow {
   species: string;
@@ -44,6 +45,22 @@ interface AnigramInstagramDeliverySettingsRow {
   last_sync_status: "success" | "partial" | "failed" | null;
   updated_by_user_id: string | null;
   updated_at: number;
+}
+
+interface AnigramInstagramSyncRunRow {
+  id: string;
+  trigger_type: "cron" | "manual";
+  triggered_by_user_id: string | null;
+  status: "success" | "partial" | "failed";
+  processed_connections: number;
+  succeeded_connections: number;
+  failed_connections: number;
+  stories_checked: number;
+  reaction_increase: number;
+  applied_points: number;
+  failures_json: string;
+  started_at: number;
+  completed_at: number;
 }
 
 export class AnigramAdminSettingsError extends Error {
@@ -327,7 +344,10 @@ export async function getAnigramInstagramReactionSyncControl(
 
 export async function recordAnigramInstagramSyncResult(
   env: AnigramEnv,
-  result: { processed: number; succeeded: number; failed: number },
+  result: InstagramSyncSummary,
+  triggerType: "cron" | "manual",
+  startedAt: number,
+  triggeredByUserId: string | null = null,
 ) {
   const status =
     result.failed === 0
@@ -335,14 +355,87 @@ export async function recordAnigramInstagramSyncResult(
       : result.succeeded > 0
         ? "partial"
         : "failed";
-  await env.DB.prepare(
-    `UPDATE anigram_instagram_delivery_settings
-        SET last_sync_at = ?1,
-            last_sync_status = ?2
-      WHERE id = 1`,
+  const completedAt = Date.now();
+  const id = crypto.randomUUID();
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO anigram_instagram_sync_runs (
+         id, trigger_type, triggered_by_user_id, status,
+         processed_connections, succeeded_connections, failed_connections,
+         stories_checked, reaction_increase, applied_points, failures_json,
+         started_at, completed_at
+       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`,
+    ).bind(
+      id,
+      triggerType,
+      triggeredByUserId,
+      status,
+      result.processed,
+      result.succeeded,
+      result.failed,
+      result.storiesChecked,
+      result.reactionIncrease,
+      result.appliedPoints,
+      JSON.stringify(result.failures),
+      startedAt,
+      completedAt,
+    ),
+    env.DB.prepare(
+      `UPDATE anigram_instagram_delivery_settings
+          SET last_sync_at = ?1,
+              last_sync_status = ?2
+        WHERE id = 1`,
+    ).bind(completedAt, status),
+  ]);
+  return {
+    id,
+    triggerType,
+    triggeredByUserId,
+    status,
+    processedConnections: result.processed,
+    succeededConnections: result.succeeded,
+    failedConnections: result.failed,
+    storiesChecked: result.storiesChecked,
+    reactionIncrease: result.reactionIncrease,
+    appliedPoints: result.appliedPoints,
+    failures: result.failures,
+    startedAt,
+    completedAt,
+  };
+}
+
+export async function listAnigramInstagramSyncRuns(
+  env: AnigramEnv,
+  requestedLimit = 20,
+) {
+  const limit = Math.min(Math.max(Math.floor(requestedLimit), 1), 50);
+  const result = await env.DB.prepare(
+    `SELECT id, trigger_type, triggered_by_user_id, status,
+            processed_connections, succeeded_connections, failed_connections,
+            stories_checked, reaction_increase, applied_points, failures_json,
+            started_at, completed_at
+       FROM anigram_instagram_sync_runs
+      ORDER BY completed_at DESC
+      LIMIT ?1`,
   )
-    .bind(Date.now(), status)
-    .run();
+    .bind(limit)
+    .all<AnigramInstagramSyncRunRow>();
+
+  return result.results.map((row) => ({
+    id: row.id,
+    triggerType: row.trigger_type,
+    triggeredByUserId: row.triggered_by_user_id,
+    status: row.status,
+    processedConnections: row.processed_connections,
+    succeededConnections: row.succeeded_connections,
+    failedConnections: row.failed_connections,
+    storiesChecked: row.stories_checked,
+    reactionIncrease: row.reaction_increase,
+    appliedPoints: row.applied_points,
+    failures: JSON.parse(row.failures_json) as unknown,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+  }));
 }
 
 export async function isAnigramAdministrator(

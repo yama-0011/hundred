@@ -54,6 +54,24 @@ export class InstagramInsightsError extends Error {
   }
 }
 
+export type InstagramSyncFailure = {
+  accountUsername: string | null;
+  code: string;
+  stage: "stories" | "interactions" | null;
+  providerCode: string | null;
+  message: string | null;
+};
+
+export type InstagramSyncSummary = {
+  processed: number;
+  succeeded: number;
+  failed: number;
+  storiesChecked: number;
+  reactionIncrease: number;
+  appliedPoints: number;
+  failures: InstagramSyncFailure[];
+};
+
 function getProviderCode(body: StoriesResponse | InsightsResponse) {
   const value = body.error?.code ?? body.error?.type;
   return value === undefined ? undefined : String(value);
@@ -145,6 +163,7 @@ async function recordStoryInteractions(
     Math.min(normalizedInteractions, storyFoodLimit) -
       Math.min(previousMaximum, storyFoodLimit),
   );
+  let anigramAppliedPoints = 0;
 
   const statements = [
     env.DB.prepare(
@@ -252,13 +271,14 @@ async function recordStoryInteractions(
   // Instagram側の観測履歴とゲーム本体の成長イベントを分離する。
   // 技術検証用の1 Story 20ポイント上限はAnigramには適用しない。
   if (interactionDelta > 0) {
-    await addAnigramGrowthEvent(env, ownerUserId, {
+    const result = await addAnigramGrowthEvent(env, ownerUserId, {
       source: "instagram_story",
       externalEventId: `${instagramUserId}:${storyId}:${normalizedInteractions}`,
       reactionType: "total_interactions",
       points: interactionDelta,
       occurredAt: now,
     });
+    anigramAppliedPoints = result.appliedPoints;
   }
 
   const snapshot = await env.DB.prepare(
@@ -277,6 +297,8 @@ async function recordStoryInteractions(
     totalFoodAwarded: snapshot?.total_food_awarded ?? previousAwarded,
     maxInteractions: snapshot?.max_total_interactions ?? previousMaximum,
     foodLimit: storyFoodLimit,
+    interactionIncrease: interactionDelta,
+    appliedPoints: anigramAppliedPoints,
   };
 }
 
@@ -344,6 +366,8 @@ export async function listInstagramStoryInsights(
             totalFoodAwarded: 0,
             maxInteractions: 0,
             foodLimit: storyFoodLimit,
+            interactionIncrease: 0,
+            appliedPoints: 0,
           }
         : await recordStoryInteractions(
             env,
@@ -389,25 +413,66 @@ export async function listInstagramStoryInsights(
 /** 接続中アカウントのStory反応を定期同期する。個別失敗で全体を止めない。 */
 export async function syncAllInstagramStoryInsights(
   env: InstagramInsightsEnv,
-) {
+): Promise<InstagramSyncSummary> {
   const result = await env.DB.prepare(
-    `SELECT owner_user_id
+    `SELECT owner_user_id, instagram_username
        FROM instagram_connections
-      WHERE token_expires_at IS NULL OR token_expires_at > ?1
       ORDER BY updated_at ASC
       LIMIT 100`,
   )
-    .bind(Math.floor(Date.now() / 1000))
-    .all<{ owner_user_id: string }>();
+    .all<{ owner_user_id: string; instagram_username: string | null }>();
   let succeeded = 0;
   let failed = 0;
+  let storiesChecked = 0;
+  let reactionIncrease = 0;
+  let appliedPoints = 0;
+  const failures: InstagramSyncFailure[] = [];
   for (const connection of result.results) {
     try {
-      await listInstagramStoryInsights(env, connection.owner_user_id);
+      const syncResult = await listInstagramStoryInsights(
+        env,
+        connection.owner_user_id,
+      );
       succeeded += 1;
-    } catch {
+      storiesChecked += syncResult.stories.length;
+      reactionIncrease += syncResult.stories.reduce(
+        (sum, story) => sum + story.interactionIncrease,
+        0,
+      );
+      appliedPoints += syncResult.stories.reduce(
+        (sum, story) => sum + story.appliedPoints,
+        0,
+      );
+    } catch (error) {
       failed += 1;
+      failures.push({
+        accountUsername: connection.instagram_username,
+        code:
+          error instanceof InstagramInsightsError
+            ? error.code
+            : "UNKNOWN_ERROR",
+        stage:
+          error instanceof InstagramInsightsError
+            ? (error.providerStage ?? null)
+            : null,
+        providerCode:
+          error instanceof InstagramInsightsError
+            ? (error.providerCode ?? null)
+            : null,
+        message:
+          error instanceof InstagramInsightsError
+            ? (error.providerMessage ?? null)
+            : null,
+      });
     }
   }
-  return { processed: result.results.length, succeeded, failed };
+  return {
+    processed: result.results.length,
+    succeeded,
+    failed,
+    storiesChecked,
+    reactionIncrease,
+    appliedPoints,
+    failures,
+  };
 }

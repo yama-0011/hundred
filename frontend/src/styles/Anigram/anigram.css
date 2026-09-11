@@ -947,6 +947,144 @@
   margin: 5px 0 0;
 }
 
+.anigram-sync-summary-grid .anigram-summary-card strong {
+  font-size: 26px;
+}
+
+.anigram-sync-manual-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+}
+
+.anigram-sync-manual-panel h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.anigram-sync-manual-panel p:last-child {
+  margin: 10px 0 0;
+  color: #879791;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.anigram-sync-manual-panel button {
+  min-width: 160px;
+  min-height: 48px;
+  padding: 0 22px;
+  border: 1px solid #72d7be;
+  border-radius: 12px;
+  background: #72d7be;
+  color: #07110e;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.anigram-sync-manual-panel button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.anigram-sync-run-list {
+  display: grid;
+  gap: 14px;
+}
+
+.anigram-sync-run {
+  padding: 18px;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 16px;
+  background: rgb(7 16 14 / 62%);
+}
+
+.anigram-sync-run > header,
+.anigram-sync-run > header > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.anigram-sync-run > header {
+  justify-content: space-between;
+}
+
+.anigram-sync-run time {
+  color: #82908c;
+  font-size: 12px;
+}
+
+.anigram-sync-run__status {
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgb(114 215 190 / 14%);
+  color: #82ddc6;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.anigram-sync-run__status[data-status='partial'] {
+  background: rgb(224 170 91 / 14%);
+  color: #e0aa5b;
+}
+
+.anigram-sync-run__status[data-status='failed'] {
+  background: rgb(231 144 144 / 14%);
+  color: #e7a0a0;
+}
+
+.anigram-sync-run dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 16px 0 0;
+  overflow: hidden;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 7%);
+}
+
+.anigram-sync-run dl div {
+  padding: 12px;
+  background: #0d1714;
+}
+
+.anigram-sync-run dt {
+  margin-bottom: 5px;
+  color: #82908c;
+  font-size: 11px;
+}
+
+.anigram-sync-run dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.anigram-sync-failures {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.anigram-sync-failures li {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid rgb(231 144 144 / 15%);
+  border-radius: 10px;
+  color: #d7b2b2;
+  font-size: 12px;
+}
+
+.anigram-sync-failures small {
+  overflow-wrap: anywhere;
+  color: #937f7f;
+}
+
 @media (max-width: 1050px) {
   .anigram-hero__content {
     grid-template-columns: 1fr;
@@ -1016,6 +1154,20 @@
   .anigram-connection-actions button,
   .anigram-link-button {
     width: 100%;
+  }
+
+  .anigram-sync-manual-panel,
+  .anigram-sync-run > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .anigram-sync-manual-panel button {
+    width: 100%;
+  }
+
+  .anigram-sync-run dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .anigram-help__tooltip {
