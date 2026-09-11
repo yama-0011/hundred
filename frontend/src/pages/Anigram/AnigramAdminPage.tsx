@@ -431,7 +431,30 @@ function AnigramAdminPage() {
                 </div>
               </div>
               <div className="anigram-field-grid">
-                <NumberField label="満腹ポイント最大値" min={1} step={0.1} value={draft.maxFullnessPoints} onChange={(value) => setNumber('maxFullnessPoints', value)} />
+                <NumberField
+                  label="満腹ポイント最大値"
+                  min={1}
+                  step={0.1}
+                  value={draft.maxFullnessPoints}
+                  onChange={(value) => {
+                    const maxFullnessPoints = Number(value)
+                    setDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            maxFullnessPoints,
+                            initialFullnessPoints:
+                              maxFullnessPoints >= 1
+                                ? Math.min(
+                                    current.initialFullnessPoints,
+                                    maxFullnessPoints,
+                                  )
+                                : current.initialFullnessPoints,
+                          }
+                        : current,
+                    )
+                  }}
+                />
                 <NumberField label="1時間あたりの減少率（%）" min={0} max={100} step={0.01} value={draft.fullnessDecayPercentPerHour} onChange={(value) => setNumber('fullnessDecayPercentPerHour', value)} />
                 <NumberField label="満腹度0から死亡まで（時間）" min={0} max={8760} step={0.25} value={draft.starvationGraceHours} onChange={(value) => setNumber('starvationGraceHours', value)} />
               </div>
