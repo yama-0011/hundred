@@ -408,12 +408,19 @@
 
 .anigram-timeline li {
   display: grid;
-  grid-template-columns: minmax(150px, 0.7fr) minmax(180px, 1fr) minmax(180px, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 20px;
   padding: 15px 4px;
   border-bottom: 1px solid rgb(255 255 255 / 7%);
   color: #a5b2ad;
   font-size: 13px;
+}
+
+.anigram-history-entry {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.7fr) minmax(180px, 1fr) minmax(180px, 1fr);
+  gap: 20px;
 }
 
 .anigram-timeline time {
@@ -951,6 +958,39 @@
   font-size: 26px;
 }
 
+.anigram-history-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #82908c;
+  font-size: 12px;
+}
+
+.anigram-history-delete,
+.anigram-history-delete-all {
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid rgb(231 144 144 / 34%);
+  border-radius: 9px;
+  background: transparent;
+  color: #e7a0a0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.anigram-history-delete:hover,
+.anigram-history-delete-all:hover {
+  background: rgb(231 144 144 / 10%);
+}
+
+.anigram-history-delete:disabled,
+.anigram-history-delete-all:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .anigram-sync-manual-panel {
   display: flex;
   align-items: center;
@@ -1188,6 +1228,16 @@
 
   .anigram-timeline li {
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .anigram-history-entry {
+    grid-template-columns: 1fr;
     gap: 5px;
+  }
+
+  .anigram-history-heading-actions {
+    align-items: flex-end;
+    flex-direction: column;
   }
 }

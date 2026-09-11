@@ -91,6 +91,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object";
 }
 
+function historyDeletionTarget(value: unknown) {
+  if (!isRecord(value)) {
+    throw new AnigramAdminSettingsError("INVALID_INPUT");
+  }
+  if (value.all === true) return null;
+  if (
+    typeof value.id !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+      value.id,
+    )
+  ) {
+    throw new AnigramAdminSettingsError("INVALID_INPUT");
+  }
+  return value.id;
+}
+
 function requiredNumber(
   value: unknown,
   minimum: number,
@@ -436,6 +452,36 @@ export async function listAnigramInstagramSyncRuns(
     startedAt: row.started_at,
     completedAt: row.completed_at,
   }));
+}
+
+async function deleteHistoryRows(
+  env: AnigramEnv,
+  table: "anigram_settings_history" | "anigram_instagram_sync_runs",
+  value: unknown,
+) {
+  const id = historyDeletionTarget(value);
+  const result = id === null
+    ? await env.DB.prepare(`DELETE FROM ${table}`).run()
+    : await env.DB.prepare(`DELETE FROM ${table} WHERE id = ?1`).bind(id).run();
+  const deletedCount = result.meta.changes ?? 0;
+  if (id !== null && deletedCount === 0) {
+    throw new AnigramAdminSettingsError("NOT_FOUND");
+  }
+  return { deletedCount };
+}
+
+export async function deleteAnigramSettingsHistory(
+  env: AnigramEnv,
+  value: unknown,
+) {
+  return deleteHistoryRows(env, "anigram_settings_history", value);
+}
+
+export async function deleteAnigramInstagramSyncRuns(
+  env: AnigramEnv,
+  value: unknown,
+) {
+  return deleteHistoryRows(env, "anigram_instagram_sync_runs", value);
 }
 
 export async function isAnigramAdministrator(

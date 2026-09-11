@@ -238,6 +238,28 @@ export async function runAnigramInstagramSync() {
   return response.run
 }
 
+export async function deleteAnigramInstagramSyncHistory(id?: string) {
+  const response = await requestAnigramApi<{
+    result: { deletedCount: number }
+  }>('/api/anigram/admin/instagram/sync-runs', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(id ? { id } : { all: true }),
+  })
+  return response.result
+}
+
+export async function deleteAnigramSettingsHistory(id?: string) {
+  const response = await requestAnigramApi<{
+    result: { deletedCount: number }
+  }>('/api/anigram/admin/settings-history', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(id ? { id } : { all: true }),
+  })
+  return response.result
+}
+
 export async function registerAnigramAdministrator(userId: string) {
   const response = await requestAnigramApi<{
     administrator: AnigramAdministrator

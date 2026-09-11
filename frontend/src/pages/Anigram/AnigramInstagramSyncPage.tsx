@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  deleteAnigramInstagramSyncHistory,
   getAnigramAdminAccess,
   getAnigramAdminSettings,
   getAnigramInstagramSyncRuns,
@@ -44,6 +45,7 @@ function AnigramInstagramSyncPage() {
     useState<AnigramInstagramDeliverySettings | null>(null)
   const [runs, setRuns] = useState<AnigramInstagramSyncRun[]>([])
   const [isSyncing, setIsSyncing] = useState(false)
+  const [deletingHistory, setDeletingHistory] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -102,6 +104,29 @@ function AnigramInstagramSyncPage() {
       setErrorMessage(responseMessage ?? '手動同期を実行できませんでした。')
     } finally {
       setIsSyncing(false)
+    }
+  }
+
+  const handleDeleteHistory = async (id?: string) => {
+    if (deletingHistory) return
+    const target = id
+      ? 'この同期履歴を削除します。削除後は復元できません。よろしいですか？'
+      : '同期履歴をDBからすべて削除します。削除後は復元できません。よろしいですか？'
+    if (!window.confirm(target)) return
+    setDeletingHistory(id ?? 'all')
+    setMessage(null)
+    setErrorMessage(null)
+    try {
+      const result = await deleteAnigramInstagramSyncHistory(id)
+      setRuns((current) => id ? current.filter((run) => run.id !== id) : [])
+      setMessage(`同期履歴を${result.deletedCount}件削除しました。`)
+    } catch (error) {
+      const responseMessage = (
+        error as Error & { responseMessage?: string }
+      ).responseMessage
+      setErrorMessage(responseMessage ?? '同期履歴を削除できませんでした。')
+    } finally {
+      setDeletingHistory(null)
     }
   }
 
@@ -186,7 +211,19 @@ function AnigramInstagramSyncPage() {
                 <p className="anigram-eyebrow">SYNC HISTORY</p>
                 <h2>同期履歴</h2>
               </div>
-              <span>直近{runs.length}件</span>
+              <div className="anigram-history-heading-actions">
+                <span>直近{runs.length}件</span>
+                {runs.length > 0 ? (
+                  <button
+                    type="button"
+                    className="anigram-history-delete-all"
+                    disabled={deletingHistory !== null}
+                    onClick={() => void handleDeleteHistory()}
+                  >
+                    {deletingHistory === 'all' ? '削除中…' : 'すべて削除'}
+                  </button>
+                ) : null}
+              </div>
             </div>
 
             {runs.length === 0 ? (
@@ -205,6 +242,15 @@ function AnigramInstagramSyncPage() {
                         <strong>{triggerLabel(run.triggerType)}</strong>
                       </div>
                       <time>{formatDateTime(run.completedAt)}</time>
+                      <button
+                        type="button"
+                        className="anigram-history-delete"
+                        disabled={deletingHistory !== null}
+                        aria-label={`${formatDateTime(run.completedAt)}の同期履歴を削除`}
+                        onClick={() => void handleDeleteHistory(run.id)}
+                      >
+                        {deletingHistory === run.id ? '削除中…' : '削除'}
+                      </button>
                     </header>
                     <dl>
                       <div><dt>接続</dt><dd>{run.succeededConnections}/{run.processedConnections}成功</dd></div>

@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  deleteAnigramSettingsHistory,
   getAnigramAdminAccess,
   getAnigramAdminSettings,
   registerAnigramAdministrator,
@@ -111,6 +112,8 @@ function AnigramAdminPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [updatingAdministrator, setUpdatingAdministrator] = useState(false)
+  const [deletingSettingsHistory, setDeletingSettingsHistory] =
+    useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -297,6 +300,29 @@ function AnigramAdminPage() {
       setError('管理者を削除できませんでした。最後の管理者は削除できません。')
     } finally {
       setUpdatingAdministrator(false)
+    }
+  }
+
+  const removeSettingsHistory = async (id?: string) => {
+    if (!canManage || deletingSettingsHistory) return
+    const target = id
+      ? 'この設定変更履歴を削除します。削除後は復元できません。よろしいですか？'
+      : '設定変更履歴をDBからすべて削除します。削除後は復元できません。よろしいですか？'
+    if (!window.confirm(target)) return
+    setDeletingSettingsHistory(id ?? 'all')
+    setMessage(null)
+    setError(null)
+    try {
+      const result = await deleteAnigramSettingsHistory(id)
+      setHistory((current) => id ? current.filter((item) => item.id !== id) : [])
+      setMessage(`設定変更履歴を${result.deletedCount}件削除しました。`)
+    } catch (requestError) {
+      const responseMessage = (
+        requestError as Error & { responseMessage?: string }
+      ).responseMessage
+      setError(responseMessage ?? '設定変更履歴を削除できませんでした。')
+    } finally {
+      setDeletingSettingsHistory(null)
     }
   }
 
@@ -492,13 +518,36 @@ function AnigramAdminPage() {
               <p className="anigram-eyebrow">AUDIT LOG</p>
               <h2>設定変更履歴</h2>
             </div>
+            {canManage && history.length > 0 ? (
+              <button
+                type="button"
+                className="anigram-history-delete-all"
+                disabled={deletingSettingsHistory !== null}
+                onClick={() => void removeSettingsHistory()}
+              >
+                {deletingSettingsHistory === 'all' ? '削除中…' : 'すべて削除'}
+              </button>
+            ) : null}
           </div>
           <ol className="anigram-timeline">
             {history.map((item) => (
               <li key={item.id}>
-                <time>{formatDateTime(item.updatedAt)}</time>
-                <strong>{item.species} の設定を更新</strong>
-                <span>管理者: {item.updatedByUserId}</span>
+                <div className="anigram-history-entry">
+                  <time>{formatDateTime(item.updatedAt)}</time>
+                  <strong>{item.species} の設定を更新</strong>
+                  <span>管理者: {item.updatedByUserId}</span>
+                </div>
+                {canManage ? (
+                  <button
+                    type="button"
+                    className="anigram-history-delete"
+                    disabled={deletingSettingsHistory !== null}
+                    aria-label={`${formatDateTime(item.updatedAt)}の設定変更履歴を削除`}
+                    onClick={() => void removeSettingsHistory(item.id)}
+                  >
+                    {deletingSettingsHistory === item.id ? '削除中…' : '削除'}
+                  </button>
+                ) : null}
               </li>
             ))}
             {history.length === 0 ? <li>設定変更はまだありません。</li> : null}

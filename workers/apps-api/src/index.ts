@@ -93,6 +93,8 @@ import {
 } from "./anigram/game";
 import {
   AnigramAdminSettingsError,
+  deleteAnigramInstagramSyncRuns,
+  deleteAnigramSettingsHistory,
   getAnigramInstagramReactionSyncControl,
   getAnigramAdminSettings,
   isAnigramAdministrator,
@@ -540,6 +542,64 @@ export default {
           return json(request, env, { error: "管理者権限が必要です" }, 403);
         }
         return json(request, env, { error: "同期履歴を取得できませんでした" }, 500);
+      }
+    }
+
+    if (
+      request.method === "DELETE" &&
+      url.pathname === "/api/anigram/admin/instagram/sync-runs"
+    ) {
+      try {
+        const { ownerUserId, username } = await verifyCognitoAccessToken(request, env);
+        await requireAnigramValidationAdmin(env, ownerUserId, username);
+        return json(request, env, {
+          result: await deleteAnigramInstagramSyncRuns(env, await request.json()),
+        });
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        if (error instanceof AnigramGameError && error.code === "FORBIDDEN") {
+          return json(request, env, { error: "管理者権限が必要です" }, 403);
+        }
+        if (error instanceof AnigramAdminSettingsError) {
+          return json(
+            request,
+            env,
+            { error: error.code === "NOT_FOUND" ? "同期履歴が見つかりません" : "削除対象が正しくありません" },
+            error.code === "NOT_FOUND" ? 404 : 400,
+          );
+        }
+        return json(request, env, { error: "同期履歴を削除できませんでした" }, 500);
+      }
+    }
+
+    if (
+      request.method === "DELETE" &&
+      url.pathname === "/api/anigram/admin/settings-history"
+    ) {
+      try {
+        const { ownerUserId, username } = await verifyCognitoAccessToken(request, env);
+        await requireAnigramValidationAdmin(env, ownerUserId, username);
+        return json(request, env, {
+          result: await deleteAnigramSettingsHistory(env, await request.json()),
+        });
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        if (error instanceof AnigramGameError && error.code === "FORBIDDEN") {
+          return json(request, env, { error: "管理者権限が必要です" }, 403);
+        }
+        if (error instanceof AnigramAdminSettingsError) {
+          return json(
+            request,
+            env,
+            { error: error.code === "NOT_FOUND" ? "設定変更履歴が見つかりません" : "削除対象が正しくありません" },
+            error.code === "NOT_FOUND" ? 404 : 400,
+          );
+        }
+        return json(request, env, { error: "設定変更履歴を削除できませんでした" }, 500);
       }
     }
 

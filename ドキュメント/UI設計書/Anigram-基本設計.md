@@ -955,6 +955,8 @@ Unityが読み込めない場合でも、満腹度、生死状態、最終給餌
 | GET | `/api/anigram/admin/instagram/oauth/start` | 管理者のInstagram接続を開始 |
 | DELETE | `/api/anigram/admin/instagram/connection` | 管理者のInstagram接続を解除 |
 | GET | `/api/anigram/admin/instagram/sync-runs` | 直近のInstagram同期履歴を取得 |
+| DELETE | `/api/anigram/admin/instagram/sync-runs` | 指定した同期履歴、または同期履歴全件を削除（管理者限定） |
+| DELETE | `/api/anigram/admin/settings-history` | 指定した設定変更履歴、または設定変更履歴全件を削除（管理者限定） |
 | POST | `/api/anigram/admin/instagram/sync` | Instagram同期を手動実行 |
 | POST | `/api/anigram/admin/users` | 管理者を登録 |
 | DELETE | `/api/anigram/admin/users` | 管理者を削除 |
@@ -970,6 +972,8 @@ OAuth処理、トークンの暗号化保存、接続状態取得はCreative IA�
 同じ画面でInstagram反応同期の稼働・停止を管理する。停止時は理由、操作した管理者、停止日時を保存する。Cron Triggerは維持し、`scheduled()`の開始時にD1の`reaction_sync_enabled`を確認する。停止中はInstagram APIを呼び出さず終了する。設定取得に失敗した場合も同期を開始しないフェイルクローズとする。
 
 登録済み管理者向けの同期管理詳細画面を`/anigram/admin/instagram-sync`に設ける。Instagram設定タブから遷移し、現在の稼働状態、最終実行、最終成功、連続失敗回数、直近20回の同期履歴を表示する。各同期履歴では実行元、接続処理数、Story確認数、反応増加数、実加算ポイント、失敗したアカウントとエラー概要を確認できる。プロバイダーのアクセストークン等の秘密情報は保存・表示しない。
+
+同期履歴と設定変更履歴には、登録済み管理者だけが利用できる個別削除・全件削除を設ける。削除前に復元できないことを確認ダイアログで通知する。全件削除は画面に表示されている直近20件だけではなく、対象テーブルに保存されている全履歴を削除する。
 
 同期が稼働中の場合、登録済み管理者は詳細画面からCronと同じ処理を手動実行できる。停止中は手動同期も許可しない。Cron実行と手動実行の結果は`anigram_instagram_sync_runs`へ保存し、同じ外部反応は既存の一意性制約によって重複加算しない。
 
