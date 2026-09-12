@@ -3,15 +3,19 @@ import {
   publishInstagramImage,
   type InstagramPublisherEnv,
 } from "./publisher";
+import {
+  renderAnigramStoryAsset,
+  type AnigramStoryRendererEnv,
+} from "../anigram/story-renderer";
 
 const maxImageBytes = 8 * 1024 * 1024;
 
-export interface AnigramStoryEnv extends InstagramPublisherEnv {
-  MEDIA: R2Bucket;
-}
+export interface AnigramStoryEnv
+  extends InstagramPublisherEnv, AnigramStoryRendererEnv {}
 
 interface StoryPublicationRow {
   id: string;
+  render_id: string | null;
   image_key: string;
   image_content_type: string;
   status: "processing" | "published" | "failed";
@@ -26,6 +30,7 @@ interface StoryPublicationRow {
 function serializeStory(row: StoryPublicationRow) {
   return {
     id: row.id,
+    renderId: row.render_id,
     status: row.status,
     containerId: row.container_id,
     instagramMediaId: row.instagram_media_id,
@@ -38,7 +43,7 @@ function serializeStory(row: StoryPublicationRow) {
 
 async function getStory(env: AnigramStoryEnv, id: string) {
   return env.DB.prepare(
-    `SELECT id, image_key, image_content_type, status, container_id,
+    `SELECT id, render_id, image_key, image_content_type, status, container_id,
             instagram_media_id, provider_error_code, created_at, updated_at,
             published_at
        FROM anigram_instagram_story_publications
@@ -48,27 +53,17 @@ async function getStory(env: AnigramStoryEnv, id: string) {
     .first<StoryPublicationRow>();
 }
 
-/** 管理者が明示確認したJPEGを、接続中アカウントのストーリーズへテスト公開する。 */
-export async function publishAnigramTestStory(
-  request: Request,
+async function publishStoryAsset(
   env: AnigramStoryEnv,
   ownerUserId: string,
   requestOrigin: string,
+  input: {
+    imageKey: string;
+    renderId?: string;
+    prepareImage?: (publicationId: string) => Promise<void>;
+  },
 ) {
-  if (new URL(request.url).searchParams.get("confirmed") !== "true") {
-    throw new InstagramPublicationError("INVALID_INPUT");
-  }
-  const contentType = request.headers.get("Content-Type")?.split(";", 1)[0];
-  if (contentType !== "image/jpeg") {
-    throw new InstagramPublicationError("INVALID_INPUT");
-  }
-  const image = await request.arrayBuffer();
-  if (image.byteLength === 0 || image.byteLength > maxImageBytes) {
-    throw new InstagramPublicationError("INVALID_INPUT");
-  }
-
   const id = crypto.randomUUID();
-  const imageKey = `anigram/story-tests/${id}.jpg`;
   const now = Date.now();
   try {
     await env.DB.prepare(
@@ -83,11 +78,11 @@ export async function publishAnigramTestStory(
       .run();
     await env.DB.prepare(
       `INSERT INTO anigram_instagram_story_publications
-         (id, owner_user_id, image_key, image_content_type, status,
+         (id, owner_user_id, render_id, image_key, image_content_type, status,
           created_at, updated_at)
-       VALUES (?1, ?2, ?3, 'image/jpeg', 'processing', ?4, ?4)`,
+       VALUES (?1, ?2, ?3, ?4, 'image/jpeg', 'processing', ?5, ?5)`,
     )
-      .bind(id, ownerUserId, imageKey, now)
+      .bind(id, ownerUserId, input.renderId ?? null, input.imageKey, now)
       .run();
   } catch (error) {
     const active = await env.DB.prepare(
@@ -103,10 +98,7 @@ export async function publishAnigramTestStory(
   }
 
   try {
-    await env.MEDIA.put(imageKey, image, {
-      httpMetadata: { contentType: "image/jpeg" },
-      customMetadata: { publicationId: id, purpose: "anigram-story-test" },
-    });
+    await input.prepareImage?.(id);
     const result = await publishInstagramImage(env, ownerUserId, {
       imageUrl: `${requestOrigin}/api/anigram/instagram/story/media/${encodeURIComponent(id)}`,
       mediaType: "STORIES",
@@ -150,6 +142,60 @@ export async function publishAnigramTestStory(
       ? error
       : new InstagramPublicationError("PROVIDER_FAILED");
   }
+}
+
+/** 管理者が明示確認したJPEGを、接続中アカウントのストーリーズへテスト公開する。 */
+export async function publishAnigramTestStory(
+  request: Request,
+  env: AnigramStoryEnv,
+  ownerUserId: string,
+  requestOrigin: string,
+) {
+  if (new URL(request.url).searchParams.get("confirmed") !== "true") {
+    throw new InstagramPublicationError("INVALID_INPUT");
+  }
+  const contentType = request.headers.get("Content-Type")?.split(";", 1)[0];
+  if (contentType !== "image/jpeg") {
+    throw new InstagramPublicationError("INVALID_INPUT");
+  }
+  const image = await request.arrayBuffer();
+  if (image.byteLength === 0 || image.byteLength > maxImageBytes) {
+    throw new InstagramPublicationError("INVALID_INPUT");
+  }
+
+  const imageKey = `anigram/story-tests/${crypto.randomUUID()}.jpg`;
+  return publishStoryAsset(env, ownerUserId, requestOrigin, {
+    imageKey,
+    prepareImage: async (publicationId) => {
+      await env.MEDIA.put(imageKey, image, {
+        httpMetadata: { contentType: "image/jpeg" },
+        customMetadata: {
+          publicationId,
+          purpose: "anigram-story-test",
+        },
+      });
+    },
+  });
+}
+
+/** 現在のペット状態をBrowser Runで生成し、その画像をInstagram Storiesへ公開する。 */
+export async function generateAndPublishAnigramStory(
+  request: Request,
+  env: AnigramStoryEnv,
+  ownerUserId: string,
+  requestOrigin: string,
+) {
+  if (new URL(request.url).searchParams.get("confirmed") !== "true") {
+    throw new InstagramPublicationError("INVALID_INPUT");
+  }
+  const asset = await renderAnigramStoryAsset(env, ownerUserId, requestOrigin);
+  const publication = await publishStoryAsset(
+    env,
+    ownerUserId,
+    requestOrigin,
+    { imageKey: asset.imageKey, renderId: asset.render.id },
+  );
+  return { ...publication, render: asset.render };
 }
 
 /** Metaがコンテナ作成時に取得する、推測困難な公開画像URL。 */

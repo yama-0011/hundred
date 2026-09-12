@@ -151,6 +151,7 @@ export type AnigramInstagramSyncRun = {
 
 export type AnigramStoryPublication = {
   id: string
+  renderId: string | null
   status: 'processing' | 'published' | 'failed'
   containerId: string | null
   instagramMediaId: string | null
@@ -359,6 +360,17 @@ export async function generateAnigramStoryRender() {
     { method: 'POST' },
   )
   return response.render
+}
+
+export async function generateAndPublishAnigramStory() {
+  return requestAnigramApi<{
+    render: AnigramStoryRender
+    story: AnigramStoryPublication
+    accountUsername: string
+    accountUrl: string
+  }>('/api/anigram/admin/instagram/story/generate-and-publish?confirmed=true', {
+    method: 'POST',
+  })
 }
 
 export async function updateAnigramAdminSettings(

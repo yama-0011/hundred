@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   deleteAnigramSettingsHistory,
+  generateAndPublishAnigramStory,
   generateAnigramStoryRender,
   getAnigramAdminAccess,
   getAnigramAdminSettings,
@@ -187,6 +188,7 @@ function AnigramAdminPage() {
   const [instagramConnectionLoading, setInstagramConnectionLoading] =
     useState(false)
   const [publishingTestStory, setPublishingTestStory] = useState(false)
+  const [publishingGeneratedStory, setPublishingGeneratedStory] = useState(false)
   const [generatingStoryRender, setGeneratingStoryRender] = useState(false)
   const [storyRender, setStoryRender] = useState<AnigramStoryRender | null>(null)
   const [testStoryResult, setTestStoryResult] = useState<{
@@ -371,7 +373,12 @@ function AnigramAdminPage() {
 
   const publishTestStory = async () => {
     const username = instagramConnection?.account?.username
-    if (!canManage || !username || publishingTestStory) return
+    if (
+      !canManage ||
+      !username ||
+      publishingTestStory ||
+      publishingGeneratedStory
+    ) return
     if (
       !window.confirm(
         `@${username} のInstagramストーリーズへ検証画像を実際に公開します。よろしいですか？`,
@@ -405,7 +412,7 @@ function AnigramAdminPage() {
   }
 
   const generateStoryRender = async () => {
-    if (!canManage || generatingStoryRender) return
+    if (!canManage || generatingStoryRender || publishingGeneratedStory) return
     setGeneratingStoryRender(true)
     setStoryRender(null)
     setMessage(null)
@@ -421,6 +428,48 @@ function AnigramAdminPage() {
       setError(responseMessage ?? 'Browser Runで画像を生成できませんでした。')
     } finally {
       setGeneratingStoryRender(false)
+    }
+  }
+
+  const generateAndPublishStory = async () => {
+    const username = instagramConnection?.account?.username
+    if (
+      !canManage ||
+      !username ||
+      publishingGeneratedStory ||
+      publishingTestStory ||
+      generatingStoryRender
+    ) return
+    if (
+      !window.confirm(
+        `現在のペット状態から新しい画像を生成し、@${username} のInstagramストーリーズへ実際に公開します。よろしいですか？`,
+      )
+    ) return
+
+    setPublishingGeneratedStory(true)
+    setTestStoryResult(null)
+    setMessage(null)
+    setError(null)
+    try {
+      const result = await generateAndPublishAnigramStory()
+      setStoryRender(result.render)
+      setTestStoryResult(result)
+      setMessage(
+        `画像を生成し、@${result.accountUsername} へストーリーを公開しました。`,
+      )
+    } catch (requestError) {
+      const typedError = requestError as Error & {
+        providerCode?: string
+        responseMessage?: string
+      }
+      const detail = typedError.providerCode
+        ? `（Instagramエラー: ${typedError.providerCode}）`
+        : ''
+      setError(
+        `${typedError.responseMessage ?? '画像生成またはストーリー公開に失敗しました。'}${detail}`,
+      )
+    } finally {
+      setPublishingGeneratedStory(false)
     }
   }
 
@@ -751,7 +800,9 @@ function AnigramAdminPage() {
               <button
                 type="button"
                 onClick={() => void generateStoryRender()}
-                disabled={!canManage || generatingStoryRender}
+                disabled={
+                  !canManage || generatingStoryRender || publishingGeneratedStory
+                }
               >
                 {generatingStoryRender
                   ? 'Browser Runで生成中…'
@@ -789,8 +840,38 @@ function AnigramAdminPage() {
                 </dl>
               </div>
             ) : null}
+            <div className="anigram-story-publish-test anigram-story-generated-publish">
+              <h3>現在の状態をストーリーへ配信</h3>
+              <p>
+                公開時点の共有ペット状態をBrowser Runで画像化し、R2への保存後、その画像をInstagramストーリーズへ公開します。
+              </p>
+              <button
+                type="button"
+                onClick={() => void generateAndPublishStory()}
+                disabled={
+                  !canManage ||
+                  !instagramConnection?.connected ||
+                  instagramConnection.tokenExpired ||
+                  publishingGeneratedStory ||
+                  publishingTestStory ||
+                  generatingStoryRender
+                }
+              >
+                {publishingGeneratedStory
+                  ? '画像生成・公開処理中…'
+                  : '生成してストーリーへ配信'}
+              </button>
+              {!canManage ? (
+                <small>登録済み管理者だけが配信できます。</small>
+              ) : !instagramConnection?.connected ||
+                instagramConnection.tokenExpired ? (
+                <small>先に有効なInstagramアカウントを接続してください。</small>
+              ) : (
+                <small>確認ダイアログで承認すると、画像生成後に実際の公開まで行います。</small>
+              )}
+            </div>
             <div className="anigram-story-publish-test">
-              <h3>Instagram公開の再検証</h3>
+              <h3>固定画像によるInstagram公開の再検証</h3>
               <p>
                 従来の固定検証画像を生成し、接続中のInstagramアカウントへストーリーズとして実際に公開します。
               </p>
@@ -801,7 +882,8 @@ function AnigramAdminPage() {
                   !canManage ||
                   !instagramConnection?.connected ||
                   instagramConnection.tokenExpired ||
-                  publishingTestStory
+                  publishingTestStory ||
+                  publishingGeneratedStory
                 }
               >
                 {publishingTestStory

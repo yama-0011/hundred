@@ -140,7 +140,7 @@ function serializeRender(row: StoryRenderRow, requestOrigin: string) {
 }
 
 /** 現在の共有ペット状態をHTML/CSSへ反映し、Browser RunでStory画像を生成する。 */
-export async function renderAnigramStoryPreview(
+export async function renderAnigramStoryAsset(
   env: AnigramStoryRendererEnv,
   ownerUserId: string,
   requestOrigin: string,
@@ -232,7 +232,24 @@ export async function renderAnigramStoryPreview(
     .bind(id)
     .first<StoryRenderRow>();
   if (!row) throw new AnigramStoryRendererError("NOT_FOUND");
-  return { render: serializeRender(row, requestOrigin) };
+  return {
+    render: serializeRender(row, requestOrigin),
+    imageKey,
+  };
+}
+
+/** 管理画面から画像生成だけを検証するため、R2の内部キーは応答に含めない。 */
+export async function renderAnigramStoryPreview(
+  env: AnigramStoryRendererEnv,
+  ownerUserId: string,
+  requestOrigin: string,
+) {
+  const { render } = await renderAnigramStoryAsset(
+    env,
+    ownerUserId,
+    requestOrigin,
+  );
+  return { render };
 }
 
 /** 管理画面プレビューおよび将来のMeta取得に使う推測困難な画像URL。 */

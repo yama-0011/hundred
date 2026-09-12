@@ -38,6 +38,7 @@ import {
   uploadInstagramFeedImage,
 } from "./instagram/publications";
 import {
+  generateAndPublishAnigramStory,
   publishAnigramTestStory,
   serveAnigramStoryImage,
   type AnigramStoryEnv,
@@ -797,6 +798,44 @@ export default {
           error instanceof Error ? error.message : "unknown error",
         );
         return json(request, env, { error: "ストーリー画像を生成できませんでした" }, 500);
+      }
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/api/anigram/admin/instagram/story/generate-and-publish"
+    ) {
+      try {
+        const { ownerUserId, username } =
+          await verifyCognitoAccessToken(request, env);
+        await requireAnigramValidationAdmin(env, ownerUserId, username);
+        return json(
+          request,
+          env,
+          await generateAndPublishAnigramStory(
+            request,
+            env,
+            ownerUserId,
+            url.origin,
+          ),
+          201,
+        );
+      } catch (error) {
+        if (error instanceof AnigramGameError && error.code === "FORBIDDEN") {
+          return json(request, env, { error: "管理者権限が必要です" }, 403);
+        }
+        if (error instanceof AnigramStoryRendererError) {
+          return json(
+            request,
+            env,
+            {
+              error: "Browser Runで配信用画像を生成できませんでした",
+              providerStatus: error.providerStatus ?? null,
+            },
+            502,
+          );
+        }
+        return handleInstagramPublicationError(request, env, error);
       }
     }
 
