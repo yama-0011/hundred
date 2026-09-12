@@ -698,7 +698,7 @@ export async function resetAnigramPetForValidation(
 
 /**
  * InstagramやHundred内操作を、共通形式の成長イベントとして反映する。
- * source + externalEventIdの一意制約により、同じ反応を二重加算しない。
+ * source + externalEventIdをAnigram全体で確保し、同じ反応を二重加算しない。
  */
 export async function addAnigramGrowthEvent(
   env: AnigramEnv,
@@ -715,22 +715,9 @@ export async function addAnigramGrowthEvent(
     throw new AnigramGameError("INVALID_INPUT");
   }
 
+  const source = input.source.trim();
+  const externalEventId = input.externalEventId.trim();
   await ensureUser(env, sourceOwnerUserId);
-
-  const existing = await env.DB.prepare(
-    `SELECT id
-       FROM anigram_growth_events
-      WHERE owner_user_id = ?1 AND source = ?2 AND external_event_id = ?3`,
-  )
-    .bind(sourceOwnerUserId, input.source, input.externalEventId)
-    .first<{ id: string }>();
-  if (existing) {
-    return {
-      duplicate: true,
-      appliedPoints: 0,
-      pet: await getAnigramPetState(env),
-    };
-  }
 
   const now = Date.now();
   const occurredAt =
@@ -778,19 +765,32 @@ export async function addAnigramGrowthEvent(
   appliedPoints = Math.max(0, appliedPoints);
 
   const eventId = crypto.randomUUID();
-  await env.DB.batch([
+  const results = await env.DB.batch([
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO anigram_growth_event_claims (
+         source, external_event_id, claim_token, first_owner_user_id, created_at
+       ) VALUES (?1, ?2, ?3, ?4, ?5)`,
+    ).bind(source, externalEventId, eventId, sourceOwnerUserId, now),
     env.DB.prepare(
       `INSERT INTO anigram_growth_events (
          id, owner_user_id, pet_id, source, external_event_id, reaction_type,
          applied_target, requested_points, applied_points, occurred_at,
          applied_at, created_at
-       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)`,
+       )
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11
+        WHERE EXISTS (
+          SELECT 1
+            FROM anigram_growth_event_claims
+           WHERE source = ?4
+             AND external_event_id = ?5
+             AND claim_token = ?1
+        )`,
     ).bind(
       eventId,
       sourceOwnerUserId,
       pet.id,
-      input.source.trim(),
-      input.externalEventId.trim(),
+      source,
+      externalEventId,
       input.reactionType?.trim() || null,
       appliedTarget,
       points,
@@ -809,7 +809,12 @@ export async function addAnigramGrowthEvent(
               evolution_started_at = ?8,
               state_calculated_at = ?1,
               updated_at = ?1
-        WHERE id = ?9`,
+        WHERE id = ?9
+          AND EXISTS (
+            SELECT 1
+              FROM anigram_growth_events
+             WHERE id = ?10
+          )`,
     ).bind(
       now,
       nextLifeStage,
@@ -820,8 +825,18 @@ export async function addAnigramGrowthEvent(
       zeroStartedAt,
       evolutionStartedAt,
       pet.id,
+      eventId,
     ),
   ]);
+
+  const eventInserted = (results[1]?.meta.changes ?? 0) > 0;
+  if (!eventInserted) {
+    return {
+      duplicate: true,
+      appliedPoints: 0,
+      pet: await getAnigramPetState(env),
+    };
+  }
 
   if (pet.life_stage !== nextLifeStage) {
     await recordStateHistory(

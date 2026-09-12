@@ -142,21 +142,35 @@ async function recordStoryInteractions(
   const storyId = String(story.id);
   const now = Date.now();
   const normalizedInteractions = Math.max(0, Math.floor(interactions));
-  const previous = await env.DB.prepare(
-    `SELECT max_total_interactions, total_food_awarded
-       FROM instagram_story_snapshots
-      WHERE owner_user_id = ?1 AND story_id = ?2`,
-  )
-    .bind(ownerUserId, storyId)
-    .first<{
-      max_total_interactions: number;
-      total_food_awarded: number;
-    }>();
+  const [previous, globalSnapshot] = await Promise.all([
+    env.DB.prepare(
+      `SELECT max_total_interactions, total_food_awarded
+         FROM instagram_story_snapshots
+        WHERE owner_user_id = ?1 AND story_id = ?2`,
+    )
+      .bind(ownerUserId, storyId)
+      .first<{
+        max_total_interactions: number;
+        total_food_awarded: number;
+      }>(),
+    env.DB.prepare(
+      `SELECT COALESCE(MAX(max_total_interactions), 0) AS max_total_interactions
+         FROM instagram_story_snapshots
+        WHERE instagram_user_id = ?1 AND story_id = ?2`,
+    )
+      .bind(instagramUserId, storyId)
+      .first<{ max_total_interactions: number }>(),
+  ]);
   const previousMaximum = previous?.max_total_interactions ?? 0;
+  const globalPreviousMaximum = globalSnapshot?.max_total_interactions ?? 0;
   const previousAwarded = previous?.total_food_awarded ?? 0;
-  const interactionDelta = Math.max(
+  const ownerInteractionDelta = Math.max(
     0,
     normalizedInteractions - previousMaximum,
+  );
+  const globalInteractionDelta = Math.max(
+    0,
+    normalizedInteractions - globalPreviousMaximum,
   );
   const foodAwarded = Math.max(
     0,
@@ -164,6 +178,7 @@ async function recordStoryInteractions(
       Math.min(previousMaximum, storyFoodLimit),
   );
   let anigramAppliedPoints = 0;
+  let uniqueReactionIncrease = 0;
 
   const statements = [
     env.DB.prepare(
@@ -196,7 +211,7 @@ async function recordStoryInteractions(
       ),
   ];
 
-  if (interactionDelta > 0 && foodAwarded > 0) {
+  if (ownerInteractionDelta > 0 && foodAwarded > 0) {
     statements.push(
       env.DB.prepare(
         `INSERT OR IGNORE INTO instagram_food_events
@@ -211,7 +226,7 @@ async function recordStoryInteractions(
           instagramUserId,
           storyId,
           normalizedInteractions,
-          interactionDelta,
+          ownerInteractionDelta,
           foodAwarded,
           now,
         ),
@@ -270,15 +285,16 @@ async function recordStoryInteractions(
 
   // Instagram側の観測履歴とゲーム本体の成長イベントを分離する。
   // 技術検証用の1 Story 20ポイント上限はAnigramには適用しない。
-  if (interactionDelta > 0) {
+  if (globalInteractionDelta > 0) {
     const result = await addAnigramGrowthEvent(env, ownerUserId, {
       source: "instagram_story",
       externalEventId: `${instagramUserId}:${storyId}:${normalizedInteractions}`,
       reactionType: "total_interactions",
-      points: interactionDelta,
+      points: globalInteractionDelta,
       occurredAt: now,
     });
     anigramAppliedPoints = result.appliedPoints;
+    uniqueReactionIncrease = result.duplicate ? 0 : globalInteractionDelta;
   }
 
   const snapshot = await env.DB.prepare(
@@ -297,7 +313,7 @@ async function recordStoryInteractions(
     totalFoodAwarded: snapshot?.total_food_awarded ?? previousAwarded,
     maxInteractions: snapshot?.max_total_interactions ?? previousMaximum,
     foodLimit: storyFoodLimit,
-    interactionIncrease: interactionDelta,
+    interactionIncrease: uniqueReactionIncrease,
     appliedPoints: anigramAppliedPoints,
   };
 }

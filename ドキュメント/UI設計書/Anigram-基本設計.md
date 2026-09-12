@@ -111,6 +111,8 @@ evolution_stage = base | stage_2 | ...
 
 Cognitoの利用者IDはログイン、管理者認可、反応取得元および操作主体の監査に使用し、表示対象ペットの選択には使用しない。共有ペットの状態変更はWorkerだけが行い、一般利用者が任意の状態を直接保存できない構成とする。
 
+外部反応の重複判定はCognito利用者IDに依存させず、`source + external_event_id`をAnigram全体で一意に確保する。Instagram反応の`external_event_id`はInstagramアカウントID、Story ID、観測時点の累計反応数から構成し、同じInstagramアカウントが複数のCognito利用者から接続されていても共有ペットへは1回だけ加算する。
+
 ---
 
 ## 5. システム構成
