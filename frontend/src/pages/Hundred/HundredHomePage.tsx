@@ -1,4 +1,5 @@
 import HundredHome from '../../components/Hundred/Home/HundredHome'
+import { useLocation } from 'react-router-dom'
 
 /**
  * Hundred Homeを表示するページコンポーネント。
@@ -8,7 +9,8 @@ import HundredHome from '../../components/Hundred/Home/HundredHome'
  * - HundredHomeコンポーネントを画面に表示する
  */
 function HundredHomePage() {
-  return <HundredHome />
+  const location = useLocation()
+  return <HundredHome key={location.key} />
 }
 
 export default HundredHomePage

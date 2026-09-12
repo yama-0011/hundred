@@ -7,7 +7,7 @@ import {
   updateUserAttributes,
 } from 'aws-amplify/auth'
 import { Hub } from 'aws-amplify/utils'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   useEffect,
   useRef,
@@ -317,10 +317,16 @@ function AppIcon({ id }: { id: AppId }) {
 /** Hundred Homeの表示、選択状態、ユーザー操作をまとめて管理する。 */
 function HundredHome() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const shouldOpenProfile =
+    new URLSearchParams(location.search).get('profile') === 'open'
+  const initialSelectedCategoryIndex = shouldOpenProfile
+    ? categories.findIndex(({ id }) => id === 'profile')
+    : initialCategoryIndex
 
   // 配列の何番目を選択しているかをstateとして保持する。
   const [selectedCategoryIndex, setSelectedCategoryIndex] =
-    useState(initialCategoryIndex)
+    useState(initialSelectedCategoryIndex)
   const [selectedAppIndex, setSelectedAppIndex] = useState(0)
   const [selectedWallpaper, setSelectedWallpaper] =
     useState<WallpaperId>(getInitialWallpaper)
@@ -344,12 +350,13 @@ function HundredHome() {
   const [isWallpaperDialogOpen, setIsWallpaperDialogOpen] = useState(false)
   const [isSoundDialogOpen, setIsSoundDialogOpen] = useState(false)
   const [isNotificationDialogOpen, setIsNotificationDialogOpen] = useState(false)
-  const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false)
+  const [isProfileDialogOpen, setIsProfileDialogOpen] =
+    useState(shouldOpenProfile)
 
   // 操作中の一時値や音声要素は、再描画を起こさないuseRefで保持する。
   const pointerStart = useRef<{ x: number; y: number } | null>(null)
   const suppressClick = useRef(false)
-  const selectedCategoryIndexRef = useRef(initialCategoryIndex)
+  const selectedCategoryIndexRef = useRef(initialSelectedCategoryIndex)
   const selectedAppIndexRef = useRef(0)
   const cursorSoundPlayer = useRef<HundredCursorSoundPlayer | null>(null)
   const categoryWheelArea = useRef<HTMLElement | null>(null)
@@ -1069,6 +1076,9 @@ function HundredHome() {
             setIsProfileDialogOpen(false)
             setDisplayNameError(null)
             setDisplayNameNotice(null)
+            if (new URLSearchParams(location.search).get('profile') === 'open') {
+              navigate('/', { replace: true })
+            }
           }}
         />
       )}
