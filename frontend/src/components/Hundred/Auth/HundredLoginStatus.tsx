@@ -1,27 +1,39 @@
-import { fetchUserAttributes, getCurrentUser } from 'aws-amplify/auth'
+import { fetchUserAttributes, getCurrentUser, signOut } from 'aws-amplify/auth'
 import { Hub } from 'aws-amplify/utils'
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import '../../../styles/Hundred/hundred-login-status.css'
 
 type LoginStatus = {
-  displayName: string
+  username: string
   providerLabel: string
 }
 
-function resolveDisplayName(name?: string, email?: string) {
+function resolveUsername(
+  cognitoUsername: string,
+  preferredUsername?: string,
+  name?: string,
+  email?: string,
+) {
+  const normalizedPreferredUsername = preferredUsername?.trim()
+  if (normalizedPreferredUsername) return normalizedPreferredUsername
+
   const normalizedName = name?.trim()
   if (normalizedName) return normalizedName
 
   const emailLocalPart = email?.split('@', 1)[0]?.trim()
-  return emailLocalPart || 'Hundredユーザー'
+  return emailLocalPart || cognitoUsername
 }
 
-/** Hundred配下のどのAppでも現在のログイン状態を確認できる固定表示。 */
+/** Hundred共通ヘッダーで現在のユーザー名とサインイン導線を表示する。 */
 function HundredLoginStatus() {
   const navigate = useNavigate()
   const [loginStatus, setLoginStatus] = useState<LoginStatus | null>(null)
-  const [isDismissed, setIsDismissed] = useState(false)
+  const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isSigningOut, setIsSigningOut] = useState(false)
+  const [dialogError, setDialogError] = useState<string | null>(null)
 
   useEffect(() => {
     let isActive = true
@@ -29,11 +41,13 @@ function HundredLoginStatus() {
     const syncLoginStatus = async () => {
       try {
         const user = await getCurrentUser()
+        let preferredUsername: string | undefined
         let name: string | undefined
         let email: string | undefined
 
         try {
           const attributes = await fetchUserAttributes()
+          preferredUsername = attributes.preferred_username
           name = attributes.name
           email = attributes.email
         } catch {
@@ -42,7 +56,12 @@ function HundredLoginStatus() {
 
         if (!isActive) return
         setLoginStatus({
-          displayName: resolveDisplayName(name, email),
+          username: resolveUsername(
+            user.username,
+            preferredUsername,
+            name,
+            email,
+          ),
           providerLabel: user.username.toLowerCase().startsWith('google_')
             ? 'Googleアカウント'
             : 'メールアドレス',
@@ -57,7 +76,7 @@ function HundredLoginStatus() {
         payload.event === 'signedIn' ||
         payload.event === 'signInWithRedirect'
       ) {
-        setIsDismissed(false)
+        setIsCollapsed(false)
         void syncLoginStatus()
         return
       }
@@ -69,7 +88,8 @@ function HundredLoginStatus() {
 
       if (payload.event === 'signedOut') {
         setLoginStatus(null)
-        setIsDismissed(false)
+        setIsCollapsed(false)
+        setIsDialogOpen(false)
       }
     })
 
@@ -81,33 +101,126 @@ function HundredLoginStatus() {
     }
   }, [])
 
-  if (!loginStatus || isDismissed) return null
+  useEffect(() => {
+    if (!isDialogOpen) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isSigningOut) setIsDialogOpen(false)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isDialogOpen, isSigningOut])
+
+  if (!loginStatus) return null
+
+  const handleGoToSignIn = async () => {
+    setIsSigningOut(true)
+    setDialogError(null)
+    try {
+      await signOut()
+      setIsDialogOpen(false)
+      navigate('/', { replace: true })
+    } catch {
+      setDialogError(
+        'サインイン画面へ移動できませんでした。時間をおいて再度お試しください。',
+      )
+    } finally {
+      setIsSigningOut(false)
+    }
+  }
 
   return (
-    <aside className="hundred-login-status" aria-label="Hundredログイン状態">
-      <button
-        className="hundred-login-status__profile"
-        type="button"
-        onClick={() => navigate('/?profile=open')}
+    <>
+      <aside
+        className="hundred-login-status"
+        data-collapsed={isCollapsed}
+        aria-label="Hundredログイン状態"
       >
-        <span className="hundred-login-status__avatar" aria-hidden="true">
-          {loginStatus.displayName.charAt(0).toUpperCase() || 'H'}
-        </span>
-        <span className="hundred-login-status__copy">
-          <strong>{loginStatus.displayName}でログイン中</strong>
-          <small>{loginStatus.providerLabel}・プロフィールを表示</small>
-        </span>
-      </button>
-      <button
-        className="hundred-login-status__dismiss"
-        type="button"
-        aria-label="ログイン表示を非表示にする"
-        title="非表示"
-        onClick={() => setIsDismissed(true)}
-      >
-        ×
-      </button>
-    </aside>
+        <button
+          className="hundred-login-status__profile"
+          type="button"
+          aria-label={`${loginStatus.username}でログイン中。サインイン画面への移動を確認する`}
+          title={isCollapsed ? `${loginStatus.username}でログイン中` : undefined}
+          onClick={() => {
+            setDialogError(null)
+            setIsDialogOpen(true)
+          }}
+        >
+          <span className="hundred-login-status__avatar" aria-hidden="true">
+            {loginStatus.username.charAt(0).toUpperCase() || 'H'}
+          </span>
+          <span className="hundred-login-status__copy">
+            <strong>{loginStatus.username}でログイン中</strong>
+            <small>{loginStatus.providerLabel}・サインイン画面を開く</small>
+          </span>
+        </button>
+        <button
+          className="hundred-login-status__toggle"
+          type="button"
+          aria-expanded={!isCollapsed}
+          aria-label={
+            isCollapsed ? 'ログイン情報を展開する' : 'ログイン情報を折りたたむ'
+          }
+          title={isCollapsed ? '展開' : '折りたたむ'}
+          onClick={() => setIsCollapsed((current) => !current)}
+        >
+          <span aria-hidden="true">{isCollapsed ? '‹' : '›'}</span>
+        </button>
+      </aside>
+
+      {isDialogOpen &&
+        createPortal(
+          <div
+            className="hundred-login-confirm"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget && !isSigningOut) {
+                setIsDialogOpen(false)
+              }
+            }}
+          >
+            <section
+              className="hundred-login-confirm__panel"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="hundred-login-confirm-title"
+            >
+              <p>ACCOUNT</p>
+              <h2 id="hundred-login-confirm-title">
+                サインイン画面へ移動しますか？
+              </h2>
+              <p>
+                現在は<strong>{loginStatus.username}</strong>でログインしています。
+                移動すると現在のアカウントからサインアウトします。
+              </p>
+              {dialogError && (
+                <p className="hundred-login-confirm__error" role="alert">
+                  {dialogError}
+                </p>
+              )}
+              <div className="hundred-login-confirm__actions">
+                <button
+                  type="button"
+                  onClick={() => setIsDialogOpen(false)}
+                  disabled={isSigningOut}
+                  autoFocus
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="button"
+                  data-primary="true"
+                  onClick={() => void handleGoToSignIn()}
+                  disabled={isSigningOut}
+                >
+                  {isSigningOut ? '移動中…' : 'サインイン画面へ'}
+                </button>
+              </div>
+            </section>
+          </div>,
+          document.body,
+        )}
+    </>
   )
 }
 
