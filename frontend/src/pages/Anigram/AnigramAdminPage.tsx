@@ -4,6 +4,7 @@ import {
   deleteAnigramSettingsHistory,
   getAnigramAdminAccess,
   getAnigramAdminSettings,
+  publishAnigramTestStory,
   registerAnigramAdministrator,
   removeAnigramAdministrator,
   updateAnigramAdminSettings,
@@ -12,6 +13,7 @@ import {
   type AnigramAdminSettings,
   type AnigramInstagramDeliverySettings,
   type AnigramSettingsHistory,
+  type AnigramStoryPublication,
 } from '../../services/Anigram/anigramApi'
 import {
   getInstagramConnectionStatus,
@@ -89,6 +91,81 @@ function formatDateTime(value: number) {
   }).format(new Date(value))
 }
 
+function createTestStoryImage(accountUsername: string): Promise<Blob> {
+  const canvas = document.createElement('canvas')
+  canvas.width = 1080
+  canvas.height = 1920
+  const context = canvas.getContext('2d')
+  if (!context) return Promise.reject(new Error('CANVAS_UNAVAILABLE'))
+
+  const background = context.createLinearGradient(0, 0, 1080, 1920)
+  background.addColorStop(0, '#07100e')
+  background.addColorStop(0.55, '#0b211b')
+  background.addColorStop(1, '#173b31')
+  context.fillStyle = background
+  context.fillRect(0, 0, 1080, 1920)
+
+  const glow = context.createRadialGradient(540, 860, 80, 540, 860, 570)
+  glow.addColorStop(0, 'rgba(118, 224, 195, 0.22)')
+  glow.addColorStop(1, 'rgba(118, 224, 195, 0)')
+  context.fillStyle = glow
+  context.fillRect(0, 260, 1080, 1220)
+
+  context.fillStyle = '#75d9c1'
+  context.font = '700 34px sans-serif'
+  context.letterSpacing = '8px'
+  context.fillText('ANIGRAM', 84, 132)
+  context.letterSpacing = '0px'
+  context.fillStyle = '#eef4f1'
+  context.font = '700 78px sans-serif'
+  context.fillText('ストーリー配信テスト', 84, 242)
+  context.fillStyle = '#9eb0aa'
+  context.font = '400 32px sans-serif'
+  context.fillText(`@${accountUsername} への接続を確認しています`, 84, 302)
+
+  context.save()
+  context.translate(540, 900)
+  context.fillStyle = '#263c37'
+  context.beginPath()
+  context.ellipse(0, 300, 340, 92, 0, 0, Math.PI * 2)
+  context.fill()
+  const egg = context.createRadialGradient(-90, -120, 20, 0, 0, 300)
+  egg.addColorStop(0, '#f3fff7')
+  egg.addColorStop(0.45, '#b9efc0')
+  egg.addColorStop(1, '#568369')
+  context.fillStyle = egg
+  context.beginPath()
+  context.ellipse(0, 0, 205, 280, 0, 0, Math.PI * 2)
+  context.fill()
+  context.restore()
+
+  context.textAlign = 'center'
+  context.fillStyle = '#eef4f1'
+  context.font = '700 58px sans-serif'
+  context.fillText('ハリネズミを育てています', 540, 1420)
+  context.fillStyle = '#86ddd0'
+  context.font = '500 34px sans-serif'
+  context.fillText('Instagram Stories API 接続テスト', 540, 1490)
+
+  context.strokeStyle = 'rgba(255, 255, 255, 0.14)'
+  context.beginPath()
+  context.moveTo(84, 1740)
+  context.lineTo(996, 1740)
+  context.stroke()
+  context.textAlign = 'left'
+  context.fillStyle = '#91a39d'
+  context.font = '400 28px sans-serif'
+  context.fillText('この画像は管理画面から手動配信された検証用です', 84, 1810)
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => blob ? resolve(blob) : reject(new Error('IMAGE_FAILED')),
+      'image/jpeg',
+      0.92,
+    )
+  })
+}
+
 /** 設定内容は公開し、更新操作だけを登録済み管理者へ許可する画面。 */
 function AnigramAdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('anigram')
@@ -107,6 +184,12 @@ function AnigramAdminPage() {
     useState<InstagramConnectionStatus | null>(null)
   const [instagramConnectionLoading, setInstagramConnectionLoading] =
     useState(false)
+  const [publishingTestStory, setPublishingTestStory] = useState(false)
+  const [testStoryResult, setTestStoryResult] = useState<{
+    story: AnigramStoryPublication
+    accountUsername: string
+    accountUrl: string
+  } | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [updatingAdministrator, setUpdatingAdministrator] = useState(false)
@@ -279,6 +362,41 @@ function AnigramAdminPage() {
       )
     } finally {
       setSaving(false)
+    }
+  }
+
+  const publishTestStory = async () => {
+    const username = instagramConnection?.account?.username
+    if (!canManage || !username || publishingTestStory) return
+    if (
+      !window.confirm(
+        `@${username} のInstagramストーリーズへ検証画像を実際に公開します。よろしいですか？`,
+      )
+    ) return
+
+    setPublishingTestStory(true)
+    setTestStoryResult(null)
+    setMessage(null)
+    setError(null)
+    try {
+      const result = await publishAnigramTestStory(
+        await createTestStoryImage(username),
+      )
+      setTestStoryResult(result)
+      setMessage(`@${result.accountUsername} へストーリーを公開しました。`)
+    } catch (requestError) {
+      const typedError = requestError as Error & {
+        providerCode?: string
+        responseMessage?: string
+      }
+      const detail = typedError.providerCode
+        ? `（Instagramエラー: ${typedError.providerCode}）`
+        : ''
+      setError(
+        `${typedError.responseMessage ?? 'ストーリーを公開できませんでした。'}${detail}`,
+      )
+    } finally {
+      setPublishingTestStory(false)
     }
   }
 
@@ -591,6 +709,63 @@ function AnigramAdminPage() {
               >
                 接続を管理
               </Link>
+            ) : null}
+          </section>
+
+          <section className="anigram-panel anigram-story-test-card">
+            <div className="anigram-panel__heading">
+              <div>
+                <p className="anigram-eyebrow">STORY PUBLISH TEST</p>
+                <h2>ストーリー配信検証</h2>
+              </div>
+              <span>管理者専用</span>
+            </div>
+            <p>
+              1080×1920の固定検証画像を生成し、接続中のInstagramアカウントへストーリーズとして実際に公開します。
+            </p>
+            <button
+              type="button"
+              onClick={() => void publishTestStory()}
+              disabled={
+                !canManage ||
+                !instagramConnection?.connected ||
+                instagramConnection.tokenExpired ||
+                publishingTestStory
+              }
+            >
+              {publishingTestStory ? '公開処理中…' : '検証画像をストーリーへ配信'}
+            </button>
+            {!canManage ? (
+              <small>登録済み管理者だけが配信できます。</small>
+            ) : !instagramConnection?.connected || instagramConnection.tokenExpired ? (
+              <small>先に有効なInstagramアカウントを接続してください。</small>
+            ) : (
+              <small>確認ダイアログで承認するまで公開されません。</small>
+            )}
+            {testStoryResult ? (
+              <dl className="anigram-story-test-result">
+                <div>
+                  <dt>公開日時</dt>
+                  <dd>
+                    {formatDateTime(
+                      testStoryResult.story.publishedAt ??
+                        testStoryResult.story.updatedAt,
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>InstagramメディアID</dt>
+                  <dd>{testStoryResult.story.instagramMediaId}</dd>
+                </div>
+                <div>
+                  <dt>公開先</dt>
+                  <dd>
+                    <a href={testStoryResult.accountUrl} target="_blank" rel="noreferrer">
+                      @{testStoryResult.accountUsername}
+                    </a>
+                  </dd>
+                </div>
+              </dl>
             ) : null}
           </section>
 

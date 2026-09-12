@@ -142,8 +142,8 @@ Cloudflare D1
 Instagram API
   ↓ 反応取得
 Instagram連携処理
-  ↓ 共通の成長イベント
-Anigramゲーム本体
+  ├─ 反応取得 → 共通の成長イベント → Anigramゲーム本体
+  └─ 共通画像投稿処理 → Instagramフィード / ストーリーズ
 ```
 
 - フロントエンドはHundredと同じCloudflare Pagesで配信する
@@ -962,14 +962,19 @@ Unityが読み込めない場合でも、満腹度、生死状態、最終給餌
 | DELETE | `/api/anigram/admin/instagram/sync-runs` | 指定した同期履歴、または同期履歴全件を削除（管理者限定） |
 | DELETE | `/api/anigram/admin/settings-history` | 指定した設定変更履歴、または設定変更履歴全件を削除（管理者限定） |
 | POST | `/api/anigram/admin/instagram/sync` | Instagram同期を手動実行 |
+| POST | `/api/anigram/admin/instagram/story/test?confirmed=true` | JPEG検証画像をInstagramストーリーズへ手動公開（管理者限定） |
 | POST | `/api/anigram/admin/users` | 管理者を登録 |
 | DELETE | `/api/anigram/admin/users` | 管理者を削除 |
 
-Instagram設定では、自動配信の有効・無効、対象ペット、配信時刻を`anigram_instagram_delivery_settings`へ保存する。時刻は`Asia/Tokyo`として扱う。初期段階では条件の保存だけを提供し、意図しない投稿を避けるため自動投稿処理には接続しない。メッセージと画像の設定・プレビュー・投稿監査を追加した後に配信処理へ接続する。
+Instagram設定では、自動配信の有効・無効、対象ペット、配信時刻を`anigram_instagram_delivery_settings`へ保存する。時刻は`Asia/Tokyo`として扱う。自動配信は意図しない投稿を避けるため、メッセージと画像の設定・プレビュー・投稿監査を追加するまでCronへ接続しない。
+
+自動配信の前段検証として、Instagram設定タブへ管理者専用の「ストーリー配信検証」を設ける。操作時にブラウザで1080×1920の固定JPEGを生成し、確認ダイアログで明示承認した場合だけ、接続中アカウントへ`media_type=STORIES`として実際に公開する。処理中は同一管理者による二重実行を拒否し、公開結果、コンテナID、InstagramメディアID、プロバイダーエラーを`anigram_instagram_story_publications`へ保存する。画像はR2へ置き、推測困難な公開URLからMetaが取得できるようにする。アクセストークンや秘密情報は画像URLおよび履歴へ含めない。
 
 Instagram設定タブには、ログイン中の登録済み管理者に限って現在の接続状態と接続アカウントを表示し、`/anigram/settings/instagram`の専用画面へ遷移する導線を設ける。専用画面では接続状態、アカウント名、アカウントID、接続日時、トークン有効期限を確認し、Instagram Business Loginによる接続・再接続・接続解除を行える。非管理者は接続情報を取得せず、専用画面の操作も許可しない。
 
-OAuth処理、トークンの暗号化保存、接続状態取得はCreative IAと共通化する。接続情報はD1の`instagram_connections`へHundredユーザー単位で保存する。共通処理を呼び出すAnigram管理APIでは、登録済み管理者であることをWorkerでも検証する。Creative IA向けの既存APIパスと共通APIの`/api/instagram/*`は互換性維持のため残す。Metaへ登録済みのOAuthコールバックURLは`/api/creative-ia/instagram/oauth/callback`を継続利用し、OAuth開始時の`returnTo`に応じてAnigramまたはCreative IAへ戻す。
+OAuth処理、トークンの暗号化保存、接続状態取得に加え、接続取得、トークン復号、有効期限確認、コンテナ作成、処理完了待機、`media_publish`実行、プロバイダーエラー変換をCreative IAと共通化する。Creative IAは共通処理へ`IMAGE`と本文を渡してフィード投稿し、Anigramは`STORIES`と画像URLを渡してストーリーズ投稿する。投稿案、画像生成、公開履歴等のドメイン処理はそれぞれで分離する。
+
+接続情報はD1の`instagram_connections`へHundredユーザー単位で保存する。共通処理を呼び出すAnigram管理APIでは、登録済み管理者であることをWorkerでも検証する。Creative IA向けの既存APIパスと共通APIの`/api/instagram/*`は互換性維持のため残す。Metaへ登録済みのOAuthコールバックURLは`/api/creative-ia/instagram/oauth/callback`を継続利用し、OAuth開始時の`returnTo`に応じてAnigramまたはCreative IAへ戻す。
 
 同じHundredユーザーがCreative IAとAnigramを利用する場合、Instagram接続は両機能で共有される。Anigramから接続先を変更または解除するとCreative IAにも反映されるため、専用画面と解除確認ダイアログへ影響範囲を明示する。アクセストークンはWorker内で暗号化し、ブラウザへ返さない。
 

@@ -812,6 +812,69 @@
   gap: 18px;
 }
 
+.anigram-story-test-card > p {
+  margin: 0 0 18px;
+  color: #91a39d;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.anigram-story-test-card > button {
+  min-height: 48px;
+  padding: 0 22px;
+  border: 1px solid #72d7be;
+  border-radius: 12px;
+  background: #72d7be;
+  color: #07110e;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.anigram-story-test-card > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.anigram-story-test-card > small {
+  display: block;
+  margin-top: 10px;
+  color: #82908c;
+}
+
+.anigram-story-test-result {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  margin: 20px 0 0;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 8%);
+}
+
+.anigram-story-test-result div {
+  min-width: 0;
+  padding: 14px;
+  background: #0a1311;
+}
+
+.anigram-story-test-result dt {
+  margin-bottom: 6px;
+  color: #82908c;
+  font-size: 11px;
+}
+
+.anigram-story-test-result dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: #dce7e3;
+  font-size: 13px;
+}
+
+.anigram-story-test-result a {
+  color: #82ddc6;
+}
+
 .anigram-instagram-account {
   margin: 0;
   color: #dce7e3;
@@ -1206,6 +1269,10 @@
   }
 
   .anigram-connection-details {
+    grid-template-columns: 1fr;
+  }
+
+  .anigram-story-test-result {
     grid-template-columns: 1fr;
   }
 

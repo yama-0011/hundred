@@ -149,6 +149,17 @@ export type AnigramInstagramSyncRun = {
   completedAt: number
 }
 
+export type AnigramStoryPublication = {
+  id: string
+  status: 'processing' | 'published' | 'failed'
+  containerId: string | null
+  instagramMediaId: string | null
+  providerErrorCode: string | null
+  createdAt: number
+  updatedAt: number
+  publishedAt: number | null
+}
+
 async function getAccessToken() {
   const session = await fetchAuthSession()
   const accessToken = session.tokens?.accessToken?.toString()
@@ -308,6 +319,18 @@ export async function updateAnigramInstagramDeliverySettings(settings: {
     body: JSON.stringify(settings),
   })
   return response.instagramDelivery
+}
+
+export async function publishAnigramTestStory(image: Blob) {
+  return requestAnigramApi<{
+    story: AnigramStoryPublication
+    accountUsername: string
+    accountUrl: string
+  }>('/api/anigram/admin/instagram/story/test?confirmed=true', {
+    method: 'POST',
+    headers: { 'Content-Type': 'image/jpeg' },
+    body: image,
+  })
 }
 
 export async function updateAnigramAdminSettings(

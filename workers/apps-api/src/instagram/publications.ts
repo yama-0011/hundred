@@ -1,14 +1,15 @@
-import { decryptAccessToken } from "../security/crypto";
+import {
+  InstagramPublicationError,
+  publishInstagramImage,
+  type InstagramPublisherEnv,
+} from "./publisher";
 
-const graphApiOrigin = "https://graph.instagram.com";
-const graphApiVersion = "v23.0";
 const maxImageBytes = 8 * 1024 * 1024;
-const processingPollDelays = [350, 600, 900, 1_200, 1_500];
 
-export interface InstagramPublicationEnv {
-  DB: D1Database;
+export { InstagramPublicationError } from "./publisher";
+
+export interface InstagramPublicationEnv extends InstagramPublisherEnv {
   MEDIA: R2Bucket;
-  TOKEN_ENCRYPTION_KEY: string;
 }
 
 type PublicationStatus = "draft" | "processing" | "published" | "failed";
@@ -22,43 +23,6 @@ interface PublicationRow {
   provider_error_code: string | null;
   updated_at: number;
   published_at: number | null;
-}
-
-interface InstagramConnectionRow {
-  instagram_user_id: string;
-  instagram_username: string;
-  access_token_ciphertext: string;
-  access_token_iv: string;
-  token_expires_at: number | null;
-}
-
-interface ProviderResponse {
-  id?: unknown;
-  status_code?: unknown;
-  status?: unknown;
-  error?: { code?: unknown; type?: unknown };
-}
-
-export class InstagramPublicationError extends Error {
-  constructor(
-    readonly code:
-      | "INVALID_INPUT"
-      | "NOT_FOUND"
-      | "UNSUPPORTED_DESTINATION"
-      | "CONNECTION_REQUIRED"
-      | "TOKEN_EXPIRED"
-      | "MEDIA_REQUIRED"
-      | "ALREADY_PROCESSING"
-      | "PROVIDER_FAILED",
-    readonly providerCode?: string,
-  ) {
-    super(code);
-    this.name = "InstagramPublicationError";
-  }
-}
-
-function wait(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function serializePublication(row: PublicationRow, requestOrigin: string) {
@@ -205,50 +169,6 @@ export async function serveInstagramPublicationImage(
   });
 }
 
-async function requestProvider(
-  path: string,
-  accessToken: string,
-  options: RequestInit = {},
-): Promise<ProviderResponse> {
-  const response = await fetch(`${graphApiOrigin}/${graphApiVersion}/${path}`, {
-    ...options,
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${accessToken}`,
-      ...options.headers,
-    },
-  });
-  const body = (await response.json()) as ProviderResponse;
-  if (!response.ok) {
-    const providerCode = body.error?.code ?? body.error?.type;
-    throw new InstagramPublicationError(
-      "PROVIDER_FAILED",
-      providerCode === undefined ? undefined : String(providerCode),
-    );
-  }
-  return body;
-}
-
-async function waitForContainer(containerId: string, accessToken: string) {
-  for (const delay of processingPollDelays) {
-    const status = await requestProvider(
-      `${encodeURIComponent(containerId)}?fields=status_code,status`,
-      accessToken,
-    );
-    if (status.status_code === "FINISHED" || status.status === "FINISHED") return;
-    if (
-      status.status_code === "ERROR" ||
-      status.status_code === "EXPIRED" ||
-      status.status === "ERROR" ||
-      status.status === "EXPIRED"
-    ) {
-      throw new InstagramPublicationError("PROVIDER_FAILED", "CONTAINER_FAILED");
-    }
-    await wait(delay);
-  }
-  throw new InstagramPublicationError("PROVIDER_FAILED", "CONTAINER_TIMEOUT");
-}
-
 /** 明示確認済みのフィード投稿だけをInstagramへ公開する。 */
 export async function publishInstagramFeed(
   request: Request,
@@ -274,69 +194,32 @@ export async function publishInstagramFeed(
     throw new InstagramPublicationError("ALREADY_PROCESSING");
   }
 
-  const connection = await env.DB.prepare(
-    `SELECT instagram_user_id, instagram_username, access_token_ciphertext,
-            access_token_iv, token_expires_at
-       FROM instagram_connections
-      WHERE owner_user_id = ?1`,
-  )
-    .bind(ownerUserId)
-    .first<InstagramConnectionRow>();
-  if (!connection) throw new InstagramPublicationError("CONNECTION_REQUIRED");
-  if (
-    connection.token_expires_at !== null &&
-    connection.token_expires_at <= Math.floor(Date.now() / 1000)
-  ) {
-    throw new InstagramPublicationError("TOKEN_EXPIRED");
-  }
-
-  await env.DB.prepare(
-    `UPDATE creative_ia_instagram_publications
-        SET status = 'processing', provider_error_code = NULL, updated_at = ?1
-      WHERE id = ?2`,
-  )
-    .bind(Date.now(), publication.id)
-    .run();
-
   try {
-    const accessToken = await decryptAccessToken(
-      connection.access_token_ciphertext,
-      connection.access_token_iv,
-      env.TOKEN_ENCRYPTION_KEY,
-    );
     const imageUrl = `${requestOrigin}/api/creative-ia/instagram/media/${encodeURIComponent(publication.id)}`;
-    const container = await requestProvider(
-      `${encodeURIComponent(connection.instagram_user_id)}/media`,
-      accessToken,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ image_url: imageUrl, caption: chat.article_content }),
+    const published = await publishInstagramImage(env, ownerUserId, {
+      imageUrl,
+      mediaType: "IMAGE",
+      caption: chat.article_content,
+      onConnectionReady: async () => {
+        await env.DB.prepare(
+          `UPDATE creative_ia_instagram_publications
+              SET status = 'processing', provider_error_code = NULL,
+                  updated_at = ?1
+            WHERE id = ?2`,
+        )
+          .bind(Date.now(), publication.id)
+          .run();
       },
-    );
-    if (typeof container.id !== "string" || !container.id) {
-      throw new InstagramPublicationError("PROVIDER_FAILED", "INVALID_CONTAINER");
-    }
-    await env.DB.prepare(
-      `UPDATE creative_ia_instagram_publications
-          SET container_id = ?1, updated_at = ?2
-        WHERE id = ?3`,
-    )
-      .bind(container.id, Date.now(), publication.id)
-      .run();
-    await waitForContainer(container.id, accessToken);
-    const published = await requestProvider(
-      `${encodeURIComponent(connection.instagram_user_id)}/media_publish`,
-      accessToken,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ creation_id: container.id }),
+      onContainerCreated: async (containerId) => {
+        await env.DB.prepare(
+          `UPDATE creative_ia_instagram_publications
+              SET container_id = ?1, updated_at = ?2
+            WHERE id = ?3`,
+        )
+          .bind(containerId, Date.now(), publication.id)
+          .run();
       },
-    );
-    if (typeof published.id !== "string" || !published.id) {
-      throw new InstagramPublicationError("PROVIDER_FAILED", "INVALID_MEDIA_ID");
-    }
+    });
     const now = Date.now();
     await env.DB.prepare(
       `UPDATE creative_ia_instagram_publications
@@ -344,16 +227,22 @@ export async function publishInstagramFeed(
               provider_error_code = NULL, updated_at = ?2, published_at = ?2
         WHERE id = ?3`,
     )
-      .bind(published.id, now, publication.id)
+      .bind(published.mediaId, now, publication.id)
       .run();
     const row = await getOwnedPublication(env, ownerUserId, chatId);
     if (!row) throw new InstagramPublicationError("NOT_FOUND");
     return {
       ...serializePublication(row, requestOrigin),
       duplicate: false,
-      accountUrl: `https://www.instagram.com/${encodeURIComponent(connection.instagram_username)}/`,
+      accountUrl: `https://www.instagram.com/${encodeURIComponent(published.accountUsername)}/`,
     };
   } catch (error) {
+    if (
+      error instanceof InstagramPublicationError &&
+      (error.code === "CONNECTION_REQUIRED" || error.code === "TOKEN_EXPIRED")
+    ) {
+      throw error;
+    }
     const providerCode =
       error instanceof InstagramPublicationError ? error.providerCode : undefined;
     await env.DB.prepare(

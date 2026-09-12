@@ -38,6 +38,11 @@ import {
   uploadInstagramFeedImage,
 } from "./instagram/publications";
 import {
+  publishAnigramTestStory,
+  serveAnigramStoryImage,
+  type AnigramStoryEnv,
+} from "./instagram/anigram-stories";
+import {
   InstagramInsightsError,
   listInstagramStoryInsights,
   syncAllInstagramStoryInsights,
@@ -111,6 +116,7 @@ interface Env
   extends WordPressOAuthEnv,
     InstagramOAuthEnv,
     InstagramPublicationEnv,
+    AnigramStoryEnv,
     InstagramInsightsEnv,
     GeminiEnv {
   COGNITO_USER_POOL_ID: string;
@@ -723,6 +729,28 @@ export default {
     }
 
     if (
+      request.method === "POST" &&
+      url.pathname === "/api/anigram/admin/instagram/story/test"
+    ) {
+      try {
+        const { ownerUserId, username } =
+          await verifyCognitoAccessToken(request, env);
+        await requireAnigramValidationAdmin(env, ownerUserId, username);
+        return json(
+          request,
+          env,
+          await publishAnigramTestStory(request, env, ownerUserId, url.origin),
+          201,
+        );
+      } catch (error) {
+        if (error instanceof AnigramGameError && error.code === "FORBIDDEN") {
+          return json(request, env, { error: "管理者権限が必要です" }, 403);
+        }
+        return handleInstagramPublicationError(request, env, error);
+      }
+    }
+
+    if (
       request.method === "DELETE" &&
       url.pathname === "/api/anigram/admin/users"
     ) {
@@ -974,6 +1002,13 @@ export default {
     );
     if (instagramMediaMatch && request.method === "GET") {
       return serveInstagramPublicationImage(env, instagramMediaMatch[1]);
+    }
+
+    const anigramStoryMediaMatch = url.pathname.match(
+      /^\/api\/anigram\/instagram\/story\/media\/([0-9a-f-]+)$/iu,
+    );
+    if (anigramStoryMediaMatch && request.method === "GET") {
+      return serveAnigramStoryImage(env, anigramStoryMediaMatch[1]);
     }
 
     if (
