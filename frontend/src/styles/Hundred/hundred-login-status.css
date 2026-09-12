@@ -1,18 +1,11 @@
 .hundred-login-status {
-  position: fixed;
-  z-index: 1000;
-  top: max(12px, env(safe-area-inset-top));
-  right: max(12px, env(safe-area-inset-right));
   display: flex;
+  height: 100%;
   overflow: hidden;
-  max-width: min(360px, calc(100vw - 24px));
-  border: 1px solid rgb(255 255 255 / 16%);
-  border-radius: 16px;
+  max-width: min(340px, 42vw);
+  border-left: 1px solid rgb(255 255 255 / 10%);
   color: #f4f8f6;
-  background: rgb(12 19 18 / 88%);
-  box-shadow: 0 14px 38px rgb(0 0 0 / 28%);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgb(255 255 255 / 2%);
 }
 
 .hundred-login-status button {
@@ -27,7 +20,7 @@
   min-width: 0;
   align-items: center;
   gap: 10px;
-  padding: 9px 12px;
+  padding: 4px 10px;
   text-align: left;
 }
 
@@ -46,14 +39,14 @@
 
 .hundred-login-status__avatar {
   display: grid;
-  flex: 0 0 32px;
-  width: 32px;
-  height: 32px;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
   place-items: center;
   border-radius: 50%;
   color: #08201a;
   background: #82ddc6;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -71,18 +64,18 @@
 }
 
 .hundred-login-status__copy strong {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .hundred-login-status__copy small {
   color: #a8b5b0;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .hundred-login-status__dismiss {
-  flex: 0 0 38px;
-  width: 38px;
+  flex: 0 0 34px;
+  width: 34px;
   border-left: 1px solid rgb(255 255 255 / 10%) !important;
   color: #a8b5b0 !important;
   font-size: 18px;
@@ -90,18 +83,16 @@
 
 @media (max-width: 520px) {
   .hundred-login-status {
-    top: max(8px, env(safe-area-inset-top));
-    right: max(8px, env(safe-area-inset-right));
-    max-width: calc(100vw - 16px);
-    border-radius: 14px;
+    max-width: 56vw;
   }
 
   .hundred-login-status__profile {
-    padding: 8px 10px;
+    gap: 7px;
+    padding: 3px 7px;
   }
 
   .hundred-login-status__copy strong {
-    max-width: 190px;
+    max-width: 130px;
   }
 
   .hundred-login-status__copy small {

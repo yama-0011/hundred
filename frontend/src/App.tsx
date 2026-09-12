@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
+import HundredAppLayout from './components/Hundred/Layout/HundredAppLayout'
 import CreativeIAConnectionPage from './pages/CreativeIA/CreativeIAConnectionPage'
 import CreativeIAInstagramConnectionPage from './pages/CreativeIA/CreativeIAInstagramConnectionPage'
 import CreativeIAWorkspacePage from './pages/CreativeIA/CreativeIAWorkspacePage'
@@ -8,7 +9,6 @@ import AnigramPage from './pages/Anigram/AnigramPage'
 import AnigramAdminPage from './pages/Anigram/AnigramAdminPage'
 import AnigramHistoryPage from './pages/Anigram/AnigramHistoryPage'
 import AnigramInstagramConnectionPage from './pages/Anigram/AnigramInstagramConnectionPage'
-import HundredLoginStatus from './components/Hundred/Auth/HundredLoginStatus'
 
 const AnigramInstagramSyncPage = lazy(
   () => import('./pages/Anigram/AnigramInstagramSyncPage'),
@@ -23,10 +23,10 @@ const AnigramInstagramSyncPage = lazy(
  */
 function App() {
   return (
-    <>
-      <Routes>
-        <Route path="/" element={<HundredHomePage />} />
-        <Route path="/auth/callback" element={<HundredHomePage />} />
+    <Routes>
+      <Route path="/" element={<HundredHomePage />} />
+      <Route path="/auth/callback" element={<HundredHomePage />} />
+      <Route element={<HundredAppLayout />}>
         <Route path="/creative-ia" element={<CreativeIAWorkspacePage />} />
         <Route path="/anigram" element={<AnigramPage />} />
         <Route path="/anigram/history" element={<AnigramHistoryPage />} />
@@ -51,9 +51,8 @@ function App() {
           path="/creative-ia/settings/instagram"
           element={<CreativeIAInstagramConnectionPage />}
         />
-      </Routes>
-      <HundredLoginStatus />
-    </>
+      </Route>
+    </Routes>
   )
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { getAnigramAdminAccess } from '../../services/Anigram/anigramApi'
 import {
   disconnectInstagram,
@@ -108,11 +108,6 @@ function AnigramInstagramConnectionPage() {
 
   return (
     <main className="anigram-page anigram-subpage">
-      <header className="anigram-header">
-        <Link to="/anigram/admin">← 管理画面へ戻る</Link>
-        <span>Instagram接続</span>
-      </header>
-
       <section className="anigram-subpage__heading anigram-connection-heading">
         <p className="anigram-eyebrow">INSTAGRAM CONNECTION</p>
         <h1>Instagram接続</h1>

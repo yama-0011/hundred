@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import {
   disconnectCreativeIAInstagram,
   getCreativeIAInstagramAuthorizationUrl,
@@ -161,11 +161,6 @@ function CreativeIAInstagramConnectionPage() {
   return (
     <main className="creative-ia-connection">
       <div className="creative-ia-connection__glow" aria-hidden="true" />
-      <header className="creative-ia-connection__header">
-        <Link to="/creative-ia">← Creative IAへ戻る</Link>
-        <span>Creative IA</span>
-      </header>
-
       <section className="creative-ia-connection__panel">
         <p className="creative-ia-connection__eyebrow">外部サービス接続</p>
         <h1>Instagram連携</h1>

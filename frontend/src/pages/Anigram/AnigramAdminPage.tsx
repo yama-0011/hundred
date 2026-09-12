@@ -328,11 +328,6 @@ function AnigramAdminPage() {
 
   return (
     <main className="anigram-page anigram-subpage">
-      <header className="anigram-header">
-        <Link to="/anigram">← Anigramへ戻る</Link>
-        <span>管理画面</span>
-      </header>
-
       <section className="anigram-subpage__heading">
         <p className="anigram-eyebrow">MANAGEMENT</p>
         <h1>Anigram管理</h1>

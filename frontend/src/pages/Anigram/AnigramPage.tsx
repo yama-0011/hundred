@@ -252,19 +252,12 @@ function AnigramPage() {
 
   return (
     <main className="anigram-page">
-      <header className="anigram-header">
-        <Link to="/">← Hundredへ戻る</Link>
-        <nav className="anigram-header__nav" aria-label="Anigramメニュー">
-          <Link to="/anigram/history">育成履歴</Link>
-          <Link to="/anigram/admin">管理設定</Link>
-        </nav>
-      </header>
+      <nav className="anigram-header__nav" aria-label="Anigramメニュー">
+        <Link to="/anigram/history">育成履歴</Link>
+        <Link to="/anigram/admin">管理設定</Link>
+      </nav>
 
       <section className="anigram-hero">
-        <div className="anigram-hero__copy">
-          <h1>Anigram</h1>
-        </div>
-
         <div className="anigram-hero__content">
           <AnigramUnityView displayState={displayState} />
 

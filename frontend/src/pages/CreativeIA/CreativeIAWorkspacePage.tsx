@@ -658,13 +658,6 @@ function CreativeIAWorkspacePage() {
       data-theme={theme}
       data-sidebar-collapsed={isSidebarCollapsed}
     >
-      <header className="creative-ia__mobile-header">
-        <Link to="/" aria-label="Hundredへ戻る">
-          <span aria-hidden="true">←</span> Hundred
-        </Link>
-        <strong>Creative IA</strong>
-      </header>
-
       <aside className="creative-ia__sidebar" aria-label="Creative IA">
         <div className="creative-ia__brand">
           <span className="creative-ia__brand-mark">C</span>
@@ -690,10 +683,6 @@ function CreativeIAWorkspacePage() {
           ))}
         </nav>
 
-        <Link className="creative-ia__home-link" to="/">
-          <span aria-hidden="true">←</span>
-          Hundredへ戻る
-        </Link>
       </aside>
 
       <button

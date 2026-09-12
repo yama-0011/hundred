@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import {
   deleteAnigramInstagramSyncHistory,
   getAnigramAdminAccess,
@@ -134,11 +133,6 @@ function AnigramInstagramSyncPage() {
 
   return (
     <main className="anigram-page anigram-subpage">
-      <header className="anigram-header">
-        <Link to="/anigram/admin">← 管理画面へ戻る</Link>
-        <span>Instagram同期管理</span>
-      </header>
-
       <section className="anigram-subpage__heading">
         <p className="anigram-eyebrow">SYNC MANAGEMENT</p>
         <h1>Instagram同期管理</h1>

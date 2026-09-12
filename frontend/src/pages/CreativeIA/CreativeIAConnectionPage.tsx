@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import {
   connectCreativeIAWordPressWithApplicationPassword,
   createCreativeIAWordPressDraft,
@@ -264,13 +264,6 @@ function CreativeIAConnectionPage() {
   return (
     <main className="creative-ia-connection">
       <div className="creative-ia-connection__glow" aria-hidden="true" />
-
-      <header className="creative-ia-connection__header">
-        <Link to="/creative-ia" aria-label="Creative IAの設定に戻る">
-          ← Creative IA
-        </Link>
-        <span>WordPress設定</span>
-      </header>
 
       <section
         className="creative-ia-connection__panel"

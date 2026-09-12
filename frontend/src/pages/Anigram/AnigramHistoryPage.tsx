@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import {
   getAnigramHistory,
   type AnigramHistory,
@@ -76,11 +75,6 @@ function AnigramHistoryPage() {
 
   return (
     <main className="anigram-page anigram-subpage">
-      <header className="anigram-header">
-        <Link to="/anigram">← Anigramへ戻る</Link>
-        <span>育成履歴</span>
-      </header>
-
       <section className="anigram-subpage__heading">
         <p className="anigram-eyebrow">HISTORY</p>
         <h1>育成の記録</h1>
