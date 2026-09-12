@@ -812,21 +812,90 @@
   gap: 18px;
 }
 
-.anigram-story-test-card > p {
-  margin: 0 0 18px;
-  color: #91a39d;
-  font-size: 13px;
-  line-height: 1.7;
+.anigram-story-template-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+  gap: 26px;
+  margin-top: 20px;
 }
 
-.anigram-story-render-actions {
-  display: flex;
-  align-items: center;
+.anigram-story-template-fields {
+  display: grid;
   gap: 18px;
 }
 
-.anigram-story-render-actions button,
-.anigram-story-publish-test > button {
+.anigram-story-template-variables {
+  margin: 0;
+  color: #82908c;
+  font-size: 12px;
+  line-height: 2;
+}
+
+.anigram-story-template-variables code {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid rgb(114 215 190 / 18%);
+  border-radius: 5px;
+  color: #82ddc6;
+  background: rgb(114 215 190 / 5%);
+}
+
+.anigram-story-template-preview {
+  min-height: 280px;
+  padding: 24px;
+  border: 1px solid rgb(114 215 190 / 15%);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 70% 20%, rgb(114 215 190 / 12%), transparent 45%),
+    #07110e;
+}
+
+.anigram-story-template-preview > span {
+  color: #72d7be;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+}
+
+.anigram-story-template-preview h3 {
+  margin: 22px 0 56px;
+  font-size: 24px;
+}
+
+.anigram-story-template-preview strong {
+  display: block;
+  margin-bottom: 22px;
+  font-size: 18px;
+}
+
+.anigram-story-template-preview p {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 18px;
+  color: #91a39d;
+  font-size: 12px;
+}
+
+.anigram-story-template-preview b {
+  color: #82ddc6;
+  font-size: 18px;
+}
+
+.anigram-story-template-preview small {
+  color: #a6b5b0;
+  line-height: 1.6;
+}
+
+.anigram-story-template-publish {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 26px;
+  padding-top: 22px;
+  border-top: 1px solid rgb(255 255 255 / 8%);
+}
+
+.anigram-story-template-publish button {
   min-height: 48px;
   padding: 0 22px;
   border: 1px solid #72d7be;
@@ -838,21 +907,14 @@
   cursor: pointer;
 }
 
-.anigram-story-render-actions button:disabled,
-.anigram-story-publish-test > button:disabled {
+.anigram-story-template-publish button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }
 
-.anigram-story-render-actions small,
-.anigram-story-publish-test > small {
+.anigram-story-template-publish small {
   color: #82908c;
   line-height: 1.6;
-}
-
-.anigram-story-publish-test > small {
-  display: block;
-  margin-top: 10px;
 }
 
 .anigram-story-render-preview {
@@ -898,56 +960,6 @@
   font-size: 13px;
 }
 
-.anigram-story-publish-test {
-  margin-top: 26px;
-  padding-top: 22px;
-  border-top: 1px solid rgb(255 255 255 / 8%);
-}
-
-.anigram-story-publish-test h3 {
-  margin: 0 0 8px;
-  font-size: 16px;
-}
-
-.anigram-story-publish-test > p {
-  margin: 0 0 16px;
-  color: #82908c;
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.anigram-story-test-result {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1px;
-  overflow: hidden;
-  margin: 20px 0 0;
-  border-radius: 12px;
-  background: rgb(255 255 255 / 8%);
-}
-
-.anigram-story-test-result div {
-  min-width: 0;
-  padding: 14px;
-  background: #0a1311;
-}
-
-.anigram-story-test-result dt {
-  margin-bottom: 6px;
-  color: #82908c;
-  font-size: 11px;
-}
-
-.anigram-story-test-result dd {
-  overflow-wrap: anywhere;
-  margin: 0;
-  color: #dce7e3;
-  font-size: 13px;
-}
-
-.anigram-story-test-result a {
-  color: #82ddc6;
-}
 
 .anigram-instagram-account {
   margin: 0;
@@ -1346,21 +1358,21 @@
     grid-template-columns: 1fr;
   }
 
-  .anigram-story-test-result {
-    grid-template-columns: 1fr;
-  }
-
   .anigram-story-render-preview {
     grid-template-columns: 1fr;
     align-items: stretch;
   }
 
-  .anigram-story-render-actions {
-    flex-direction: column;
+  .anigram-story-template-grid {
+    grid-template-columns: 1fr;
   }
 
-  .anigram-story-render-actions button,
-  .anigram-story-publish-test > button {
+  .anigram-story-template-publish {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .anigram-story-template-publish button {
     width: 100%;
   }
 

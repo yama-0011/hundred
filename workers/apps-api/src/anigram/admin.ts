@@ -36,6 +36,9 @@ interface AnigramInstagramDeliverySettingsRow {
   species: string;
   delivery_time: string;
   timezone: string;
+  story_title_template: string;
+  story_message_template: string;
+  story_reaction_template: string;
   reaction_sync_enabled: number;
   sync_pause_reason: string | null;
   sync_paused_by_user_id: string | null;
@@ -158,6 +161,35 @@ function optionalPauseReason(value: unknown, syncEnabled: boolean) {
   return normalized;
 }
 
+const storyTemplateVariables = new Set([
+  "pet_name",
+  "status",
+  "progress",
+  "progress_label",
+  "life_stage",
+  "evolution_stage",
+]);
+
+function requiredStoryTemplate(value: unknown, maximumLength: number) {
+  if (typeof value !== "string") {
+    throw new AnigramAdminSettingsError("INVALID_INPUT");
+  }
+  const normalized = value.trim();
+  if (normalized.length < 1 || normalized.length > maximumLength) {
+    throw new AnigramAdminSettingsError("INVALID_INPUT");
+  }
+  for (const match of normalized.matchAll(/\{([^{}]+)\}/gu)) {
+    if (!storyTemplateVariables.has(match[1])) {
+      throw new AnigramAdminSettingsError("INVALID_INPUT");
+    }
+  }
+  const withoutVariables = normalized.replace(/\{[^{}]+\}/gu, "");
+  if (withoutVariables.includes("{") || withoutVariables.includes("}")) {
+    throw new AnigramAdminSettingsError("INVALID_INPUT");
+  }
+  return normalized;
+}
+
 function serializeInstagramDeliverySettings(
   row: AnigramInstagramDeliverySettingsRow,
 ) {
@@ -166,6 +198,9 @@ function serializeInstagramDeliverySettings(
     species: row.species,
     deliveryTime: row.delivery_time,
     timezone: row.timezone,
+    storyTitleTemplate: row.story_title_template,
+    storyMessageTemplate: row.story_message_template,
+    storyReactionTemplate: row.story_reaction_template,
     reactionSyncEnabled: row.reaction_sync_enabled === 1,
     syncPauseReason: row.sync_pause_reason,
     syncPausedByUserId: row.sync_paused_by_user_id,
@@ -243,6 +278,8 @@ export async function getAnigramAdminSettings(env: AnigramEnv) {
     ).all<AnigramAdminUserRow>(),
     env.DB.prepare(
       `SELECT enabled, species, delivery_time, timezone,
+              story_title_template, story_message_template,
+              story_reaction_template,
               reaction_sync_enabled, sync_pause_reason,
               sync_paused_by_user_id, sync_paused_at,
               last_sync_at, last_sync_status,
@@ -295,6 +332,29 @@ export async function updateAnigramInstagramDeliverySettings(
     value.syncPauseReason,
     reactionSyncEnabled,
   );
+  const currentTemplates = await env.DB.prepare(
+    `SELECT story_title_template, story_message_template,
+            story_reaction_template
+       FROM anigram_instagram_delivery_settings
+      WHERE id = 1`,
+  ).first<Pick<
+    AnigramInstagramDeliverySettingsRow,
+    | "story_title_template"
+    | "story_message_template"
+    | "story_reaction_template"
+  >>();
+  if (!currentTemplates) {
+    throw new AnigramAdminSettingsError("NOT_FOUND");
+  }
+  const storyTitleTemplate = value.storyTitleTemplate === undefined
+    ? currentTemplates.story_title_template
+    : requiredStoryTemplate(value.storyTitleTemplate, 80);
+  const storyMessageTemplate = value.storyMessageTemplate === undefined
+    ? currentTemplates.story_message_template
+    : requiredStoryTemplate(value.storyMessageTemplate, 120);
+  const storyReactionTemplate = value.storyReactionTemplate === undefined
+    ? currentTemplates.story_reaction_template
+    : requiredStoryTemplate(value.storyReactionTemplate, 180);
   const speciesExists = await env.DB.prepare(
     `SELECT species FROM anigram_species_settings WHERE species = ?1`,
   )
@@ -311,18 +371,24 @@ export async function updateAnigramInstagramDeliverySettings(
             species = ?2,
             delivery_time = ?3,
             timezone = 'Asia/Tokyo',
-            reaction_sync_enabled = ?4,
-            sync_pause_reason = ?5,
-            sync_paused_by_user_id = ?6,
-            sync_paused_at = ?7,
-            updated_by_user_id = ?8,
-            updated_at = ?9
+            story_title_template = ?4,
+            story_message_template = ?5,
+            story_reaction_template = ?6,
+            reaction_sync_enabled = ?7,
+            sync_pause_reason = ?8,
+            sync_paused_by_user_id = ?9,
+            sync_paused_at = ?10,
+            updated_by_user_id = ?11,
+            updated_at = ?12
       WHERE id = 1`,
   )
     .bind(
       value.enabled ? 1 : 0,
       species,
       deliveryTime,
+      storyTitleTemplate,
+      storyMessageTemplate,
+      storyReactionTemplate,
       reactionSyncEnabled ? 1 : 0,
       syncPauseReason,
       reactionSyncEnabled ? null : updatedByUserId,
@@ -334,6 +400,8 @@ export async function updateAnigramInstagramDeliverySettings(
 
   const updated = await env.DB.prepare(
     `SELECT enabled, species, delivery_time, timezone,
+            story_title_template, story_message_template,
+            story_reaction_template,
             reaction_sync_enabled, sync_pause_reason,
             sync_paused_by_user_id, sync_paused_at,
             last_sync_at, last_sync_status,

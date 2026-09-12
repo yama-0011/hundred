@@ -962,17 +962,15 @@ Unityが読み込めない場合でも、満腹度、生死状態、最終給餌
 | DELETE | `/api/anigram/admin/instagram/sync-runs` | 指定した同期履歴、または同期履歴全件を削除（管理者限定） |
 | DELETE | `/api/anigram/admin/settings-history` | 指定した設定変更履歴、または設定変更履歴全件を削除（管理者限定） |
 | POST | `/api/anigram/admin/instagram/sync` | Instagram同期を手動実行 |
-| POST | `/api/anigram/admin/instagram/story/render-test` | 現在のペット状態からBrowser RunでStory画像を生成（管理者限定） |
 | POST | `/api/anigram/admin/instagram/story/generate-and-publish?confirmed=true` | 現在のペット状態からStory画像を生成し、Instagramへ公開（管理者限定） |
-| POST | `/api/anigram/admin/instagram/story/test?confirmed=true` | JPEG検証画像をInstagramストーリーズへ手動公開（管理者限定） |
 | POST | `/api/anigram/admin/users` | 管理者を登録 |
 | DELETE | `/api/anigram/admin/users` | 管理者を削除 |
 
 Instagram設定では、自動配信の有効・無効、対象ペット、配信時刻を`anigram_instagram_delivery_settings`へ保存する。時刻は`Asia/Tokyo`として扱う。自動配信は意図しない投稿を避けるため、メッセージと画像の設定・プレビュー・投稿監査を追加するまでCronへ接続しない。
 
-自動配信の前段検証として、Instagram設定タブへ管理者専用の「ストーリー配信検証」を設ける。操作時にブラウザで1080×1920の固定JPEGを生成し、確認ダイアログで明示承認した場合だけ、接続中アカウントへ`media_type=STORIES`として実際に公開する。処理中は同一管理者による二重実行を拒否し、公開結果、コンテナID、InstagramメディアID、プロバイダーエラーを`anigram_instagram_story_publications`へ保存する。画像はR2へ置き、推測困難な公開URLからMetaが取得できるようにする。アクセストークンや秘密情報は画像URLおよび履歴へ含めない。
+Instagram設定タブには「ストーリーテンプレート」を設け、見出し、メインメッセージ、反応を促すメッセージを管理者が設定する。`{pet_name}`、`{status}`、`{progress}`、`{progress_label}`、`{life_stage}`、`{evolution_stage}`を生成時の状態へ置換する。未保存テンプレートの誤配信を防ぐため、変更内容を保存するまで手動配信ボタンを無効にする。固定検証画像と画像生成だけの検証UI・APIは提供しない。
 
-Story画像のサーバー生成にはCloudflare Browser RunのWorkers BindingとQuick Actions `screenshot`を使用する。Workerが現在の共有ペット状態を確定してスナップショットを作成し、状態を埋め込んだHTML/CSSを1080×1920のJPEGへ変換する。生成画像はR2、生成時のペット状態、画像サイズ、Browser使用時間は`anigram_story_renders`へ保存する。管理画面には生成画像、生成日時、画像サイズ、Browser使用時間を表示する。画像生成だけの検証に加え、確認ダイアログで明示承認した場合は、生成画像を共通Instagram投稿処理へ渡してストーリーズへ公開する。生成履歴と公開履歴は`render_id`で関連付け、画像生成とInstagram公開の成否を分離して追跡する。
+Story画像のサーバー生成にはCloudflare Browser RunのWorkers BindingとQuick Actions `screenshot`を使用する。Workerが現在の共有ペット状態と保存済みテンプレートを確定してスナップショットを作成し、状態を埋め込んだHTML/CSSを1080×1920のJPEGへ変換する。生成画像はR2、生成時のペット状態・テンプレート、画像サイズ、Browser使用時間は`anigram_story_renders`へ保存する。確認ダイアログで明示承認した場合に生成画像を共通Instagram投稿処理へ渡してストーリーズへ公開する。生成履歴と公開履歴は`render_id`で関連付け、画像生成とInstagram公開の成否を分離して追跡する。
 
 Instagram設定タブには、ログイン中の登録済み管理者に限って現在の接続状態と接続アカウントを表示し、`/anigram/settings/instagram`の専用画面へ遷移する導線を設ける。専用画面では接続状態、アカウント名、アカウントID、接続日時、トークン有効期限を確認し、Instagram Business Loginによる接続・再接続・接続解除を行える。非管理者は接続情報を取得せず、専用画面の操作も許可しない。
 

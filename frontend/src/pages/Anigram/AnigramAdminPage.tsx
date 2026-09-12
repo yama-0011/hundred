@@ -3,10 +3,8 @@ import { Link } from 'react-router-dom'
 import {
   deleteAnigramSettingsHistory,
   generateAndPublishAnigramStory,
-  generateAnigramStoryRender,
   getAnigramAdminAccess,
   getAnigramAdminSettings,
-  publishAnigramTestStory,
   registerAnigramAdministrator,
   removeAnigramAdministrator,
   updateAnigramAdminSettings,
@@ -31,6 +29,9 @@ type InstagramDeliveryDraft = Pick<
   | 'enabled'
   | 'species'
   | 'deliveryTime'
+  | 'storyTitleTemplate'
+  | 'storyMessageTemplate'
+  | 'storyReactionTemplate'
   | 'reactionSyncEnabled'
   | 'syncPauseReason'
 >
@@ -94,79 +95,19 @@ function formatDateTime(value: number) {
   }).format(new Date(value))
 }
 
-function createTestStoryImage(accountUsername: string): Promise<Blob> {
-  const canvas = document.createElement('canvas')
-  canvas.width = 1080
-  canvas.height = 1920
-  const context = canvas.getContext('2d')
-  if (!context) return Promise.reject(new Error('CANVAS_UNAVAILABLE'))
+const storyTemplateSampleValues: Record<string, string> = {
+  pet_name: 'ハリネズミ',
+  status: '卵を温めています',
+  progress: '40',
+  progress_label: '孵化進捗',
+  life_stage: 'egg',
+  evolution_stage: 'base',
+}
 
-  const background = context.createLinearGradient(0, 0, 1080, 1920)
-  background.addColorStop(0, '#07100e')
-  background.addColorStop(0.55, '#0b211b')
-  background.addColorStop(1, '#173b31')
-  context.fillStyle = background
-  context.fillRect(0, 0, 1080, 1920)
-
-  const glow = context.createRadialGradient(540, 860, 80, 540, 860, 570)
-  glow.addColorStop(0, 'rgba(118, 224, 195, 0.22)')
-  glow.addColorStop(1, 'rgba(118, 224, 195, 0)')
-  context.fillStyle = glow
-  context.fillRect(0, 260, 1080, 1220)
-
-  context.fillStyle = '#75d9c1'
-  context.font = '700 34px sans-serif'
-  context.letterSpacing = '8px'
-  context.fillText('ANIGRAM', 84, 132)
-  context.letterSpacing = '0px'
-  context.fillStyle = '#eef4f1'
-  context.font = '700 78px sans-serif'
-  context.fillText('ストーリー配信テスト', 84, 242)
-  context.fillStyle = '#9eb0aa'
-  context.font = '400 32px sans-serif'
-  context.fillText(`@${accountUsername} への接続を確認しています`, 84, 302)
-
-  context.save()
-  context.translate(540, 900)
-  context.fillStyle = '#263c37'
-  context.beginPath()
-  context.ellipse(0, 300, 340, 92, 0, 0, Math.PI * 2)
-  context.fill()
-  const egg = context.createRadialGradient(-90, -120, 20, 0, 0, 300)
-  egg.addColorStop(0, '#f3fff7')
-  egg.addColorStop(0.45, '#b9efc0')
-  egg.addColorStop(1, '#568369')
-  context.fillStyle = egg
-  context.beginPath()
-  context.ellipse(0, 0, 205, 280, 0, 0, Math.PI * 2)
-  context.fill()
-  context.restore()
-
-  context.textAlign = 'center'
-  context.fillStyle = '#eef4f1'
-  context.font = '700 58px sans-serif'
-  context.fillText('ハリネズミを育てています', 540, 1420)
-  context.fillStyle = '#86ddd0'
-  context.font = '500 34px sans-serif'
-  context.fillText('Instagram Stories API 接続テスト', 540, 1490)
-
-  context.strokeStyle = 'rgba(255, 255, 255, 0.14)'
-  context.beginPath()
-  context.moveTo(84, 1740)
-  context.lineTo(996, 1740)
-  context.stroke()
-  context.textAlign = 'left'
-  context.fillStyle = '#91a39d'
-  context.font = '400 28px sans-serif'
-  context.fillText('この画像は管理画面から手動配信された検証用です', 84, 1810)
-
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => blob ? resolve(blob) : reject(new Error('IMAGE_FAILED')),
-      'image/jpeg',
-      0.92,
-    )
-  })
+function renderStoryTemplateSample(template: string) {
+  return template.replace(/\{([^{}]+)\}/gu, (token, name: string) =>
+    storyTemplateSampleValues[name] ?? token,
+  )
 }
 
 /** 設定内容は公開し、更新操作だけを登録済み管理者へ許可する画面。 */
@@ -187,9 +128,7 @@ function AnigramAdminPage() {
     useState<InstagramConnectionStatus | null>(null)
   const [instagramConnectionLoading, setInstagramConnectionLoading] =
     useState(false)
-  const [publishingTestStory, setPublishingTestStory] = useState(false)
   const [publishingGeneratedStory, setPublishingGeneratedStory] = useState(false)
-  const [generatingStoryRender, setGeneratingStoryRender] = useState(false)
   const [storyRender, setStoryRender] = useState<AnigramStoryRender | null>(null)
   const [testStoryResult, setTestStoryResult] = useState<{
     story: AnigramStoryPublication
@@ -209,6 +148,31 @@ function AnigramAdminPage() {
     [selectedSpecies, settings],
   )
 
+  const storyTemplatePreview = useMemo(
+    () => instagramDraft
+      ? {
+          title: renderStoryTemplateSample(instagramDraft.storyTitleTemplate),
+          message: renderStoryTemplateSample(instagramDraft.storyMessageTemplate),
+          reaction: renderStoryTemplateSample(instagramDraft.storyReactionTemplate),
+        }
+      : null,
+    [instagramDraft],
+  )
+
+  const instagramSettingsDirty = useMemo(() => {
+    if (!instagramDraft || !instagramDelivery) return false
+    return (
+      instagramDraft.enabled !== instagramDelivery.enabled ||
+      instagramDraft.species !== instagramDelivery.species ||
+      instagramDraft.deliveryTime !== instagramDelivery.deliveryTime ||
+      instagramDraft.storyTitleTemplate !== instagramDelivery.storyTitleTemplate ||
+      instagramDraft.storyMessageTemplate !== instagramDelivery.storyMessageTemplate ||
+      instagramDraft.storyReactionTemplate !== instagramDelivery.storyReactionTemplate ||
+      instagramDraft.reactionSyncEnabled !== instagramDelivery.reactionSyncEnabled ||
+      instagramDraft.syncPauseReason !== instagramDelivery.syncPauseReason
+    )
+  }, [instagramDelivery, instagramDraft])
+
   const applyPublicData = (
     response: Awaited<ReturnType<typeof getAnigramAdminSettings>>,
   ) => {
@@ -220,6 +184,9 @@ function AnigramAdminPage() {
       enabled: response.instagramDelivery.enabled,
       species: response.instagramDelivery.species,
       deliveryTime: response.instagramDelivery.deliveryTime,
+      storyTitleTemplate: response.instagramDelivery.storyTitleTemplate,
+      storyMessageTemplate: response.instagramDelivery.storyMessageTemplate,
+      storyReactionTemplate: response.instagramDelivery.storyReactionTemplate,
       reactionSyncEnabled: response.instagramDelivery.reactionSyncEnabled,
       syncPauseReason: response.instagramDelivery.syncPauseReason,
     })
@@ -357,6 +324,9 @@ function AnigramAdminPage() {
         enabled: updated.enabled,
         species: updated.species,
         deliveryTime: updated.deliveryTime,
+        storyTitleTemplate: updated.storyTitleTemplate,
+        storyMessageTemplate: updated.storyMessageTemplate,
+        storyReactionTemplate: updated.storyReactionTemplate,
         reactionSyncEnabled: updated.reactionSyncEnabled,
         syncPauseReason: updated.syncPauseReason,
       })
@@ -371,74 +341,12 @@ function AnigramAdminPage() {
     }
   }
 
-  const publishTestStory = async () => {
-    const username = instagramConnection?.account?.username
-    if (
-      !canManage ||
-      !username ||
-      publishingTestStory ||
-      publishingGeneratedStory
-    ) return
-    if (
-      !window.confirm(
-        `@${username} のInstagramストーリーズへ検証画像を実際に公開します。よろしいですか？`,
-      )
-    ) return
-
-    setPublishingTestStory(true)
-    setTestStoryResult(null)
-    setMessage(null)
-    setError(null)
-    try {
-      const result = await publishAnigramTestStory(
-        await createTestStoryImage(username),
-      )
-      setTestStoryResult(result)
-      setMessage(`@${result.accountUsername} へストーリーを公開しました。`)
-    } catch (requestError) {
-      const typedError = requestError as Error & {
-        providerCode?: string
-        responseMessage?: string
-      }
-      const detail = typedError.providerCode
-        ? `（Instagramエラー: ${typedError.providerCode}）`
-        : ''
-      setError(
-        `${typedError.responseMessage ?? 'ストーリーを公開できませんでした。'}${detail}`,
-      )
-    } finally {
-      setPublishingTestStory(false)
-    }
-  }
-
-  const generateStoryRender = async () => {
-    if (!canManage || generatingStoryRender || publishingGeneratedStory) return
-    setGeneratingStoryRender(true)
-    setStoryRender(null)
-    setMessage(null)
-    setError(null)
-    try {
-      const render = await generateAnigramStoryRender()
-      setStoryRender(render)
-      setMessage('Browser Runでストーリー画像を生成しました。')
-    } catch (requestError) {
-      const responseMessage = (
-        requestError as Error & { responseMessage?: string }
-      ).responseMessage
-      setError(responseMessage ?? 'Browser Runで画像を生成できませんでした。')
-    } finally {
-      setGeneratingStoryRender(false)
-    }
-  }
-
   const generateAndPublishStory = async () => {
     const username = instagramConnection?.account?.username
     if (
       !canManage ||
       !username ||
-      publishingGeneratedStory ||
-      publishingTestStory ||
-      generatingStoryRender
+      publishingGeneratedStory
     ) return
     if (
       !window.confirm(
@@ -785,151 +693,6 @@ function AnigramAdminPage() {
             ) : null}
           </section>
 
-          <section className="anigram-panel anigram-story-test-card">
-            <div className="anigram-panel__heading">
-              <div>
-                <p className="anigram-eyebrow">STORY PUBLISH TEST</p>
-                <h2>ストーリー配信検証</h2>
-              </div>
-              <span>管理者専用</span>
-            </div>
-            <p>
-              Browser RunによるHTML/CSS画像生成を確認できます。生成だけではInstagramへ公開されません。
-            </p>
-            <div className="anigram-story-render-actions">
-              <button
-                type="button"
-                onClick={() => void generateStoryRender()}
-                disabled={
-                  !canManage || generatingStoryRender || publishingGeneratedStory
-                }
-              >
-                {generatingStoryRender
-                  ? 'Browser Runで生成中…'
-                  : 'Browser Runで画像を生成'}
-              </button>
-              <small>
-                現在の共有ペット状態をスナップショットし、1080×1920のJPEGとしてR2へ保存します。
-              </small>
-            </div>
-            {storyRender ? (
-              <div className="anigram-story-render-preview">
-                <img
-                  src={storyRender.imageUrl}
-                  width={storyRender.width}
-                  height={storyRender.height}
-                  alt="Browser Runで生成したAnigramストーリーのプレビュー"
-                />
-                <dl>
-                  <div>
-                    <dt>生成日時</dt>
-                    <dd>{formatDateTime(storyRender.createdAt)}</dd>
-                  </div>
-                  <div>
-                    <dt>画像サイズ</dt>
-                    <dd>{storyRender.width}×{storyRender.height}</dd>
-                  </div>
-                  <div>
-                    <dt>Browser使用時間</dt>
-                    <dd>
-                      {storyRender.browserMsUsed === null
-                        ? '取得不可'
-                        : `${storyRender.browserMsUsed.toLocaleString()} ms`}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-            ) : null}
-            <div className="anigram-story-publish-test anigram-story-generated-publish">
-              <h3>現在の状態をストーリーへ配信</h3>
-              <p>
-                公開時点の共有ペット状態をBrowser Runで画像化し、R2への保存後、その画像をInstagramストーリーズへ公開します。
-              </p>
-              <button
-                type="button"
-                onClick={() => void generateAndPublishStory()}
-                disabled={
-                  !canManage ||
-                  !instagramConnection?.connected ||
-                  instagramConnection.tokenExpired ||
-                  publishingGeneratedStory ||
-                  publishingTestStory ||
-                  generatingStoryRender
-                }
-              >
-                {publishingGeneratedStory
-                  ? '画像生成・公開処理中…'
-                  : '生成してストーリーへ配信'}
-              </button>
-              {!canManage ? (
-                <small>登録済み管理者だけが配信できます。</small>
-              ) : !instagramConnection?.connected ||
-                instagramConnection.tokenExpired ? (
-                <small>先に有効なInstagramアカウントを接続してください。</small>
-              ) : (
-                <small>確認ダイアログで承認すると、画像生成後に実際の公開まで行います。</small>
-              )}
-            </div>
-            <div className="anigram-story-publish-test">
-              <h3>固定画像によるInstagram公開の再検証</h3>
-              <p>
-                従来の固定検証画像を生成し、接続中のInstagramアカウントへストーリーズとして実際に公開します。
-              </p>
-              <button
-                type="button"
-                onClick={() => void publishTestStory()}
-                disabled={
-                  !canManage ||
-                  !instagramConnection?.connected ||
-                  instagramConnection.tokenExpired ||
-                  publishingTestStory ||
-                  publishingGeneratedStory
-                }
-              >
-                {publishingTestStory
-                  ? '公開処理中…'
-                  : '検証画像をストーリーへ配信'}
-              </button>
-              {!canManage ? (
-                <small>登録済み管理者だけが配信できます。</small>
-              ) : !instagramConnection?.connected ||
-                instagramConnection.tokenExpired ? (
-                <small>先に有効なInstagramアカウントを接続してください。</small>
-              ) : (
-                <small>確認ダイアログで承認するまで公開されません。</small>
-              )}
-              {testStoryResult ? (
-                <dl className="anigram-story-test-result">
-                  <div>
-                    <dt>公開日時</dt>
-                    <dd>
-                      {formatDateTime(
-                        testStoryResult.story.publishedAt ??
-                          testStoryResult.story.updatedAt,
-                      )}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>InstagramメディアID</dt>
-                    <dd>{testStoryResult.story.instagramMediaId}</dd>
-                  </div>
-                  <div>
-                    <dt>公開先</dt>
-                    <dd>
-                      <a
-                        href={testStoryResult.accountUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        @{testStoryResult.accountUsername}
-                      </a>
-                    </dd>
-                  </div>
-                </dl>
-              ) : null}
-            </div>
-          </section>
-
           <form
             className="anigram-admin-form"
             onSubmit={(event) => void saveInstagramDelivery(event)}
@@ -938,6 +701,161 @@ function AnigramAdminPage() {
             className="anigram-admin-fieldset"
             disabled={!canManage || saving}
           >
+            <section className="anigram-panel anigram-story-template-card">
+              <div className="anigram-panel__heading">
+                <div>
+                  <p className="anigram-eyebrow">STORY TEMPLATE</p>
+                  <h2>ストーリーテンプレート</h2>
+                </div>
+                <span>1080×1920</span>
+              </div>
+
+              <div className="anigram-story-template-grid">
+                <div className="anigram-story-template-fields">
+                  <label className="anigram-field">
+                    <span>見出し</span>
+                    <input
+                      type="text"
+                      required
+                      maxLength={80}
+                      value={instagramDraft.storyTitleTemplate}
+                      onChange={(event) =>
+                        setInstagramDraft((current) =>
+                          current
+                            ? { ...current, storyTitleTemplate: event.target.value }
+                            : current,
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="anigram-field">
+                    <span>メインメッセージ</span>
+                    <textarea
+                      rows={2}
+                      required
+                      maxLength={120}
+                      value={instagramDraft.storyMessageTemplate}
+                      onChange={(event) =>
+                        setInstagramDraft((current) =>
+                          current
+                            ? { ...current, storyMessageTemplate: event.target.value }
+                            : current,
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="anigram-field">
+                    <span>反応を促すメッセージ</span>
+                    <textarea
+                      rows={3}
+                      required
+                      maxLength={180}
+                      value={instagramDraft.storyReactionTemplate}
+                      onChange={(event) =>
+                        setInstagramDraft((current) =>
+                          current
+                            ? { ...current, storyReactionTemplate: event.target.value }
+                            : current,
+                        )
+                      }
+                    />
+                  </label>
+                  <p className="anigram-story-template-variables">
+                    差し込み変数：<code>{'{pet_name}'}</code>{' '}
+                    <code>{'{status}'}</code>{' '}
+                    <code>{'{progress}'}</code>{' '}
+                    <code>{'{progress_label}'}</code>{' '}
+                    <code>{'{life_stage}'}</code>{' '}
+                    <code>{'{evolution_stage}'}</code>
+                  </p>
+                </div>
+
+                {storyTemplatePreview ? (
+                  <aside className="anigram-story-template-preview">
+                    <span>入力プレビュー</span>
+                    <h3>{storyTemplatePreview.title}</h3>
+                    <strong>{storyTemplatePreview.message}</strong>
+                    <p>
+                      孵化進捗 <b>40%</b>
+                    </p>
+                    <small>{storyTemplatePreview.reaction}</small>
+                  </aside>
+                ) : null}
+              </div>
+
+              <div className="anigram-story-template-publish">
+                <button
+                  type="button"
+                  onClick={() => void generateAndPublishStory()}
+                  disabled={
+                    !canManage ||
+                    !instagramConnection?.connected ||
+                    instagramConnection.tokenExpired ||
+                    publishingGeneratedStory ||
+                    instagramSettingsDirty
+                  }
+                >
+                  {publishingGeneratedStory
+                    ? '画像生成・公開処理中…'
+                    : '生成してストーリーへ配信'}
+                </button>
+                {!canManage ? (
+                  <small>登録済み管理者だけが配信できます。</small>
+                ) : instagramSettingsDirty ? (
+                  <small>変更したテンプレートを保存してから配信してください。</small>
+                ) : !instagramConnection?.connected ||
+                  instagramConnection.tokenExpired ? (
+                  <small>先に有効なInstagramアカウントを接続してください。</small>
+                ) : (
+                  <small>確認ダイアログで承認すると、現在の状態から画像を生成して実際に公開します。</small>
+                )}
+              </div>
+
+              {storyRender ? (
+                <div className="anigram-story-render-preview">
+                  <img
+                    src={storyRender.imageUrl}
+                    width={storyRender.width}
+                    height={storyRender.height}
+                    alt="Instagramへ公開したAnigramストーリー"
+                  />
+                  {testStoryResult ? (
+                    <dl>
+                      <div>
+                        <dt>公開日時</dt>
+                        <dd>
+                          {formatDateTime(
+                            testStoryResult.story.publishedAt ??
+                              testStoryResult.story.updatedAt,
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Browser使用時間</dt>
+                        <dd>
+                          {storyRender.browserMsUsed === null
+                            ? '取得不可'
+                            : `${storyRender.browserMsUsed.toLocaleString()} ms`}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>公開先</dt>
+                        <dd>
+                          <a
+                            href={testStoryResult.accountUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            @{testStoryResult.accountUsername}
+                          </a>
+                        </dd>
+                      </div>
+                    </dl>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
+
             <section className="anigram-panel">
               <div className="anigram-panel__heading">
                 <div>
@@ -1125,7 +1043,7 @@ function AnigramAdminPage() {
               </div>
 
               <p className="anigram-instagram-note">
-                現段階では配信条件の保存のみです。メッセージ・画像設定の追加後に、自動投稿処理へ接続します。
+                配信条件とストーリー文言を保存します。指定時刻に投稿するCron処理への接続は次の実装で行います。
               </p>
             </section>
 

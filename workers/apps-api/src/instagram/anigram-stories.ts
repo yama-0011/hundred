@@ -8,8 +8,6 @@ import {
   type AnigramStoryRendererEnv,
 } from "../anigram/story-renderer";
 
-const maxImageBytes = 8 * 1024 * 1024;
-
 export interface AnigramStoryEnv
   extends InstagramPublisherEnv, AnigramStoryRendererEnv {}
 
@@ -60,7 +58,6 @@ async function publishStoryAsset(
   input: {
     imageKey: string;
     renderId?: string;
-    prepareImage?: (publicationId: string) => Promise<void>;
   },
 ) {
   const id = crypto.randomUUID();
@@ -98,7 +95,6 @@ async function publishStoryAsset(
   }
 
   try {
-    await input.prepareImage?.(id);
     const result = await publishInstagramImage(env, ownerUserId, {
       imageUrl: `${requestOrigin}/api/anigram/instagram/story/media/${encodeURIComponent(id)}`,
       mediaType: "STORIES",
@@ -142,40 +138,6 @@ async function publishStoryAsset(
       ? error
       : new InstagramPublicationError("PROVIDER_FAILED");
   }
-}
-
-/** 管理者が明示確認したJPEGを、接続中アカウントのストーリーズへテスト公開する。 */
-export async function publishAnigramTestStory(
-  request: Request,
-  env: AnigramStoryEnv,
-  ownerUserId: string,
-  requestOrigin: string,
-) {
-  if (new URL(request.url).searchParams.get("confirmed") !== "true") {
-    throw new InstagramPublicationError("INVALID_INPUT");
-  }
-  const contentType = request.headers.get("Content-Type")?.split(";", 1)[0];
-  if (contentType !== "image/jpeg") {
-    throw new InstagramPublicationError("INVALID_INPUT");
-  }
-  const image = await request.arrayBuffer();
-  if (image.byteLength === 0 || image.byteLength > maxImageBytes) {
-    throw new InstagramPublicationError("INVALID_INPUT");
-  }
-
-  const imageKey = `anigram/story-tests/${crypto.randomUUID()}.jpg`;
-  return publishStoryAsset(env, ownerUserId, requestOrigin, {
-    imageKey,
-    prepareImage: async (publicationId) => {
-      await env.MEDIA.put(imageKey, image, {
-        httpMetadata: { contentType: "image/jpeg" },
-        customMetadata: {
-          publicationId,
-          purpose: "anigram-story-test",
-        },
-      });
-    },
-  });
 }
 
 /** 現在のペット状態をBrowser Runで生成し、その画像をInstagram Storiesへ公開する。 */

@@ -115,6 +115,9 @@ export type AnigramInstagramDeliverySettings = {
   species: string
   deliveryTime: string
   timezone: string
+  storyTitleTemplate: string
+  storyMessageTemplate: string
+  storyReactionTemplate: string
   reactionSyncEnabled: boolean
   syncPauseReason: string | null
   syncPausedByUserId: string | null
@@ -329,6 +332,9 @@ export async function updateAnigramInstagramDeliverySettings(settings: {
   enabled: boolean
   species: string
   deliveryTime: string
+  storyTitleTemplate: string
+  storyMessageTemplate: string
+  storyReactionTemplate: string
   reactionSyncEnabled: boolean
   syncPauseReason: string | null
 }) {
@@ -340,26 +346,6 @@ export async function updateAnigramInstagramDeliverySettings(settings: {
     body: JSON.stringify(settings),
   })
   return response.instagramDelivery
-}
-
-export async function publishAnigramTestStory(image: Blob) {
-  return requestAnigramApi<{
-    story: AnigramStoryPublication
-    accountUsername: string
-    accountUrl: string
-  }>('/api/anigram/admin/instagram/story/test?confirmed=true', {
-    method: 'POST',
-    headers: { 'Content-Type': 'image/jpeg' },
-    body: image,
-  })
-}
-
-export async function generateAnigramStoryRender() {
-  const response = await requestAnigramApi<{ render: AnigramStoryRender }>(
-    '/api/anigram/admin/instagram/story/render-test',
-    { method: 'POST' },
-  )
-  return response.render
 }
 
 export async function generateAndPublishAnigramStory() {

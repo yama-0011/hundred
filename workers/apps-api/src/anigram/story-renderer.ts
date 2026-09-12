@@ -20,6 +20,12 @@ interface StoryRenderRow {
   created_at: number;
 }
 
+interface StoryTextTemplates {
+  story_title_template: string;
+  story_message_template: string;
+  story_reaction_template: string;
+}
+
 export class AnigramStoryRendererError extends Error {
   constructor(
     readonly code: "BROWSER_FAILED" | "INVALID_IMAGE" | "NOT_FOUND",
@@ -39,15 +45,25 @@ function escapeHtml(value: unknown) {
     .replaceAll("'", "&#039;");
 }
 
+function applyStoryTemplate(
+  template: string,
+  variables: Record<string, string>,
+) {
+  return template.replace(/\{([^{}]+)\}/gu, (token, name: string) =>
+    variables[name] ?? token
+  );
+}
+
 function createStoryHtml(
   pet: Awaited<ReturnType<typeof getAnigramPetState>>,
   generatedAt: number,
+  templates: StoryTextTemplates,
 ) {
   const isEgg = pet.lifeStage === "egg" || pet.lifeStage === "hatching";
   const progress = isEgg
     ? (pet.hatchProgressPercent ?? 0)
     : (pet.fullnessPercent ?? 0);
-  const statusTitle =
+  const defaultStatusTitle =
     pet.status === "dead"
       ? "ハリネズミは眠っています"
       : isEgg
@@ -56,9 +72,26 @@ function createStoryHtml(
           ? "ハリネズミは成長しました"
           : "ハリネズミを育てています";
   const progressLabel = isEgg ? "孵化進捗" : "満腹度";
-  const callToAction = isEgg
-    ? "あなたの反応が、誕生への一歩になります。"
-    : "ストーリーへの反応が、ハリネズミのごはんになります。";
+  const variables = {
+    pet_name: pet.displayName,
+    status: defaultStatusTitle,
+    progress: String(progress),
+    progress_label: progressLabel,
+    life_stage: pet.lifeStage,
+    evolution_stage: pet.evolutionStage,
+  };
+  const statusTitle = applyStoryTemplate(
+    templates.story_title_template,
+    variables,
+  );
+  const storyMessage = applyStoryTemplate(
+    templates.story_message_template,
+    variables,
+  );
+  const callToAction = applyStoryTemplate(
+    templates.story_reaction_template,
+    variables,
+  );
   const generatedLabel = new Intl.DateTimeFormat("ja-JP", {
     timeZone: "Asia/Tokyo",
     year: "numeric",
@@ -115,7 +148,7 @@ function createStoryHtml(
       <div class="${isEgg ? "egg" : "pet"}"></div>
     </div>
     <section class="content">
-      <h2>${escapeHtml(pet.displayName)}をみんなで育てよう。</h2>
+      <h2>${escapeHtml(storyMessage)}</h2>
       <div class="progress-head"><span>${escapeHtml(progressLabel)}</span><strong>${escapeHtml(progress)}%</strong></div>
       <div class="track"><span></span></div>
       <p class="cta">${escapeHtml(callToAction)}</p>
@@ -147,6 +180,13 @@ export async function renderAnigramStoryAsset(
 ) {
   const pet = await getAnigramPetState(env);
   const createdAt = Date.now();
+  const templates = await env.DB.prepare(
+    `SELECT story_title_template, story_message_template,
+            story_reaction_template
+       FROM anigram_instagram_delivery_settings
+      WHERE id = 1`,
+  ).first<StoryTextTemplates>();
+  if (!templates) throw new AnigramStoryRendererError("NOT_FOUND");
   const snapshot = {
     capturedAt: createdAt,
     species: pet.species,
@@ -156,9 +196,14 @@ export async function renderAnigramStoryAsset(
     evolutionStage: pet.evolutionStage,
     hatchProgressPercent: pet.hatchProgressPercent,
     fullnessPercent: pet.fullnessPercent,
+    storyText: {
+      titleTemplate: templates.story_title_template,
+      messageTemplate: templates.story_message_template,
+      reactionTemplate: templates.story_reaction_template,
+    },
   };
   const response = await env.BROWSER.quickAction("screenshot", {
-    html: createStoryHtml(pet, createdAt),
+    html: createStoryHtml(pet, createdAt, templates),
     viewport: { width: storyWidth, height: storyHeight, deviceScaleFactor: 1 },
     screenshotOptions: {
       type: "jpeg",
@@ -236,20 +281,6 @@ export async function renderAnigramStoryAsset(
     render: serializeRender(row, requestOrigin),
     imageKey,
   };
-}
-
-/** 管理画面から画像生成だけを検証するため、R2の内部キーは応答に含めない。 */
-export async function renderAnigramStoryPreview(
-  env: AnigramStoryRendererEnv,
-  ownerUserId: string,
-  requestOrigin: string,
-) {
-  const { render } = await renderAnigramStoryAsset(
-    env,
-    ownerUserId,
-    requestOrigin,
-  );
-  return { render };
 }
 
 /** 管理画面プレビューおよび将来のMeta取得に使う推測困難な画像URL。 */
