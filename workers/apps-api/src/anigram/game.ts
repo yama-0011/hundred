@@ -59,6 +59,7 @@ export class AnigramGameError extends Error {
 }
 
 const defaultSpecies = "hedgehog";
+const sharedPetOwnerUserId = "anigram_shared_pet";
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(Math.max(value, minimum), maximum);
@@ -80,8 +81,13 @@ async function ensureUser(env: AnigramEnv, ownerUserId: string) {
     .run();
 }
 
-async function ensurePet(env: AnigramEnv, ownerUserId: string) {
-  await ensureUser(env, ownerUserId);
+async function ensureSharedPet(env: AnigramEnv) {
+  const existing = await env.DB.prepare(
+    `SELECT pet_id FROM anigram_shared_pet WHERE id = 1`,
+  ).first<{ pet_id: string }>();
+  if (existing) return;
+
+  await ensureUser(env, sharedPetOwnerUserId);
   const now = Date.now();
   await env.DB.prepare(
     `INSERT INTO anigram_pets (
@@ -91,11 +97,21 @@ async function ensurePet(env: AnigramEnv, ownerUserId: string) {
      VALUES (?1, ?2, ?3, 'alive', 'egg', 'base', 0, 0, ?4, ?4, ?4)
      ON CONFLICT(owner_user_id) DO NOTHING`,
   )
-    .bind(crypto.randomUUID(), ownerUserId, defaultSpecies, now)
+    .bind(crypto.randomUUID(), sharedPetOwnerUserId, defaultSpecies, now)
+    .run();
+
+  await env.DB.prepare(
+    `INSERT INTO anigram_shared_pet (id, pet_id, selected_at)
+     SELECT 1, id, ?1
+       FROM anigram_pets
+      WHERE owner_user_id = ?2
+     ON CONFLICT(id) DO NOTHING`,
+  )
+    .bind(now, sharedPetOwnerUserId)
     .run();
 }
 
-async function loadPet(env: AnigramEnv, ownerUserId: string) {
+async function loadSharedPet(env: AnigramEnv) {
   const pet = await env.DB.prepare(
     `SELECT
        pet.*,
@@ -111,11 +127,12 @@ async function loadPet(env: AnigramEnv, ownerUserId: string) {
        settings.evolution_hold_seconds,
        settings.next_evolution_stage
      FROM anigram_pets AS pet
+     JOIN anigram_shared_pet AS shared
+       ON shared.id = 1 AND shared.pet_id = pet.id
      JOIN anigram_species_settings AS settings
        ON settings.species = pet.species
-     WHERE pet.owner_user_id = ?1`,
+     LIMIT 1`,
   )
-    .bind(ownerUserId)
     .first<AnigramPetRow>();
   if (!pet) throw new AnigramGameError("NOT_FOUND");
   return pet;
@@ -155,11 +172,10 @@ async function recordStateHistory(
  */
 async function settlePet(
   env: AnigramEnv,
-  ownerUserId: string,
   requestedNow = Date.now(),
 ) {
-  await ensurePet(env, ownerUserId);
-  let pet = await loadPet(env, ownerUserId);
+  await ensureSharedPet(env);
+  let pet = await loadSharedPet(env);
   const now = Math.max(requestedNow, pet.state_calculated_at);
 
   if (
@@ -181,9 +197,9 @@ async function settlePet(
               state_calculated_at = ?3,
               hatched_at = ?3,
               updated_at = ?1
-        WHERE owner_user_id = ?4`,
+        WHERE id = ?4`,
     )
-      .bind(now, initialFullness, hatchedAt, ownerUserId)
+      .bind(now, initialFullness, hatchedAt, pet.id)
       .run();
     await recordStateHistory(
       env,
@@ -194,7 +210,7 @@ async function settlePet(
       "hatching_duration_elapsed",
       hatchedAt,
     );
-    pet = await loadPet(env, ownerUserId);
+    pet = await loadSharedPet(env);
   }
 
   if (
@@ -265,7 +281,7 @@ async function settlePet(
               life_stage = ?7,
               evolution_stage = ?8,
               updated_at = ?1
-        WHERE owner_user_id = ?9`,
+        WHERE id = ?9`,
     )
       .bind(
         now,
@@ -276,7 +292,7 @@ async function settlePet(
         diedAt,
         lifeStage,
         evolutionStage,
-        ownerUserId,
+        pet.id,
       )
       .run();
     if (pet.status !== status) {
@@ -316,7 +332,7 @@ async function settlePet(
         now,
       );
     }
-    pet = await loadPet(env, ownerUserId);
+    pet = await loadSharedPet(env);
   }
 
   return pet;
@@ -451,11 +467,9 @@ function serializePet(pet: AnigramPetRow, now = Date.now()) {
  */
 export async function runAnigramEvolutionValidation(
   env: AnigramEnv,
-  ownerUserId: string,
   action: AnigramEvolutionValidationAction,
 ) {
-  await ensurePet(env, ownerUserId);
-  const pet = await settlePet(env, ownerUserId);
+  const pet = await settlePet(env);
   const now = Date.now();
 
   if (action === "prepare") {
@@ -473,9 +487,9 @@ export async function runAnigramEvolutionValidation(
               evolution_started_at = ?1,
               died_at = NULL,
               updated_at = ?1
-        WHERE id = ?3 AND owner_user_id = ?4`,
+        WHERE id = ?3`,
     )
-      .bind(now, pet.max_fullness_points, pet.id, ownerUserId)
+      .bind(now, pet.max_fullness_points, pet.id)
       .run();
     await recordStateHistory(
       env,
@@ -486,7 +500,7 @@ export async function runAnigramEvolutionValidation(
       "manual_validation_prepare",
       now,
     );
-    return serializePet(await loadPet(env, ownerUserId), now);
+    return serializePet(await loadSharedPet(env), now);
   }
 
   if (
@@ -503,11 +517,11 @@ export async function runAnigramEvolutionValidation(
           SET evolution_started_at = evolution_started_at - ?1,
               state_calculated_at = ?2,
               updated_at = ?3
-        WHERE id = ?4 AND owner_user_id = ?5`,
+        WHERE id = ?4`,
     )
-      .bind(elapsedMilliseconds, now - 1_000, now, pet.id, ownerUserId)
+      .bind(elapsedMilliseconds, now - 1_000, now, pet.id)
       .run();
-    const settled = await settlePet(env, ownerUserId, now);
+    const settled = await settlePet(env, now);
     await recordStateHistory(
       env,
       settled,
@@ -529,11 +543,9 @@ export async function runAnigramEvolutionValidation(
  */
 export async function runAnigramStarvationValidation(
   env: AnigramEnv,
-  ownerUserId: string,
   action: AnigramStarvationValidationAction,
 ) {
-  await ensurePet(env, ownerUserId);
-  let pet = await settlePet(env, ownerUserId);
+  let pet = await settlePet(env);
   const now = Date.now();
 
   if (action === "prepare") {
@@ -550,9 +562,9 @@ export async function runAnigramStarvationValidation(
               evolution_started_at = NULL,
               died_at = NULL,
               updated_at = ?2
-        WHERE id = ?3 AND owner_user_id = ?4`,
+        WHERE id = ?3`,
     )
-      .bind(preparedFullness, now, pet.id, ownerUserId)
+      .bind(preparedFullness, now, pet.id)
       .run();
     await recordStateHistory(
       env,
@@ -563,7 +575,7 @@ export async function runAnigramStarvationValidation(
       "manual_validation_prepare",
       now,
     );
-    return serializePet(await loadPet(env, ownerUserId), now);
+    return serializePet(await loadSharedPet(env), now);
   }
 
   if (
@@ -589,11 +601,11 @@ export async function runAnigramStarvationValidation(
       `UPDATE anigram_pets
           SET state_calculated_at = state_calculated_at - ?1,
               updated_at = ?2
-        WHERE id = ?3 AND owner_user_id = ?4`,
+        WHERE id = ?3`,
     )
-      .bind(elapsedMilliseconds, now, pet.id, ownerUserId)
+      .bind(elapsedMilliseconds, now, pet.id)
       .run();
-    const settled = await settlePet(env, ownerUserId, now);
+    const settled = await settlePet(env, now);
     await recordStateHistory(
       env,
       settled,
@@ -616,11 +628,11 @@ export async function runAnigramStarvationValidation(
           SET state_calculated_at = state_calculated_at - ?1,
               zero_started_at = zero_started_at - ?1,
               updated_at = ?2
-        WHERE id = ?3 AND owner_user_id = ?4`,
+        WHERE id = ?3`,
     )
-      .bind(elapsedMilliseconds, now, pet.id, ownerUserId)
+      .bind(elapsedMilliseconds, now, pet.id)
       .run();
-    const settled = await settlePet(env, ownerUserId, now);
+    const settled = await settlePet(env, now);
     await recordStateHistory(
       env,
       settled,
@@ -636,23 +648,19 @@ export async function runAnigramStarvationValidation(
   throw new AnigramGameError("INVALID_INPUT");
 }
 
-export async function getAnigramPetState(
-  env: AnigramEnv,
-  ownerUserId: string,
-) {
-  return serializePet(await settlePet(env, ownerUserId));
+export async function getAnigramPetState(env: AnigramEnv) {
+  return serializePet(await settlePet(env));
 }
 
 /**
- * Phase 1の技術検証用に、ログイン中ユーザーのペットだけを初期状態へ戻す。
+ * Phase 1の技術検証用に、Anigramの共有ペットを初期状態へ戻す。
  * 成長イベントは削除せず、Instagram反応の重複加算防止を維持する。
  */
 export async function resetAnigramPetForValidation(
   env: AnigramEnv,
-  ownerUserId: string,
 ) {
-  await ensurePet(env, ownerUserId);
-  const pet = await loadPet(env, ownerUserId);
+  await ensureSharedPet(env);
+  const pet = await loadSharedPet(env);
   const now = Date.now();
 
   await env.DB.prepare(
@@ -670,9 +678,9 @@ export async function resetAnigramPetForValidation(
             evolution_started_at = NULL,
             died_at = NULL,
             updated_at = ?1
-      WHERE id = ?2 AND owner_user_id = ?3`,
+      WHERE id = ?2`,
   )
-    .bind(now, pet.id, ownerUserId)
+    .bind(now, pet.id)
     .run();
 
   await recordStateHistory(
@@ -685,7 +693,7 @@ export async function resetAnigramPetForValidation(
     now,
   );
 
-  return serializePet(await loadPet(env, ownerUserId), now);
+  return serializePet(await loadSharedPet(env), now);
 }
 
 /**
@@ -694,7 +702,7 @@ export async function resetAnigramPetForValidation(
  */
 export async function addAnigramGrowthEvent(
   env: AnigramEnv,
-  ownerUserId: string,
+  sourceOwnerUserId: string,
   input: AnigramGrowthEventInput,
 ) {
   const points = Number(input.points);
@@ -707,18 +715,20 @@ export async function addAnigramGrowthEvent(
     throw new AnigramGameError("INVALID_INPUT");
   }
 
+  await ensureUser(env, sourceOwnerUserId);
+
   const existing = await env.DB.prepare(
     `SELECT id
        FROM anigram_growth_events
       WHERE owner_user_id = ?1 AND source = ?2 AND external_event_id = ?3`,
   )
-    .bind(ownerUserId, input.source, input.externalEventId)
+    .bind(sourceOwnerUserId, input.source, input.externalEventId)
     .first<{ id: string }>();
   if (existing) {
     return {
       duplicate: true,
       appliedPoints: 0,
-      pet: await getAnigramPetState(env, ownerUserId),
+      pet: await getAnigramPetState(env),
     };
   }
 
@@ -727,7 +737,7 @@ export async function addAnigramGrowthEvent(
     typeof input.occurredAt === "number" && Number.isFinite(input.occurredAt)
       ? Math.min(Math.max(0, Math.floor(input.occurredAt)), now)
       : now;
-  const pet = await settlePet(env, ownerUserId, now);
+  const pet = await settlePet(env, now);
   let appliedTarget: "hatch" | "fullness" | "ignored" = "ignored";
   let appliedPoints = 0;
   let nextHatchPoints = pet.hatch_points;
@@ -777,7 +787,7 @@ export async function addAnigramGrowthEvent(
        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)`,
     ).bind(
       eventId,
-      ownerUserId,
+      sourceOwnerUserId,
       pet.id,
       input.source.trim(),
       input.externalEventId.trim(),
@@ -799,7 +809,7 @@ export async function addAnigramGrowthEvent(
               evolution_started_at = ?8,
               state_calculated_at = ?1,
               updated_at = ?1
-        WHERE id = ?9 AND owner_user_id = ?10`,
+        WHERE id = ?9`,
     ).bind(
       now,
       nextLifeStage,
@@ -810,7 +820,6 @@ export async function addAnigramGrowthEvent(
       zeroStartedAt,
       evolutionStartedAt,
       pet.id,
-      ownerUserId,
     ),
   ]);
 
@@ -829,25 +838,25 @@ export async function addAnigramGrowthEvent(
   return {
     duplicate: false,
     appliedPoints,
-    pet: await getAnigramPetState(env, ownerUserId),
+    pet: await getAnigramPetState(env),
   };
 }
 
 export async function listAnigramGrowthEvents(
   env: AnigramEnv,
-  ownerUserId: string,
   requestedLimit = 20,
 ) {
   const limit = Math.floor(clamp(requestedLimit, 1, 100));
+  const pet = await settlePet(env);
   const result = await env.DB.prepare(
     `SELECT id, source, reaction_type, applied_target, requested_points,
             applied_points, occurred_at, applied_at
        FROM anigram_growth_events
-      WHERE owner_user_id = ?1
+      WHERE pet_id = ?1
       ORDER BY applied_at DESC
       LIMIT ?2`,
   )
-    .bind(ownerUserId, limit)
+    .bind(pet.id, limit)
     .all<{
       id: string;
       source: string;

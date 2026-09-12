@@ -614,21 +614,16 @@ export async function updateAnigramAdminSettings(
   };
 
   // 新しい減少率を過去の経過時間へ遡及させないため、更新前の設定で状態を確定する。
-  const petOwners = await env.DB.prepare(
-    `SELECT owner_user_id FROM anigram_pets WHERE species = ?1`,
-  )
-    .bind(species)
-    .all<{ owner_user_id: string }>();
-  for (const pet of petOwners.results) {
-    await getAnigramPetState(env, pet.owner_user_id);
-  }
+  await getAnigramPetState(env);
 
   const now = Date.now();
   const previousSettings = serializeSettings(previousRow);
   const newlyHatchingPets = await env.DB.prepare(
-    `SELECT id, owner_user_id
-       FROM anigram_pets
-      WHERE species = ?1
+    `SELECT pet.id, pet.owner_user_id
+       FROM anigram_pets AS pet
+       JOIN anigram_shared_pet AS shared
+         ON shared.id = 1 AND shared.pet_id = pet.id
+      WHERE pet.species = ?1
         AND status = 'alive'
         AND life_stage = 'egg'
         AND hatch_points >= ?2`,
@@ -679,7 +674,8 @@ export async function updateAnigramAdminSettings(
                 ELSE hatching_started_at
               END,
               updated_at = ?5
-        WHERE species = ?1`,
+        WHERE id = (SELECT pet_id FROM anigram_shared_pet WHERE id = 1)
+          AND species = ?1`,
     ).bind(
       species,
       nextSettings.hatchRequiredPoints,
@@ -713,9 +709,7 @@ export async function updateAnigramAdminSettings(
   await env.DB.batch(statements);
 
   // 閾値や待機時間の変更による孵化・進化条件を新設定で直ちに再評価する。
-  for (const pet of petOwners.results) {
-    await getAnigramPetState(env, pet.owner_user_id);
-  }
+  await getAnigramPetState(env);
 
   return serializeSettings(await loadSettings(env, species));
 }

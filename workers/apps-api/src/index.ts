@@ -455,7 +455,7 @@ export default {
       try {
         const { ownerUserId, username } = await verifyCognitoAccessToken(request, env);
         return json(request, env, {
-          pet: await getAnigramPetState(env, ownerUserId),
+          pet: await getAnigramPetState(env),
           validation: {
             allowed: await canManageAnigramValidation(env, ownerUserId, username),
           },
@@ -473,14 +473,13 @@ export default {
       url.pathname === "/api/anigram/history"
     ) {
       try {
-        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        await verifyCognitoAccessToken(request, env);
         const requestedLimit = Number(url.searchParams.get("limit") ?? 50);
         return json(
           request,
           env,
           await getAnigramHistory(
             env,
-            ownerUserId,
             Number.isFinite(requestedLimit) ? requestedLimit : 50,
           ),
         );
@@ -807,12 +806,11 @@ export default {
       url.pathname === "/api/anigram/growth-events"
     ) {
       try {
-        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        await verifyCognitoAccessToken(request, env);
         const requestedLimit = Number(url.searchParams.get("limit") ?? 20);
         return json(request, env, {
           events: await listAnigramGrowthEvents(
             env,
-            ownerUserId,
             Number.isFinite(requestedLimit) ? requestedLimit : 20,
           ),
         });
@@ -870,7 +868,7 @@ export default {
         const { ownerUserId, username } = await verifyCognitoAccessToken(request, env);
         await requireAnigramValidationAdmin(env, ownerUserId, username);
         return json(request, env, {
-          pet: await resetAnigramPetForValidation(env, ownerUserId),
+          pet: await resetAnigramPetForValidation(env),
         });
       } catch (error) {
         if (error instanceof CognitoAuthenticationError) {
@@ -902,7 +900,6 @@ export default {
         return json(request, env, {
           pet: await runAnigramStarvationValidation(
             env,
-            ownerUserId,
             action as AnigramStarvationValidationAction,
           ),
         });
@@ -942,7 +939,6 @@ export default {
         return json(request, env, {
           pet: await runAnigramEvolutionValidation(
             env,
-            ownerUserId,
             action as AnigramEvolutionValidationAction,
           ),
         });

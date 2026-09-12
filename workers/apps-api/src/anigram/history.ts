@@ -15,23 +15,22 @@ function startOfTodayInJapan(now: number) {
 
 export async function getAnigramHistory(
   env: AnigramEnv,
-  ownerUserId: string,
   requestedLimit = 50,
 ) {
   const limit = Math.min(Math.max(Math.floor(requestedLimit), 1), 100);
   const now = Date.now();
   const todayStartedAt = startOfTodayInJapan(now);
-  const [pet, growthResult, stateResult, todaySummary] = await Promise.all([
-    getAnigramPetState(env, ownerUserId),
+  const pet = await getAnigramPetState(env);
+  const [growthResult, stateResult, todaySummary] = await Promise.all([
     env.DB.prepare(
       `SELECT id, source, reaction_type, applied_target, requested_points,
               applied_points, occurred_at, applied_at
          FROM anigram_growth_events
-        WHERE owner_user_id = ?1
+        WHERE pet_id = ?1
         ORDER BY applied_at DESC
         LIMIT ?2`,
     )
-      .bind(ownerUserId, limit)
+      .bind(pet.id, limit)
       .all<{
         id: string;
         source: string;
@@ -45,11 +44,11 @@ export async function getAnigramHistory(
     env.DB.prepare(
       `SELECT id, event_type, previous_value, next_value, reason, occurred_at
          FROM anigram_state_history
-        WHERE owner_user_id = ?1
+        WHERE pet_id = ?1
         ORDER BY occurred_at DESC
         LIMIT ?2`,
     )
-      .bind(ownerUserId, limit)
+      .bind(pet.id, limit)
       .all<{
         id: string;
         event_type: string;
@@ -67,9 +66,9 @@ export async function getAnigramHistory(
          COALESCE(SUM(applied_points), 0) AS applied_points,
          COUNT(*) AS event_count
        FROM anigram_growth_events
-       WHERE owner_user_id = ?1 AND occurred_at >= ?2 AND occurred_at <= ?3`,
+       WHERE pet_id = ?1 AND occurred_at >= ?2 AND occurred_at <= ?3`,
     )
-      .bind(ownerUserId, todayStartedAt, now)
+      .bind(pet.id, todayStartedAt, now)
       .first<{
         instagram_reactions: number;
         requested_points: number;
