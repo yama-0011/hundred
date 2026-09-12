@@ -57,13 +57,9 @@ function AnigramHistoryPage() {
         setHistory(nextHistory)
         setError(null)
       })
-      .catch((requestError: unknown) => {
+      .catch(() => {
         if (cancelled) return
-        setError(
-          requestError instanceof Error && requestError.message === 'AUTH_REQUIRED'
-            ? '履歴を見るにはHundredへのサインインが必要です。'
-            : 'Anigramの履歴を取得できませんでした。',
-        )
+        setError('Anigramの履歴を取得できませんでした。')
       })
       .finally(() => {
         if (!cancelled) setLoading(false)

@@ -8,9 +8,14 @@ import { Hub } from 'aws-amplify/utils'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
+import {
+  endHundredGuestSession,
+  hasHundredGuestSession,
+} from './hundredGuestSession'
 import '../../../styles/Hundred/hundred-login-status.css'
 
 type LoginStatus = {
+  sessionType: 'member' | 'guest'
   displayName: string
   providerLabel: string
 }
@@ -75,6 +80,7 @@ function HundredLoginStatus() {
 
         if (!isActive) return
         setLoginStatus({
+          sessionType: 'member',
           displayName: resolveDisplayName(
             user.username,
             name,
@@ -86,7 +92,16 @@ function HundredLoginStatus() {
             : 'メールアドレス',
         })
       } catch {
-        if (isActive) setLoginStatus(null)
+        if (!isActive) return
+        setLoginStatus(
+          hasHundredGuestSession()
+            ? {
+                sessionType: 'guest',
+                displayName: 'ゲスト',
+                providerLabel: 'アカウント未使用',
+              }
+            : null,
+        )
       }
     }
 
@@ -106,6 +121,7 @@ function HundredLoginStatus() {
       }
 
       if (payload.event === 'signedOut') {
+        endHundredGuestSession()
         setLoginStatus(null)
         setIsCollapsed(false)
         setIsDialogOpen(false)
@@ -140,7 +156,11 @@ function HundredLoginStatus() {
     setIsSigningOut(true)
     setDialogError(null)
     try {
-      await signOut()
+      if (loginStatus.sessionType === 'member') {
+        await signOut()
+      } else {
+        endHundredGuestSession()
+      }
       setIsDialogOpen(false)
       navigate('/', { replace: true })
     } catch {
@@ -162,9 +182,17 @@ function HundredLoginStatus() {
         <button
           className="hundred-login-status__profile"
           type="button"
-          aria-label={`${loginStatus.displayName}でログイン中。サインイン画面への移動を確認する`}
+          aria-label={`${
+            loginStatus.sessionType === 'guest'
+              ? 'ゲストで利用中'
+              : `${loginStatus.displayName}でログイン中`
+          }。サインイン画面への移動を確認する`}
           title={
-            isCollapsed ? `${loginStatus.displayName}でログイン中` : undefined
+            isCollapsed
+              ? loginStatus.sessionType === 'guest'
+                ? 'ゲストで利用中'
+                : `${loginStatus.displayName}でログイン中`
+              : undefined
           }
           onClick={() => {
             setDialogError(null)
@@ -175,7 +203,11 @@ function HundredLoginStatus() {
             {loginStatus.displayName.charAt(0).toUpperCase() || 'H'}
           </span>
           <span className="hundred-login-status__copy">
-            <strong>{loginStatus.displayName}でログイン中</strong>
+            <strong>
+              {loginStatus.sessionType === 'guest'
+                ? 'ゲストで利用中'
+                : `${loginStatus.displayName}でログイン中`}
+            </strong>
             <small>{loginStatus.providerLabel}・サインイン画面を開く</small>
           </span>
         </button>
@@ -215,9 +247,18 @@ function HundredLoginStatus() {
                 サインイン画面へ移動しますか？
               </h2>
               <p>
-                現在は<strong>{loginStatus.displayName}</strong>
-                でログインしています。
-                移動すると現在のアカウントからサインアウトします。
+                {loginStatus.sessionType === 'guest' ? (
+                  <>
+                    現在は<strong>ゲスト</strong>として利用しています。
+                    移動するとゲスト利用を終了します。
+                  </>
+                ) : (
+                  <>
+                    現在は<strong>{loginStatus.displayName}</strong>
+                    でログインしています。
+                    移動すると現在のアカウントからサインアウトします。
+                  </>
+                )}
               </p>
               {dialogError && (
                 <p className="hundred-login-confirm__error" role="alert">

@@ -88,12 +88,8 @@ function AnigramPage() {
       showGrowthMotion(nextPet)
       setPet(nextPet)
       setError(null)
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error && requestError.message === 'AUTH_REQUIRED'
-          ? 'Anigramを始めるにはHundredへのサインインが必要です。'
-          : 'ゲーム状態を取得できませんでした。',
-      )
+    } catch {
+      setError('ゲーム状態を取得できませんでした。')
     } finally {
       setLoading(false)
     }

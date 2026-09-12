@@ -194,8 +194,21 @@ async function requestPublicAnigramApi<T>(path: string) {
   return (await response.json()) as T
 }
 
+async function requestOptionalAuthAnigramApi<T>(path: string) {
+  const headers = new Headers({ Accept: 'application/json' })
+  try {
+    headers.set('Authorization', `Bearer ${await getAccessToken()}`)
+  } catch {
+    // ゲストは認証ヘッダーなしで共有情報を取得する。
+  }
+
+  const response = await fetch(new URL(path, anigramApiOrigin), { headers })
+  if (!response.ok) throw new Error('API_FAILED')
+  return (await response.json()) as T
+}
+
 export async function getAnigramPet() {
-  const response = await requestAnigramApi<{
+  const response = await requestOptionalAuthAnigramApi<{
     pet: Omit<AnigramPetState, 'canManageValidation'>
     validation?: { allowed: boolean }
   }>(
@@ -208,7 +221,9 @@ export async function getAnigramPet() {
 }
 
 export async function getAnigramHistory() {
-  return requestAnigramApi<AnigramHistory>('/api/anigram/history?limit=50')
+  return requestPublicAnigramApi<AnigramHistory>(
+    '/api/anigram/history?limit=50',
+  )
 }
 
 export async function getAnigramAdminSettings() {

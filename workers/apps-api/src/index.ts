@@ -453,17 +453,27 @@ export default {
       url.pathname === "/api/anigram/pet"
     ) {
       try {
-        const { ownerUserId, username } = await verifyCognitoAccessToken(request, env);
+        let canManageValidation = false;
+        if (request.headers.has("Authorization")) {
+          try {
+            const { ownerUserId, username } =
+              await verifyCognitoAccessToken(request, env);
+            canManageValidation = await canManageAnigramValidation(
+              env,
+              ownerUserId,
+              username,
+            );
+          } catch (error) {
+            if (!(error instanceof CognitoAuthenticationError)) throw error;
+          }
+        }
         return json(request, env, {
           pet: await getAnigramPetState(env),
           validation: {
-            allowed: await canManageAnigramValidation(env, ownerUserId, username),
+            allowed: canManageValidation,
           },
         });
       } catch (error) {
-        if (error instanceof CognitoAuthenticationError) {
-          return json(request, env, { error: "認証が必要です" }, 401);
-        }
         return json(request, env, { error: "動物の状態を取得できませんでした" }, 500);
       }
     }
@@ -473,7 +483,6 @@ export default {
       url.pathname === "/api/anigram/history"
     ) {
       try {
-        await verifyCognitoAccessToken(request, env);
         const requestedLimit = Number(url.searchParams.get("limit") ?? 50);
         return json(
           request,
@@ -484,9 +493,6 @@ export default {
           ),
         );
       } catch (error) {
-        if (error instanceof CognitoAuthenticationError) {
-          return json(request, env, { error: "認証が必要です" }, 401);
-        }
         return json(request, env, { error: "Anigramの履歴を取得できませんでした" }, 500);
       }
     }

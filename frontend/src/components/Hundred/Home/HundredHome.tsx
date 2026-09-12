@@ -16,6 +16,11 @@ import {
   type ReactNode,
 } from 'react'
 import HundredSignInScreen from '../Auth/HundredSignInScreen'
+import {
+  endHundredGuestSession,
+  hasHundredGuestSession,
+  startHundredGuestSession,
+} from '../Auth/hundredGuestSession'
 import HundredNotificationDialog from '../Notification/HundredNotificationDialog'
 import HundredProfileDialog, {
   type HundredMemberProfile,
@@ -394,6 +399,7 @@ function HundredHome() {
             ? 'google'
             : 'email',
         })
+        endHundredGuestSession()
         setProfileSession('member')
         setAuthError(null)
 
@@ -445,7 +451,7 @@ function HundredHome() {
       } catch {
         if (!isActive) return
         setMemberProfile(null)
-        setProfileSession(null)
+        setProfileSession(hasHundredGuestSession() ? 'guest' : null)
       } finally {
         if (isActive) {
           setIsAuthChecking(false)
@@ -465,6 +471,7 @@ function HundredHome() {
       }
 
       if (payload.event === 'signedOut') {
+        endHundredGuestSession()
         setMemberProfile(null)
         setProfileSession(null)
         setSigningInMethod(null)
@@ -611,6 +618,7 @@ function HundredHome() {
   const handleGuestSignIn = () => {
     getCursorSoundPlayer().prepare()
     setAuthError(null)
+    startHundredGuestSession()
     setProfileSession('guest')
   }
 
@@ -626,6 +634,7 @@ function HundredHome() {
       }
     }
 
+    endHundredGuestSession()
     setMemberProfile(null)
     setProfileSession(null)
   }
