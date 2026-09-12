@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   deleteAnigramSettingsHistory,
+  generateAnigramStoryRender,
   getAnigramAdminAccess,
   getAnigramAdminSettings,
   publishAnigramTestStory,
@@ -14,6 +15,7 @@ import {
   type AnigramInstagramDeliverySettings,
   type AnigramSettingsHistory,
   type AnigramStoryPublication,
+  type AnigramStoryRender,
 } from '../../services/Anigram/anigramApi'
 import {
   getInstagramConnectionStatus,
@@ -185,6 +187,8 @@ function AnigramAdminPage() {
   const [instagramConnectionLoading, setInstagramConnectionLoading] =
     useState(false)
   const [publishingTestStory, setPublishingTestStory] = useState(false)
+  const [generatingStoryRender, setGeneratingStoryRender] = useState(false)
+  const [storyRender, setStoryRender] = useState<AnigramStoryRender | null>(null)
   const [testStoryResult, setTestStoryResult] = useState<{
     story: AnigramStoryPublication
     accountUsername: string
@@ -397,6 +401,26 @@ function AnigramAdminPage() {
       )
     } finally {
       setPublishingTestStory(false)
+    }
+  }
+
+  const generateStoryRender = async () => {
+    if (!canManage || generatingStoryRender) return
+    setGeneratingStoryRender(true)
+    setStoryRender(null)
+    setMessage(null)
+    setError(null)
+    try {
+      const render = await generateAnigramStoryRender()
+      setStoryRender(render)
+      setMessage('Browser Runでストーリー画像を生成しました。')
+    } catch (requestError) {
+      const responseMessage = (
+        requestError as Error & { responseMessage?: string }
+      ).responseMessage
+      setError(responseMessage ?? 'Browser Runで画像を生成できませんでした。')
+    } finally {
+      setGeneratingStoryRender(false)
     }
   }
 
@@ -721,52 +745,107 @@ function AnigramAdminPage() {
               <span>管理者専用</span>
             </div>
             <p>
-              1080×1920の固定検証画像を生成し、接続中のInstagramアカウントへストーリーズとして実際に公開します。
+              Browser RunによるHTML/CSS画像生成を確認できます。生成だけではInstagramへ公開されません。
             </p>
-            <button
-              type="button"
-              onClick={() => void publishTestStory()}
-              disabled={
-                !canManage ||
-                !instagramConnection?.connected ||
-                instagramConnection.tokenExpired ||
-                publishingTestStory
-              }
-            >
-              {publishingTestStory ? '公開処理中…' : '検証画像をストーリーへ配信'}
-            </button>
-            {!canManage ? (
-              <small>登録済み管理者だけが配信できます。</small>
-            ) : !instagramConnection?.connected || instagramConnection.tokenExpired ? (
-              <small>先に有効なInstagramアカウントを接続してください。</small>
-            ) : (
-              <small>確認ダイアログで承認するまで公開されません。</small>
-            )}
-            {testStoryResult ? (
-              <dl className="anigram-story-test-result">
-                <div>
-                  <dt>公開日時</dt>
-                  <dd>
-                    {formatDateTime(
-                      testStoryResult.story.publishedAt ??
-                        testStoryResult.story.updatedAt,
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt>InstagramメディアID</dt>
-                  <dd>{testStoryResult.story.instagramMediaId}</dd>
-                </div>
-                <div>
-                  <dt>公開先</dt>
-                  <dd>
-                    <a href={testStoryResult.accountUrl} target="_blank" rel="noreferrer">
-                      @{testStoryResult.accountUsername}
-                    </a>
-                  </dd>
-                </div>
-              </dl>
+            <div className="anigram-story-render-actions">
+              <button
+                type="button"
+                onClick={() => void generateStoryRender()}
+                disabled={!canManage || generatingStoryRender}
+              >
+                {generatingStoryRender
+                  ? 'Browser Runで生成中…'
+                  : 'Browser Runで画像を生成'}
+              </button>
+              <small>
+                現在の共有ペット状態をスナップショットし、1080×1920のJPEGとしてR2へ保存します。
+              </small>
+            </div>
+            {storyRender ? (
+              <div className="anigram-story-render-preview">
+                <img
+                  src={storyRender.imageUrl}
+                  width={storyRender.width}
+                  height={storyRender.height}
+                  alt="Browser Runで生成したAnigramストーリーのプレビュー"
+                />
+                <dl>
+                  <div>
+                    <dt>生成日時</dt>
+                    <dd>{formatDateTime(storyRender.createdAt)}</dd>
+                  </div>
+                  <div>
+                    <dt>画像サイズ</dt>
+                    <dd>{storyRender.width}×{storyRender.height}</dd>
+                  </div>
+                  <div>
+                    <dt>Browser使用時間</dt>
+                    <dd>
+                      {storyRender.browserMsUsed === null
+                        ? '取得不可'
+                        : `${storyRender.browserMsUsed.toLocaleString()} ms`}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
             ) : null}
+            <div className="anigram-story-publish-test">
+              <h3>Instagram公開の再検証</h3>
+              <p>
+                従来の固定検証画像を生成し、接続中のInstagramアカウントへストーリーズとして実際に公開します。
+              </p>
+              <button
+                type="button"
+                onClick={() => void publishTestStory()}
+                disabled={
+                  !canManage ||
+                  !instagramConnection?.connected ||
+                  instagramConnection.tokenExpired ||
+                  publishingTestStory
+                }
+              >
+                {publishingTestStory
+                  ? '公開処理中…'
+                  : '検証画像をストーリーへ配信'}
+              </button>
+              {!canManage ? (
+                <small>登録済み管理者だけが配信できます。</small>
+              ) : !instagramConnection?.connected ||
+                instagramConnection.tokenExpired ? (
+                <small>先に有効なInstagramアカウントを接続してください。</small>
+              ) : (
+                <small>確認ダイアログで承認するまで公開されません。</small>
+              )}
+              {testStoryResult ? (
+                <dl className="anigram-story-test-result">
+                  <div>
+                    <dt>公開日時</dt>
+                    <dd>
+                      {formatDateTime(
+                        testStoryResult.story.publishedAt ??
+                          testStoryResult.story.updatedAt,
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>InstagramメディアID</dt>
+                    <dd>{testStoryResult.story.instagramMediaId}</dd>
+                  </div>
+                  <div>
+                    <dt>公開先</dt>
+                    <dd>
+                      <a
+                        href={testStoryResult.accountUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        @{testStoryResult.accountUsername}
+                      </a>
+                    </dd>
+                  </div>
+                </dl>
+              ) : null}
+            </div>
           </section>
 
           <form

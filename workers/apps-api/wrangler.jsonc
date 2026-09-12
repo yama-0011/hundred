@@ -11,6 +11,10 @@
     }
   ],
   "workers_dev": true,
+  "browser": {
+    "binding": "BROWSER",
+    "remote": true
+  },
   "triggers": {
     "crons": ["*/5 * * * *"]
   },

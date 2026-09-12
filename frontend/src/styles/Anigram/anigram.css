@@ -819,7 +819,14 @@
   line-height: 1.7;
 }
 
-.anigram-story-test-card > button {
+.anigram-story-render-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.anigram-story-render-actions button,
+.anigram-story-publish-test > button {
   min-height: 48px;
   padding: 0 22px;
   border: 1px solid #72d7be;
@@ -831,15 +838,82 @@
   cursor: pointer;
 }
 
-.anigram-story-test-card > button:disabled {
+.anigram-story-render-actions button:disabled,
+.anigram-story-publish-test > button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }
 
-.anigram-story-test-card > small {
+.anigram-story-render-actions small,
+.anigram-story-publish-test > small {
+  color: #82908c;
+  line-height: 1.6;
+}
+
+.anigram-story-publish-test > small {
   display: block;
   margin-top: 10px;
+}
+
+.anigram-story-render-preview {
+  display: grid;
+  grid-template-columns: minmax(180px, 320px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  margin-top: 22px;
+}
+
+.anigram-story-render-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 16px;
+  background: #07100e;
+}
+
+.anigram-story-render-preview dl {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+  margin: 0;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 8%);
+}
+
+.anigram-story-render-preview dl div {
+  padding: 15px;
+  background: #0a1311;
+}
+
+.anigram-story-render-preview dt {
+  margin-bottom: 6px;
   color: #82908c;
+  font-size: 11px;
+}
+
+.anigram-story-render-preview dd {
+  margin: 0;
+  color: #dce7e3;
+  font-size: 13px;
+}
+
+.anigram-story-publish-test {
+  margin-top: 26px;
+  padding-top: 22px;
+  border-top: 1px solid rgb(255 255 255 / 8%);
+}
+
+.anigram-story-publish-test h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.anigram-story-publish-test > p {
+  margin: 0 0 16px;
+  color: #82908c;
+  font-size: 12px;
+  line-height: 1.7;
 }
 
 .anigram-story-test-result {
@@ -1274,6 +1348,20 @@
 
   .anigram-story-test-result {
     grid-template-columns: 1fr;
+  }
+
+  .anigram-story-render-preview {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .anigram-story-render-actions {
+    flex-direction: column;
+  }
+
+  .anigram-story-render-actions button,
+  .anigram-story-publish-test > button {
+    width: 100%;
   }
 
   .anigram-connection-actions,

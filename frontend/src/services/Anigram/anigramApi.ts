@@ -160,6 +160,26 @@ export type AnigramStoryPublication = {
   publishedAt: number | null
 }
 
+export type AnigramStoryRender = {
+  id: string
+  imageUrl: string
+  imageContentType: string
+  width: number
+  height: number
+  snapshot: {
+    capturedAt: number
+    species: string
+    displayName: string
+    status: AnigramLifeStatus
+    lifeStage: AnigramLifeStage
+    evolutionStage: string
+    hatchProgressPercent: number | null
+    fullnessPercent: number | null
+  }
+  browserMsUsed: number | null
+  createdAt: number
+}
+
 async function getAccessToken() {
   const session = await fetchAuthSession()
   const accessToken = session.tokens?.accessToken?.toString()
@@ -331,6 +351,14 @@ export async function publishAnigramTestStory(image: Blob) {
     headers: { 'Content-Type': 'image/jpeg' },
     body: image,
   })
+}
+
+export async function generateAnigramStoryRender() {
+  const response = await requestAnigramApi<{ render: AnigramStoryRender }>(
+    '/api/anigram/admin/instagram/story/render-test',
+    { method: 'POST' },
+  )
+  return response.render
 }
 
 export async function updateAnigramAdminSettings(

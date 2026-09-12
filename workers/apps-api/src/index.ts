@@ -111,12 +111,19 @@ import {
   updateAnigramInstagramDeliverySettings,
 } from "./anigram/admin";
 import { getAnigramHistory } from "./anigram/history";
+import {
+  AnigramStoryRendererError,
+  renderAnigramStoryPreview,
+  serveAnigramStoryRender,
+  type AnigramStoryRendererEnv,
+} from "./anigram/story-renderer";
 
 interface Env
   extends WordPressOAuthEnv,
     InstagramOAuthEnv,
     InstagramPublicationEnv,
     AnigramStoryEnv,
+    AnigramStoryRendererEnv,
     InstagramInsightsEnv,
     GeminiEnv {
   COGNITO_USER_POOL_ID: string;
@@ -751,6 +758,49 @@ export default {
     }
 
     if (
+      request.method === "POST" &&
+      url.pathname === "/api/anigram/admin/instagram/story/render-test"
+    ) {
+      try {
+        const { ownerUserId, username } =
+          await verifyCognitoAccessToken(request, env);
+        await requireAnigramValidationAdmin(env, ownerUserId, username);
+        return json(
+          request,
+          env,
+          await renderAnigramStoryPreview(env, ownerUserId, url.origin),
+          201,
+        );
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) {
+          return json(request, env, { error: "認証が必要です" }, 401);
+        }
+        if (error instanceof AnigramGameError && error.code === "FORBIDDEN") {
+          return json(request, env, { error: "管理者権限が必要です" }, 403);
+        }
+        if (error instanceof AnigramStoryRendererError) {
+          const message =
+            error.code === "BROWSER_FAILED"
+              ? "Browser Runで画像を生成できませんでした"
+              : error.code === "INVALID_IMAGE"
+                ? "生成された画像を利用できません"
+                : "生成画像が見つかりません";
+          return json(
+            request,
+            env,
+            { error: message, providerStatus: error.providerStatus ?? null },
+            error.code === "NOT_FOUND" ? 404 : 502,
+          );
+        }
+        console.error(
+          "Anigram story rendering failed",
+          error instanceof Error ? error.message : "unknown error",
+        );
+        return json(request, env, { error: "ストーリー画像を生成できませんでした" }, 500);
+      }
+    }
+
+    if (
       request.method === "DELETE" &&
       url.pathname === "/api/anigram/admin/users"
     ) {
@@ -1009,6 +1059,13 @@ export default {
     );
     if (anigramStoryMediaMatch && request.method === "GET") {
       return serveAnigramStoryImage(env, anigramStoryMediaMatch[1]);
+    }
+
+    const anigramStoryRenderMatch = url.pathname.match(
+      /^\/api\/anigram\/instagram\/story\/render\/([0-9a-f-]+)$/iu,
+    );
+    if (anigramStoryRenderMatch && request.method === "GET") {
+      return serveAnigramStoryRender(env, anigramStoryRenderMatch[1]);
     }
 
     if (
