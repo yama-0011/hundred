@@ -32,7 +32,6 @@ type InstagramDeliveryDraft = Pick<
 
 type SettingsDraft = {
   hatchRequiredPoints: number
-  hatchingDurationSeconds: number
   initialFullnessPoints: number
   maxFullnessPoints: number
   fullnessStorageLimitPercent: number
@@ -72,7 +71,6 @@ function NumberField({ label, value, min, max, step, onChange }: NumberFieldProp
 function createDraft(settings: AnigramAdminSettings): SettingsDraft {
   return {
     hatchRequiredPoints: settings.hatchRequiredPoints,
-    hatchingDurationSeconds: settings.hatchingDurationSeconds,
     initialFullnessPoints: settings.initialFullnessPoints,
     maxFullnessPoints: settings.maxFullnessPoints,
     fullnessStorageLimitPercent: settings.fullnessStorageLimitPercent ?? 120,
@@ -205,7 +203,6 @@ function AnigramAdminPage() {
     try {
       const updated = await updateAnigramAdminSettings(selectedSettings.species, {
         hatchRequiredPoints: draft.hatchRequiredPoints,
-        hatchingDurationSeconds: draft.hatchingDurationSeconds,
         initialFullnessPoints: draft.initialFullnessPoints,
         maxFullnessPoints: draft.maxFullnessPoints,
         fullnessStorageLimitPercent: draft.fullnessStorageLimitPercent,
@@ -411,9 +408,8 @@ function AnigramAdminPage() {
                   <h2>孵化までの設定</h2>
                 </div>
               </div>
-              <div className="anigram-field-grid">
+              <div className="anigram-field-grid anigram-field-grid--two">
                 <NumberField label="孵化に必要なポイント" min={1} step={1} value={draft.hatchRequiredPoints} onChange={(value) => setNumber('hatchRequiredPoints', value)} />
-                <NumberField label="孵化演出時間（秒）" min={0} step={1} value={draft.hatchingDurationSeconds} onChange={(value) => setNumber('hatchingDurationSeconds', value)} />
                 <NumberField label="孵化後の初期満腹ポイント" min={0} step={0.1} value={draft.initialFullnessPoints} onChange={(value) => setNumber('initialFullnessPoints', value)} />
               </div>
             </section>

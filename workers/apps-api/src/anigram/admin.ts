@@ -5,7 +5,6 @@ interface AnigramSettingsRow {
   species: string;
   display_name: string;
   hatch_required_points: number;
-  hatching_duration_seconds: number;
   initial_fullness_points: number;
   max_fullness_points: number;
   fullness_storage_limit_percent: number;
@@ -183,7 +182,6 @@ function serializeSettings(row: AnigramSettingsRow) {
     species: row.species,
     displayName: row.display_name,
     hatchRequiredPoints: row.hatch_required_points,
-    hatchingDurationSeconds: row.hatching_duration_seconds,
     initialFullnessPoints: row.initial_fullness_points,
     maxFullnessPoints: row.max_fullness_points,
     fullnessStorageLimitPercent: row.fullness_storage_limit_percent,
@@ -200,7 +198,7 @@ function serializeSettings(row: AnigramSettingsRow) {
 async function loadSettings(env: AnigramEnv, species: string) {
   const row = await env.DB.prepare(
     `SELECT species, display_name, hatch_required_points,
-            hatching_duration_seconds, initial_fullness_points,
+            initial_fullness_points,
             max_fullness_points, fullness_storage_limit_percent,
             fullness_decay_rate_per_hour,
             starvation_grace_seconds, evolution_fullness_threshold,
@@ -223,7 +221,7 @@ export async function getAnigramAdminSettings(env: AnigramEnv) {
   ] = await Promise.all([
     env.DB.prepare(
       `SELECT species, display_name, hatch_required_points,
-              hatching_duration_seconds, initial_fullness_points,
+              initial_fullness_points,
               max_fullness_points, fullness_storage_limit_percent,
               fullness_decay_rate_per_hour,
               starvation_grace_seconds, evolution_fullness_threshold,
@@ -572,12 +570,6 @@ export async function updateAnigramAdminSettings(
       1_000_000,
       true,
     ),
-    hatchingDurationSeconds: requiredNumber(
-      value.hatchingDurationSeconds,
-      0,
-      86_400,
-      true,
-    ),
     initialFullnessPoints: requiredNumber(
       value.initialFullnessPoints,
       0,
@@ -634,21 +626,20 @@ export async function updateAnigramAdminSettings(
     env.DB.prepare(
       `UPDATE anigram_species_settings
           SET hatch_required_points = ?2,
-              hatching_duration_seconds = ?3,
-              initial_fullness_points = ?4,
-              max_fullness_points = ?5,
-              fullness_storage_limit_percent = ?6,
-              fullness_decay_rate_per_hour = ?7,
-              starvation_grace_seconds = ?8,
-              evolution_fullness_threshold = ?9,
-              evolution_hold_seconds = ?10,
-              next_evolution_stage = ?11,
-              updated_at = ?12
+              hatching_duration_seconds = 0,
+              initial_fullness_points = ?3,
+              max_fullness_points = ?4,
+              fullness_storage_limit_percent = ?5,
+              fullness_decay_rate_per_hour = ?6,
+              starvation_grace_seconds = ?7,
+              evolution_fullness_threshold = ?8,
+              evolution_hold_seconds = ?9,
+              next_evolution_stage = ?10,
+              updated_at = ?11
         WHERE species = ?1`,
     ).bind(
       species,
       nextSettings.hatchRequiredPoints,
-      nextSettings.hatchingDurationSeconds,
       nextSettings.initialFullnessPoints,
       nextSettings.maxFullnessPoints,
       nextSettings.fullnessStorageLimitPercent,
@@ -708,7 +699,7 @@ export async function updateAnigramAdminSettings(
   ];
   await env.DB.batch(statements);
 
-  // 閾値や待機時間の変更による孵化・進化条件を新設定で直ちに再評価する。
+  // 閾値等の変更による孵化・進化条件を新設定で直ちに再評価する。
   await getAnigramPetState(env);
 
   return serializeSettings(await loadSettings(env, species));

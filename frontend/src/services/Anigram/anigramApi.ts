@@ -84,7 +84,6 @@ export type AnigramAdminSettings = {
   species: string
   displayName: string
   hatchRequiredPoints: number
-  hatchingDurationSeconds: number
   initialFullnessPoints: number
   maxFullnessPoints: number
   fullnessStorageLimitPercent: number
