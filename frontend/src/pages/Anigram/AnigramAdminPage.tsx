@@ -104,6 +104,33 @@ const storyTemplateSampleValues: Record<string, string> = {
   evolution_stage: 'base',
 }
 
+const storyTemplateVariableHelp = [
+  {
+    token: '{pet_name}',
+    description: '対象ペットの表示名に置き換わります。例：ハリネズミ',
+  },
+  {
+    token: '{status}',
+    description: '現在の状態を表す文言に置き換わります。例：卵を温めています',
+  },
+  {
+    token: '{progress}',
+    description: '現在の進捗率の数値に置き換わります。例：40（%記号は含みません）',
+  },
+  {
+    token: '{progress_label}',
+    description: '成長段階に応じた進捗項目名に置き換わります。例：孵化進捗、満腹度',
+  },
+  {
+    token: '{life_stage}',
+    description: '現在の成長状態を表す内部値に置き換わります。egg、hatching、baby、adultのいずれかです。',
+  },
+  {
+    token: '{evolution_stage}',
+    description: '現在の進化段階を表す内部値に置き換わります。例：base、stage_2',
+  },
+] as const
+
 function renderStoryTemplateSample(template: string) {
   return template.replace(/\{([^{}]+)\}/gu, (token, name: string) =>
     storyTemplateSampleValues[name] ?? token,
@@ -761,12 +788,18 @@ function AnigramAdminPage() {
                     />
                   </label>
                   <p className="anigram-story-template-variables">
-                    差し込み変数：<code>{'{pet_name}'}</code>{' '}
-                    <code>{'{status}'}</code>{' '}
-                    <code>{'{progress}'}</code>{' '}
-                    <code>{'{progress_label}'}</code>{' '}
-                    <code>{'{life_stage}'}</code>{' '}
-                    <code>{'{evolution_stage}'}</code>
+                    <span>差し込み変数：</span>
+                    {storyTemplateVariableHelp.map((variable) => (
+                      <span
+                        key={variable.token}
+                        className="anigram-story-template-variable"
+                        tabIndex={0}
+                        aria-label={`${variable.token}：${variable.description}`}
+                      >
+                        <code>{variable.token}</code>
+                        <span role="tooltip">{variable.description}</span>
+                      </span>
+                    ))}
                   </p>
                 </div>
 

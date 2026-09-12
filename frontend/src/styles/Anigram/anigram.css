@@ -825,19 +825,58 @@
 }
 
 .anigram-story-template-variables {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
   margin: 0;
   color: #82908c;
   font-size: 12px;
   line-height: 2;
 }
 
-.anigram-story-template-variables code {
+.anigram-story-template-variable {
+  position: relative;
+  display: inline-flex;
+  outline: none;
+}
+
+.anigram-story-template-variable code {
   display: inline-block;
   padding: 1px 6px;
   border: 1px solid rgb(114 215 190 / 18%);
   border-radius: 5px;
   color: #82ddc6;
   background: rgb(114 215 190 / 5%);
+  cursor: help;
+}
+
+.anigram-story-template-variable > span[role='tooltip'] {
+  position: absolute;
+  z-index: 20;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  width: max-content;
+  max-width: min(320px, 78vw);
+  padding: 10px 12px;
+  border: 1px solid rgb(114 215 190 / 24%);
+  border-radius: 9px;
+  background: #13201c;
+  box-shadow: 0 12px 30px rgb(0 0 0 / 38%);
+  color: #dce7e3;
+  font-size: 11px;
+  line-height: 1.65;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 5px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.anigram-story-template-variable:hover > span[role='tooltip'],
+.anigram-story-template-variable:focus > span[role='tooltip'],
+.anigram-story-template-variable:focus-within > span[role='tooltip'] {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 .anigram-story-template-preview {
