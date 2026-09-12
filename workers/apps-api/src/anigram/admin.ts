@@ -39,6 +39,11 @@ interface AnigramInstagramDeliverySettingsRow {
   story_title_template: string;
   story_message_template: string;
   story_reaction_template: string;
+  publisher_user_id: string | null;
+  publisher_instagram_username: string | null;
+  last_delivery_at: number | null;
+  last_delivery_status: "published" | "failed" | null;
+  last_delivery_error_code: string | null;
   reaction_sync_enabled: number;
   sync_pause_reason: string | null;
   sync_paused_by_user_id: string | null;
@@ -201,6 +206,11 @@ function serializeInstagramDeliverySettings(
     storyTitleTemplate: row.story_title_template,
     storyMessageTemplate: row.story_message_template,
     storyReactionTemplate: row.story_reaction_template,
+    publisherUserId: row.publisher_user_id,
+    publisherInstagramUsername: row.publisher_instagram_username,
+    lastDeliveryAt: row.last_delivery_at,
+    lastDeliveryStatus: row.last_delivery_status,
+    lastDeliveryErrorCode: row.last_delivery_error_code,
     reactionSyncEnabled: row.reaction_sync_enabled === 1,
     syncPauseReason: row.sync_pause_reason,
     syncPausedByUserId: row.sync_paused_by_user_id,
@@ -280,12 +290,19 @@ export async function getAnigramAdminSettings(env: AnigramEnv) {
       `SELECT enabled, species, delivery_time, timezone,
               story_title_template, story_message_template,
               story_reaction_template,
+              publisher_user_id,
+              (SELECT instagram_username
+                 FROM instagram_connections
+                WHERE owner_user_id = delivery.publisher_user_id)
+                AS publisher_instagram_username,
+              last_delivery_at, last_delivery_status,
+              last_delivery_error_code,
               reaction_sync_enabled, sync_pause_reason,
               sync_paused_by_user_id, sync_paused_at,
               last_sync_at, last_sync_status,
               updated_by_user_id, updated_at
-         FROM anigram_instagram_delivery_settings
-        WHERE id = 1`,
+         FROM anigram_instagram_delivery_settings AS delivery
+        WHERE delivery.id = 1`,
     ).first<AnigramInstagramDeliverySettingsRow>(),
   ]);
 
@@ -334,7 +351,7 @@ export async function updateAnigramInstagramDeliverySettings(
   );
   const currentTemplates = await env.DB.prepare(
     `SELECT story_title_template, story_message_template,
-            story_reaction_template
+            story_reaction_template, publisher_user_id
        FROM anigram_instagram_delivery_settings
       WHERE id = 1`,
   ).first<Pick<
@@ -342,6 +359,7 @@ export async function updateAnigramInstagramDeliverySettings(
     | "story_title_template"
     | "story_message_template"
     | "story_reaction_template"
+    | "publisher_user_id"
   >>();
   if (!currentTemplates) {
     throw new AnigramAdminSettingsError("NOT_FOUND");
@@ -364,6 +382,34 @@ export async function updateAnigramInstagramDeliverySettings(
     throw new AnigramAdminSettingsError("NOT_FOUND");
   }
 
+  await env.DB.prepare(
+    `INSERT INTO users (owner_user_id)
+     VALUES (?1)
+     ON CONFLICT(owner_user_id)
+     DO UPDATE SET updated_at = unixepoch()`,
+  )
+    .bind(updatedByUserId)
+    .run();
+  if (value.enabled) {
+    const connection = await env.DB.prepare(
+      `SELECT owner_user_id, token_expires_at
+         FROM instagram_connections
+        WHERE owner_user_id = ?1`,
+    )
+      .bind(updatedByUserId)
+      .first<{ owner_user_id: string; token_expires_at: number | null }>();
+    if (
+      !connection ||
+      (connection.token_expires_at !== null &&
+        connection.token_expires_at <= Math.floor(Date.now() / 1_000))
+    ) {
+      throw new AnigramAdminSettingsError("INVALID_INPUT");
+    }
+  }
+  const publisherUserId = value.enabled
+    ? updatedByUserId
+    : currentTemplates.publisher_user_id;
+
   const now = Date.now();
   await env.DB.prepare(
     `UPDATE anigram_instagram_delivery_settings
@@ -374,12 +420,13 @@ export async function updateAnigramInstagramDeliverySettings(
             story_title_template = ?4,
             story_message_template = ?5,
             story_reaction_template = ?6,
-            reaction_sync_enabled = ?7,
-            sync_pause_reason = ?8,
-            sync_paused_by_user_id = ?9,
-            sync_paused_at = ?10,
-            updated_by_user_id = ?11,
-            updated_at = ?12
+            publisher_user_id = ?7,
+            reaction_sync_enabled = ?8,
+            sync_pause_reason = ?9,
+            sync_paused_by_user_id = ?10,
+            sync_paused_at = ?11,
+            updated_by_user_id = ?12,
+            updated_at = ?13
       WHERE id = 1`,
   )
     .bind(
@@ -389,6 +436,7 @@ export async function updateAnigramInstagramDeliverySettings(
       storyTitleTemplate,
       storyMessageTemplate,
       storyReactionTemplate,
+      publisherUserId,
       reactionSyncEnabled ? 1 : 0,
       syncPauseReason,
       reactionSyncEnabled ? null : updatedByUserId,
@@ -402,12 +450,19 @@ export async function updateAnigramInstagramDeliverySettings(
     `SELECT enabled, species, delivery_time, timezone,
             story_title_template, story_message_template,
             story_reaction_template,
+            publisher_user_id,
+            (SELECT instagram_username
+               FROM instagram_connections
+              WHERE owner_user_id = delivery.publisher_user_id)
+              AS publisher_instagram_username,
+            last_delivery_at, last_delivery_status,
+            last_delivery_error_code,
             reaction_sync_enabled, sync_pause_reason,
             sync_paused_by_user_id, sync_paused_at,
             last_sync_at, last_sync_status,
             updated_by_user_id, updated_at
-       FROM anigram_instagram_delivery_settings
-      WHERE id = 1`,
+       FROM anigram_instagram_delivery_settings AS delivery
+      WHERE delivery.id = 1`,
   ).first<AnigramInstagramDeliverySettingsRow>();
   if (!updated) throw new AnigramAdminSettingsError("NOT_FOUND");
   return serializeInstagramDeliverySettings(updated);

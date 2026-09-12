@@ -4,12 +4,22 @@ import {
   type InstagramPublisherEnv,
 } from "./publisher";
 import {
+  AnigramStoryRendererError,
   renderAnigramStoryAsset,
   type AnigramStoryRendererEnv,
 } from "../anigram/story-renderer";
 
 export interface AnigramStoryEnv
-  extends InstagramPublisherEnv, AnigramStoryRendererEnv {}
+  extends InstagramPublisherEnv, AnigramStoryRendererEnv {
+  PUBLIC_API_ORIGIN: string;
+}
+
+interface ScheduledDeliverySettingsRow {
+  enabled: number;
+  delivery_time: string;
+  timezone: string;
+  publisher_user_id: string | null;
+}
 
 interface StoryPublicationRow {
   id: string;
@@ -141,6 +151,21 @@ async function publishStoryAsset(
 }
 
 /** 現在のペット状態をBrowser Runで生成し、その画像をInstagram Storiesへ公開する。 */
+async function generateAndPublishAnigramStoryCore(
+  env: AnigramStoryEnv,
+  ownerUserId: string,
+  requestOrigin: string,
+) {
+  const asset = await renderAnigramStoryAsset(env, ownerUserId, requestOrigin);
+  const publication = await publishStoryAsset(
+    env,
+    ownerUserId,
+    requestOrigin,
+    { imageKey: asset.imageKey, renderId: asset.render.id },
+  );
+  return { ...publication, render: asset.render };
+}
+
 export async function generateAndPublishAnigramStory(
   request: Request,
   env: AnigramStoryEnv,
@@ -150,14 +175,130 @@ export async function generateAndPublishAnigramStory(
   if (new URL(request.url).searchParams.get("confirmed") !== "true") {
     throw new InstagramPublicationError("INVALID_INPUT");
   }
-  const asset = await renderAnigramStoryAsset(env, ownerUserId, requestOrigin);
-  const publication = await publishStoryAsset(
+  return generateAndPublishAnigramStoryCore(
     env,
     ownerUserId,
     requestOrigin,
-    { imageKey: asset.imageKey, renderId: asset.render.id },
   );
-  return { ...publication, render: asset.render };
+}
+
+function resolveDeliverySlot(scheduledAt: number, deliveryTime: string) {
+  const [hour, minute] = deliveryTime.split(":").map(Number);
+  const jstDate = new Date(scheduledAt + 9 * 60 * 60 * 1_000);
+  let target = Date.UTC(
+    jstDate.getUTCFullYear(),
+    jstDate.getUTCMonth(),
+    jstDate.getUTCDate(),
+    hour - 9,
+    minute,
+  );
+  if (target > scheduledAt) target -= 24 * 60 * 60 * 1_000;
+  const elapsed = scheduledAt - target;
+  if (elapsed < 0 || elapsed >= 5 * 60 * 1_000) return null;
+  const slotDate = new Date(target + 9 * 60 * 60 * 1_000);
+  return {
+    scheduledFor: target,
+    slot: `${slotDate.toISOString().slice(0, 16)}+09:00`,
+  };
+}
+
+function deliveryErrorCode(error: unknown) {
+  if (error instanceof InstagramPublicationError) {
+    return error.providerCode
+      ? `${error.code}:${error.providerCode}`
+      : error.code;
+  }
+  if (error instanceof AnigramStoryRendererError) {
+    return error.providerStatus === undefined
+      ? error.code
+      : `${error.code}:${error.providerStatus}`;
+  }
+  return "UNEXPECTED";
+}
+
+/** 5分Cronから呼び出し、設定時刻の一度だけ自動生成・公開する。 */
+export async function runAnigramScheduledStoryDelivery(
+  env: AnigramStoryEnv,
+  scheduledAt: number,
+) {
+  const settings = await env.DB.prepare(
+    `SELECT enabled, delivery_time, timezone, publisher_user_id
+       FROM anigram_instagram_delivery_settings
+      WHERE id = 1`,
+  ).first<ScheduledDeliverySettingsRow>();
+  if (!settings || settings.enabled !== 1) {
+    return { status: "skipped", reason: "disabled" } as const;
+  }
+  if (settings.timezone !== "Asia/Tokyo") {
+    return { status: "skipped", reason: "unsupported_timezone" } as const;
+  }
+  const deliverySlot = resolveDeliverySlot(scheduledAt, settings.delivery_time);
+  if (!deliverySlot) {
+    return { status: "skipped", reason: "not_due" } as const;
+  }
+
+  const runId = crypto.randomUUID();
+  const startedAt = Date.now();
+  const claimed = await env.DB.prepare(
+    `INSERT OR IGNORE INTO anigram_instagram_delivery_runs
+       (id, delivery_slot, publisher_user_id, status, scheduled_for, started_at)
+     VALUES (?1, ?2, ?3, 'processing', ?4, ?5)`,
+  )
+    .bind(
+      runId,
+      deliverySlot.slot,
+      settings.publisher_user_id,
+      deliverySlot.scheduledFor,
+      startedAt,
+    )
+    .run();
+  if ((claimed.meta.changes ?? 0) === 0) {
+    return { status: "skipped", reason: "already_processed" } as const;
+  }
+
+  try {
+    if (!settings.publisher_user_id) {
+      throw new InstagramPublicationError("CONNECTION_REQUIRED", "PUBLISHER_NOT_CONFIGURED");
+    }
+    const result = await generateAndPublishAnigramStoryCore(
+      env,
+      settings.publisher_user_id,
+      env.PUBLIC_API_ORIGIN,
+    );
+    const completedAt = Date.now();
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE anigram_instagram_delivery_runs
+            SET status = 'published', publication_id = ?1,
+                error_code = NULL, completed_at = ?2
+          WHERE id = ?3`,
+      ).bind(result.story.id, completedAt, runId),
+      env.DB.prepare(
+        `UPDATE anigram_instagram_delivery_settings
+            SET last_delivery_at = ?1, last_delivery_status = 'published',
+                last_delivery_error_code = NULL
+          WHERE id = 1`,
+      ).bind(completedAt),
+    ]);
+    return { status: "published", runId, story: result.story } as const;
+  } catch (error) {
+    const errorCode = deliveryErrorCode(error);
+    const completedAt = Date.now();
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE anigram_instagram_delivery_runs
+            SET status = 'failed', error_code = ?1, completed_at = ?2
+          WHERE id = ?3`,
+      ).bind(errorCode, completedAt, runId),
+      env.DB.prepare(
+        `UPDATE anigram_instagram_delivery_settings
+            SET last_delivery_at = ?1, last_delivery_status = 'failed',
+                last_delivery_error_code = ?2
+          WHERE id = 1`,
+      ).bind(completedAt, errorCode),
+    ]);
+    return { status: "failed", runId, errorCode } as const;
+  }
 }
 
 /** Metaがコンテナ作成時に取得する、推測困難な公開画像URL。 */

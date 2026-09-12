@@ -118,6 +118,11 @@ export type AnigramInstagramDeliverySettings = {
   storyTitleTemplate: string
   storyMessageTemplate: string
   storyReactionTemplate: string
+  publisherUserId: string | null
+  publisherInstagramUsername: string | null
+  lastDeliveryAt: number | null
+  lastDeliveryStatus: 'published' | 'failed' | null
+  lastDeliveryErrorCode: string | null
   reactionSyncEnabled: boolean
   syncPauseReason: string | null
   syncPausedByUserId: string | null

@@ -1075,8 +1075,39 @@ function AnigramAdminPage() {
                 </label>
               </div>
 
+              <dl className="anigram-sync-status">
+                <div>
+                  <dt>自動配信アカウント</dt>
+                  <dd>
+                    {instagramDelivery.publisherInstagramUsername
+                      ? `@${instagramDelivery.publisherInstagramUsername}`
+                      : '未設定'}
+                  </dd>
+                </div>
+                <div>
+                  <dt>最終自動配信</dt>
+                  <dd>
+                    {instagramDelivery.lastDeliveryAt === null
+                      ? '未実行'
+                      : formatDateTime(instagramDelivery.lastDeliveryAt)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>最終結果</dt>
+                  <dd>
+                    {instagramDelivery.lastDeliveryStatus === 'published'
+                      ? '公開成功'
+                      : instagramDelivery.lastDeliveryStatus === 'failed'
+                        ? `失敗${instagramDelivery.lastDeliveryErrorCode
+                            ? `（${instagramDelivery.lastDeliveryErrorCode}）`
+                            : ''}`
+                        : '記録なし'}
+                  </dd>
+                </div>
+              </dl>
+
               <p className="anigram-instagram-note">
-                配信条件とストーリー文言を保存します。指定時刻に投稿するCron処理への接続は次の実装で行います。
+                自動配信をONにして保存した管理者の接続中Instagramアカウントへ、指定時刻から5分以内のCronで1日1回配信します。
               </p>
             </section>
 

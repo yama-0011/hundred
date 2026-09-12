@@ -20,6 +20,7 @@
   },
   "vars": {
     "APP_ORIGIN": "https://yamahit.com",
+    "PUBLIC_API_ORIGIN": "https://apps-api.yamahit.com",
     "WORDPRESS_CLIENT_ID": "146245",
     "WORDPRESS_REDIRECT_URI": "https://hundred-apps-api.oneonewapig.workers.dev/api/creative-ia/wordpress/oauth/callback",
     "INSTAGRAM_CLIENT_ID": "1048065648079668",

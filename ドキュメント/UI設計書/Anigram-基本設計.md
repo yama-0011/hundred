@@ -966,11 +966,13 @@ Unityが読み込めない場合でも、満腹度、生死状態、最終給餌
 | POST | `/api/anigram/admin/users` | 管理者を登録 |
 | DELETE | `/api/anigram/admin/users` | 管理者を削除 |
 
-Instagram設定では、自動配信の有効・無効、対象ペット、配信時刻を`anigram_instagram_delivery_settings`へ保存する。時刻は`Asia/Tokyo`として扱う。自動配信は意図しない投稿を避けるため、メッセージと画像の設定・プレビュー・投稿監査を追加するまでCronへ接続しない。
+Instagram設定では、自動配信の有効・無効、対象ペット、配信時刻を`anigram_instagram_delivery_settings`へ保存する。時刻は`Asia/Tokyo`として扱う。自動配信を有効にして保存した管理者のInstagram接続を公開先として記録し、5分ごとのCronで指定時刻から5分以内に1日1回だけ配信する。Instagram未接続またはトークン期限切れの管理者は自動配信を有効にできない。
 
 Instagram設定タブには「ストーリーテンプレート」を設け、見出し、メインメッセージ、反応を促すメッセージを管理者が設定する。`{pet_name}`、`{status}`、`{progress}`、`{progress_label}`、`{life_stage}`、`{evolution_stage}`を生成時の状態へ置換する。未保存テンプレートの誤配信を防ぐため、変更内容を保存するまで手動配信ボタンを無効にする。固定検証画像と画像生成だけの検証UI・APIは提供しない。
 
 Story画像のサーバー生成にはCloudflare Browser RunのWorkers BindingとQuick Actions `screenshot`を使用する。Workerが現在の共有ペット状態と保存済みテンプレートを確定してスナップショットを作成し、状態を埋め込んだHTML/CSSを1080×1920のJPEGへ変換する。生成画像はR2、生成時のペット状態・テンプレート、画像サイズ、Browser使用時間は`anigram_story_renders`へ保存する。確認ダイアログで明示承認した場合に生成画像を共通Instagram投稿処理へ渡してストーリーズへ公開する。生成履歴と公開履歴は`render_id`で関連付け、画像生成とInstagram公開の成否を分離して追跡する。
+
+自動配信ではCron起動時点の共有ペット状態と保存済みテンプレートを使い、手動配信と同じ画像生成・Instagram公開処理を実行する。日付と配信時刻から作る`delivery_slot`を`anigram_instagram_delivery_runs`の一意キーとして先に確保し、Cronの重複実行でも同じ配信枠を二重投稿しない。結果は公開成功または失敗として履歴へ保存し、設定画面には自動配信アカウント、最終実行日時、最終結果を表示する。失敗した配信枠は自動再試行せず、管理者が原因を解消して手動配信で補完する。
 
 Instagram設定タブには、ログイン中の登録済み管理者に限って現在の接続状態と接続アカウントを表示し、`/anigram/settings/instagram`の専用画面へ遷移する導線を設ける。専用画面では接続状態、アカウント名、アカウントID、接続日時、トークン有効期限を確認し、Instagram Business Loginによる接続・再接続・接続解除を行える。非管理者は接続情報を取得せず、専用画面の操作も許可しない。
 

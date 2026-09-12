@@ -39,6 +39,7 @@ import {
 } from "./instagram/publications";
 import {
   generateAndPublishAnigramStory,
+  runAnigramScheduledStoryDelivery,
   serveAnigramStoryImage,
   type AnigramStoryEnv,
 } from "./instagram/anigram-stories";
@@ -415,7 +416,7 @@ async function handleInstagramStatus(
 
 export default {
   async scheduled(
-    _controller: ScheduledController,
+    controller: ScheduledController,
     env: Env,
     context: ExecutionContext,
   ): Promise<void> {
@@ -435,6 +436,21 @@ export default {
           startedAt,
         );
         console.log("Instagram Story sync completed", summary);
+      })(),
+    );
+    context.waitUntil(
+      (async () => {
+        const result = await runAnigramScheduledStoryDelivery(
+          env,
+          controller.scheduledTime,
+        );
+        if (result.status === "failed") {
+          console.error("Anigram scheduled Story delivery failed", result);
+          return;
+        }
+        if (result.status === "published") {
+          console.log("Anigram scheduled Story delivery completed", result);
+        }
       })(),
     );
   },
