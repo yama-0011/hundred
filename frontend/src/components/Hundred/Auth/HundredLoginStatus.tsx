@@ -1,4 +1,9 @@
-import { fetchUserAttributes, getCurrentUser, signOut } from 'aws-amplify/auth'
+import {
+  fetchAuthSession,
+  fetchUserAttributes,
+  getCurrentUser,
+  signOut,
+} from 'aws-amplify/auth'
 import { Hub } from 'aws-amplify/utils'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -6,27 +11,27 @@ import { useNavigate } from 'react-router-dom'
 import '../../../styles/Hundred/hundred-login-status.css'
 
 type LoginStatus = {
-  username: string
+  displayName: string
   providerLabel: string
 }
 
-function resolveUsername(
+function resolveDisplayName(
   cognitoUsername: string,
-  preferredUsername?: string,
   name?: string,
+  preferredUsername?: string,
   email?: string,
 ) {
-  const normalizedPreferredUsername = preferredUsername?.trim()
-  if (normalizedPreferredUsername) return normalizedPreferredUsername
-
   const normalizedName = name?.trim()
   if (normalizedName) return normalizedName
+
+  const normalizedPreferredUsername = preferredUsername?.trim()
+  if (normalizedPreferredUsername) return normalizedPreferredUsername
 
   const emailLocalPart = email?.split('@', 1)[0]?.trim()
   return emailLocalPart || cognitoUsername
 }
 
-/** Hundred共通ヘッダーで現在のユーザー名とサインイン導線を表示する。 */
+/** Hundred共通ヘッダーで現在の表示名とサインイン導線を表示する。 */
 function HundredLoginStatus() {
   const navigate = useNavigate()
   const [loginStatus, setLoginStatus] = useState<LoginStatus | null>(null)
@@ -46,20 +51,34 @@ function HundredLoginStatus() {
         let email: string | undefined
 
         try {
+          const authSession = await fetchAuthSession()
+          const claims = authSession.tokens?.idToken?.payload
+          preferredUsername =
+            typeof claims?.preferred_username === 'string'
+              ? claims.preferred_username
+              : undefined
+          name = typeof claims?.name === 'string' ? claims.name : undefined
+          email = typeof claims?.email === 'string' ? claims.email : undefined
+        } catch {
+          // IDトークンを参照できない場合はCognito属性の取得を続ける。
+        }
+
+        try {
           const attributes = await fetchUserAttributes()
-          preferredUsername = attributes.preferred_username
-          name = attributes.name
-          email = attributes.email
+          preferredUsername =
+            attributes.preferred_username ?? preferredUsername
+          name = attributes.name ?? name
+          email = attributes.email ?? email
         } catch {
           // 認証セッションが有効なら、属性を取得できなくても状態表示は維持する。
         }
 
         if (!isActive) return
         setLoginStatus({
-          username: resolveUsername(
+          displayName: resolveDisplayName(
             user.username,
-            preferredUsername,
             name,
+            preferredUsername,
             email,
           ),
           providerLabel: user.username.toLowerCase().startsWith('google_')
@@ -94,9 +113,13 @@ function HundredLoginStatus() {
     })
 
     void syncLoginStatus()
+    const retryTimer = window.setTimeout(() => {
+      void syncLoginStatus()
+    }, 750)
 
     return () => {
       isActive = false
+      window.clearTimeout(retryTimer)
       cancelAuthListener()
     }
   }, [])
@@ -139,18 +162,20 @@ function HundredLoginStatus() {
         <button
           className="hundred-login-status__profile"
           type="button"
-          aria-label={`${loginStatus.username}でログイン中。サインイン画面への移動を確認する`}
-          title={isCollapsed ? `${loginStatus.username}でログイン中` : undefined}
+          aria-label={`${loginStatus.displayName}でログイン中。サインイン画面への移動を確認する`}
+          title={
+            isCollapsed ? `${loginStatus.displayName}でログイン中` : undefined
+          }
           onClick={() => {
             setDialogError(null)
             setIsDialogOpen(true)
           }}
         >
           <span className="hundred-login-status__avatar" aria-hidden="true">
-            {loginStatus.username.charAt(0).toUpperCase() || 'H'}
+            {loginStatus.displayName.charAt(0).toUpperCase() || 'H'}
           </span>
           <span className="hundred-login-status__copy">
-            <strong>{loginStatus.username}でログイン中</strong>
+            <strong>{loginStatus.displayName}でログイン中</strong>
             <small>{loginStatus.providerLabel}・サインイン画面を開く</small>
           </span>
         </button>
@@ -190,7 +215,8 @@ function HundredLoginStatus() {
                 サインイン画面へ移動しますか？
               </h2>
               <p>
-                現在は<strong>{loginStatus.username}</strong>でログインしています。
+                現在は<strong>{loginStatus.displayName}</strong>
+                でログインしています。
                 移動すると現在のアカウントからサインアウトします。
               </p>
               {dialogError && (
