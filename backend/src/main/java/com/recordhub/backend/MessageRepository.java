@@ -82,4 +82,22 @@ public class MessageRepository {
 
         return jdbcTemplate.update(sql, content, id);
     }
+
+    public Message lockById(Long id, LockMode lockMode) {
+        String sql = """
+                SELECT id, content
+                FROM messages
+                WHERE id = ?
+                FOR UPDATE
+                """ + (lockMode == LockMode.NOWAIT ? " NOWAIT" : "");
+
+        return jdbcTemplate.queryForObject(
+                sql,
+                (rs, rowNum) -> new Message(
+                        rs.getLong("id"),
+                        rs.getString("content")
+                ),
+                id
+        );
+    }
 }

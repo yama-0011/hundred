@@ -17,6 +17,15 @@ public class ApiExceptionHandler {
                 .body(new ErrorResponse(exception.getMessage()));
     }
 
+    @ExceptionHandler(MessageLockedException.class)
+    public ResponseEntity<ErrorResponse> handleMessageLocked(
+            MessageLockedException exception) {
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse(exception.getMessage()));
+    }
+
     public record ErrorResponse(String error) {
     }
 }

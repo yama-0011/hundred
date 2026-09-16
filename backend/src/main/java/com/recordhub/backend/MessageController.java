@@ -14,6 +14,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 public class MessageController {
@@ -58,11 +59,13 @@ public class MessageController {
     @PutMapping("/api/messages/{id}")
     public Message updateMessage(
             @PathVariable("id") Long id,
+            @RequestParam(defaultValue = "WAIT") LockMode lockMode,
             @Valid @RequestBody UpdateMessageRequest request) {
 
         return messageService.updateMessage(
                 id,
-                request.content()
+                request.content(),
+                lockMode
         );
     }
 
