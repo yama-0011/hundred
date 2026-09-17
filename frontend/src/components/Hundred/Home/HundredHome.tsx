@@ -59,7 +59,12 @@ import '../../../styles/Hundred/hundred-home-settings.css'
 
 // IDを文字列の自由入力にせず、扱えるカテゴリとAppを型で限定する。
 type CategoryId = 'profile' | 'apps' | 'store' | 'mail' | 'settings'
-type AppId = 'record-hub' | 'creative-ia' | 'memo' | 'anigram' | 'card-home'
+type AppId =
+  | 'ai-desktop'
+  | 'record-hub'
+  | 'creative-ia'
+  | 'anigram'
+  | 'card-home'
 
 type Category = {
   id: CategoryId
@@ -87,6 +92,11 @@ const categories: Category[] = [
 ]
 
 const installedApps: InstalledApp[] = [
+  {
+    id: 'ai-desktop',
+    name: 'AI Desktop',
+    detail: '生成AI駆動開発をデスクトップで学ぶ',
+  },
   { id: 'card-home', name: 'カードホーム', detail: 'デッキを組んでカードバトルへ' },
   { id: 'record-hub', name: 'Record Hub', detail: '記録をひとつの場所に' },
   {
@@ -94,7 +104,6 @@ const installedApps: InstalledApp[] = [
     name: 'Creative IA',
     detail: 'ブログ記事をかんたんに作成',
   },
-  { id: 'memo', name: 'Memo', detail: '考えをすばやく残す' },
   {
     id: 'anigram',
     name: 'Anigram',
@@ -277,6 +286,13 @@ function CategoryIcon({ id }: { id: CategoryId }) {
 function AppIcon({ id }: { id: AppId }) {
   // Appごとのアイコンを同じ大きさのSVGとして描画する。
   const paths: Record<AppId, ReactNode> = {
+    'ai-desktop': (
+      <>
+        <rect x="3.5" y="3.5" width="17" height="17" rx="3" />
+        <path d="M12 3.5v17M3.5 12h17" />
+        <circle cx="16.2" cy="7.8" r="1.25" />
+      </>
+    ),
     'card-home': (
       <>
         <rect x="8" y="3" width="12" height="17" rx="2" />
@@ -294,12 +310,6 @@ function AppIcon({ id }: { id: AppId }) {
       <>
         <path d="M6 18.5 7.2 14l8.9-8.9a1.9 1.9 0 0 1 2.7 2.7L9.9 16.7 6 18.5Z" />
         <path d="m14.8 6.4 2.8 2.8M5 6.5h4M7 4.5v4M15.5 15v4M13.5 17h4" />
-      </>
-    ),
-    memo: (
-      <>
-        <path d="M6 4.5h9l3 3v12H6v-15Z" />
-        <path d="M14.5 4.5V8H18M9 11h6M9 14.5h6" />
       </>
     ),
     anigram: (
@@ -705,6 +715,7 @@ function HundredHome() {
   /** Appを選択し、選択済みの起動可能なAppが押された場合は画面を開く。 */
   const handleAppClick = (app: InstalledApp, index: number) => {
     const appRoutes: Partial<Record<AppId, string>> = {
+      'ai-desktop': '/ai-desktop',
       'creative-ia': '/creative-ia',
       anigram: '/anigram',
     }

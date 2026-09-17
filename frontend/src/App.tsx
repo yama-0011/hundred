@@ -9,6 +9,7 @@ import AnigramPage from './pages/Anigram/AnigramPage'
 import AnigramAdminPage from './pages/Anigram/AnigramAdminPage'
 import AnigramHistoryPage from './pages/Anigram/AnigramHistoryPage'
 import AnigramInstagramConnectionPage from './pages/Anigram/AnigramInstagramConnectionPage'
+import AIDesktopPage from './pages/AIDesktop/AIDesktopPage'
 
 const AnigramInstagramSyncPage = lazy(
   () => import('./pages/Anigram/AnigramInstagramSyncPage'),
@@ -26,6 +27,7 @@ function App() {
     <Routes>
       <Route path="/" element={<HundredHomePage />} />
       <Route path="/auth/callback" element={<HundredHomePage />} />
+      <Route path="/ai-desktop" element={<AIDesktopPage />} />
       <Route element={<HundredAppLayout />}>
         <Route path="/creative-ia" element={<CreativeIAWorkspacePage />} />
         <Route path="/anigram" element={<AnigramPage />} />
