@@ -1,0 +1,4 @@
+local/**/*.json
+remote/**/*.json
+!local/.gitkeep
+!remote/.gitkeep

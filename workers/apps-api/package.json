@@ -7,9 +7,13 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "check": "wrangler deploy --dry-run",
-    "types": "wrangler types"
+    "types": "wrangler types",
+    "ai-desktop:pull": "node scripts/ai-desktop-content.mjs pull",
+    "ai-desktop:push": "node scripts/ai-desktop-content.mjs push"
   },
   "devDependencies": {
+    "jsdom": "^29.1.1",
+    "mermaid": "^12.0.0",
     "wrangler": "^4.0.0"
   },
   "dependencies": {

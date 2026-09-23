@@ -113,6 +113,29 @@ import {
 } from "./anigram/admin";
 import { getAnigramHistory } from "./anigram/history";
 import {
+  AIDesktopContentError,
+  deleteAIDesktopImage,
+  getAIDesktopContentDraft,
+  getAIDesktopState,
+  listAIDesktopCatalogs,
+  deleteAIDesktopContentDraftHistory,
+  getAIDesktopContentDraftHistory,
+  listAIDesktopContentDraftHistory,
+  listAIDesktopImages,
+  saveAIDesktopCatalog,
+  saveAIDesktopContentDraft,
+  saveAIDesktopState,
+  serveAIDesktopImage,
+  uploadAIDesktopImage,
+} from "./ai-desktop";
+import {
+  appendAppleIntelligenceMessage,
+  AppleIntelligenceChatError,
+  createAppleIntelligenceChat,
+  getAppleIntelligenceChat,
+  listAppleIntelligenceChats,
+} from "./apple-intelligence-chats";
+import {
   AnigramStoryRendererError,
   serveAnigramStoryRender,
   type AnigramStoryRendererEnv,
@@ -474,6 +497,176 @@ export default {
         url.pathname === "/api/creative-ia/health")
     ) {
       return json(request, env, { status: "ok" });
+    }
+
+    if (url.pathname === "/api/ai-desktop/state" && request.method === "GET") {
+      try {
+        return json(request, env, await getAIDesktopState(env));
+      } catch {
+        return json(request, env, { error: "AI Desktopの共有設定を取得できませんでした" }, 500);
+      }
+    }
+
+    if (url.pathname === "/api/ai-desktop/state" && request.method === "PUT") {
+      try {
+        const identity = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await saveAIDesktopState(request, env, identity.username));
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        if (error instanceof AIDesktopContentError || error instanceof SyntaxError) return json(request, env, { error: "共有設定が正しくありません" }, 400);
+        return json(request, env, { error: "AI Desktopの共有設定を保存できませんでした" }, 500);
+      }
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/ai-desktop/catalogs") {
+      try {
+        return json(request, env, await listAIDesktopCatalogs(env));
+      } catch {
+        return json(request, env, { error: "AI Desktopのコンテンツを取得できませんでした" }, 500);
+      }
+    }
+
+    if (url.pathname === "/api/apple-intelligence/chats" && (request.method === "GET" || request.method === "POST")) {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        if (request.method === "GET") return json(request, env, await listAppleIntelligenceChats(env, ownerUserId));
+        return json(request, env, await createAppleIntelligenceChat(request, env, ownerUserId), 201);
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        if (error instanceof AppleIntelligenceChatError || error instanceof SyntaxError) {
+          const status = error instanceof AppleIntelligenceChatError && error.code === "CHAT_LIMIT_REACHED" ? 409 : 400;
+          return json(request, env, { error: status === 409 ? "保存できるチャットは100件までです" : "チャットの設定が正しくありません" }, status);
+        }
+        return json(request, env, { error: "チャット履歴を処理できませんでした" }, 500);
+      }
+    }
+
+    const appleIntelligenceChatMatch = url.pathname.match(/^\/api\/apple-intelligence\/chats\/([0-9a-f-]+)$/iu);
+    if (appleIntelligenceChatMatch && request.method === "GET") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await getAppleIntelligenceChat(env, ownerUserId, appleIntelligenceChatMatch[1]));
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        if (error instanceof AppleIntelligenceChatError && error.code === "NOT_FOUND") return json(request, env, { error: "チャットが見つかりません" }, 404);
+        return json(request, env, { error: "チャット履歴を取得できませんでした" }, 500);
+      }
+    }
+
+    const appleIntelligenceMessageMatch = url.pathname.match(/^\/api\/apple-intelligence\/chats\/([0-9a-f-]+)\/messages$/iu);
+    if (appleIntelligenceMessageMatch && request.method === "POST") {
+      try {
+        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await appendAppleIntelligenceMessage(request, env, ownerUserId, appleIntelligenceMessageMatch[1]), 201);
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        if (error instanceof AppleIntelligenceChatError) {
+          const status = error.code === "NOT_FOUND" ? 404 : error.code === "MESSAGE_LIMIT_REACHED" ? 409 : 400;
+          const message = error.code === "NOT_FOUND" ? "チャットが見つかりません" : error.code === "MESSAGE_LIMIT_REACHED" ? "このチャットのメッセージ上限に達しました" : "メッセージが正しくありません";
+          return json(request, env, { error: message }, status);
+        }
+        return json(request, env, { error: "メッセージを保存できませんでした" }, 500);
+      }
+    }
+
+    const aiDesktopDraftMatch = url.pathname.match(/^\/api\/ai-desktop\/drafts\/(category|content)\/(chatgpt|codex|claude|ai-desktop)\/([^/]+)(?:\/([^/]+))?$/u);
+    if (aiDesktopDraftMatch && (request.method === "GET" || request.method === "PUT")) {
+      try {
+        const identity = await verifyCognitoAccessToken(request, env);
+        const [, scope, serviceId, rawCategoryId, rawContentId] = aiDesktopDraftMatch;
+        const categoryId = decodeURIComponent(rawCategoryId);
+        const contentId = rawContentId ? decodeURIComponent(rawContentId) : undefined;
+        if (request.method === "GET") return json(request, env, await getAIDesktopContentDraft(env, scope, serviceId, categoryId, contentId));
+        return json(request, env, await saveAIDesktopContentDraft(request, env, identity.username, scope, serviceId, categoryId, contentId));
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        if (error instanceof AIDesktopContentError && error.code === "CONFLICT") return json(request, env, { error: "下書きが別の編集で更新されています。再読込してください" }, 409);
+        if (error instanceof AIDesktopContentError || error instanceof SyntaxError || error instanceof URIError) return json(request, env, { error: "下書きの内容が正しくありません" }, 400);
+        return json(request, env, { error: "AI編集用の下書きを処理できませんでした" }, 500);
+      }
+    }
+
+    const aiDesktopDraftHistoryMatch = url.pathname.match(/^\/api\/ai-desktop\/drafts\/history\/(chatgpt|codex|claude|ai-desktop)\/([^/]+)(?:\/(\d+))?$/u);
+    if (aiDesktopDraftHistoryMatch && (request.method === "GET" || request.method === "DELETE")) {
+      try {
+        await verifyCognitoAccessToken(request, env);
+        const serviceId = aiDesktopDraftHistoryMatch[1];
+        const categoryId = decodeURIComponent(aiDesktopDraftHistoryMatch[2]);
+        const historyId = aiDesktopDraftHistoryMatch[3];
+        const contentId = url.searchParams.get("contentId") ?? "";
+        if (request.method === "DELETE") {
+          if (historyId) throw new AIDesktopContentError("INVALID_INPUT");
+          return json(request, env, await deleteAIDesktopContentDraftHistory(env, serviceId, categoryId, contentId));
+        }
+        if (historyId) return json(request, env, await getAIDesktopContentDraftHistory(env, serviceId, categoryId, historyId));
+        return json(request, env, await listAIDesktopContentDraftHistory(env, serviceId, categoryId, contentId));
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        if (error instanceof AIDesktopContentError && error.code === "NOT_FOUND") return json(request, env, { error: "下書き履歴が見つかりません" }, 404);
+        if (error instanceof AIDesktopContentError || error instanceof URIError) return json(request, env, { error: "下書き履歴の対象が正しくありません" }, 400);
+        return json(request, env, { error: "下書き履歴を処理できませんでした" }, 500);
+      }
+    }
+
+    const aiDesktopCatalogMatch = url.pathname.match(
+      /^\/api\/ai-desktop\/catalogs\/(chatgpt|codex|claude|ai-desktop)$/u,
+    );
+    if (request.method === "PUT" && aiDesktopCatalogMatch) {
+      try {
+        await verifyCognitoAccessToken(request, env);
+        return json(
+          request,
+          env,
+          await saveAIDesktopCatalog(request, env, aiDesktopCatalogMatch[1]),
+        );
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        if (error instanceof AIDesktopContentError || error instanceof SyntaxError) {
+          return json(request, env, { error: "保存内容が正しくありません" }, 400);
+        }
+        console.error("Failed to save AI Desktop catalog", { serviceId: aiDesktopCatalogMatch[1], error });
+        return json(request, env, { error: "AI Desktopのコンテンツを保存できませんでした" }, 500);
+      }
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/ai-desktop/images") {
+      try {
+        await verifyCognitoAccessToken(request, env);
+        return json(request, env, await uploadAIDesktopImage(request, env), 201);
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        if (error instanceof AIDesktopContentError) {
+          return json(request, env, { error: "10MB以下のJPEG、PNG、WebP、GIF、AVIFを選択してください" }, 400);
+        }
+        return json(request, env, { error: "画像をアップロードできませんでした" }, 500);
+      }
+    }
+
+    const aiDesktopImageMatch = url.pathname.match(
+      /^\/api\/ai-desktop\/images\/([0-9a-f-]+\.(?:jpg|png|webp|gif|avif))$/u,
+    );
+    if (aiDesktopImageMatch && request.method === "GET") {
+      return serveAIDesktopImage(env, aiDesktopImageMatch[1]);
+    }
+    if (aiDesktopImageMatch && request.method === "DELETE") {
+      try {
+        await verifyCognitoAccessToken(request, env);
+        await deleteAIDesktopImage(env, aiDesktopImageMatch[1]);
+        return new Response(null, { status: 204, headers: getCorsHeaders(request, env) });
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        return json(request, env, { error: "画像を削除できませんでした" }, 500);
+      }
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/ai-desktop/images") {
+      try {
+        await verifyCognitoAccessToken(request, env);
+        return json(request, env, await listAIDesktopImages(request, env));
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        return json(request, env, { error: "画像一覧を取得できませんでした" }, 500);
+      }
     }
 
     if (

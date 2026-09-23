@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import HundredAppLayout from './components/Hundred/Layout/HundredAppLayout'
+import { HundredAppleIntelligenceProvider } from './components/Hundred/AppleIntelligence/HundredAppleIntelligence'
 import CreativeIAConnectionPage from './pages/CreativeIA/CreativeIAConnectionPage'
 import CreativeIAInstagramConnectionPage from './pages/CreativeIA/CreativeIAInstagramConnectionPage'
 import CreativeIAWorkspacePage from './pages/CreativeIA/CreativeIAWorkspacePage'
@@ -24,7 +25,7 @@ const AnigramInstagramSyncPage = lazy(
  */
 function App() {
   return (
-    <Routes>
+    <HundredAppleIntelligenceProvider><Routes>
       <Route path="/" element={<HundredHomePage />} />
       <Route path="/auth/callback" element={<HundredHomePage />} />
       <Route path="/ai-desktop" element={<AIDesktopPage />} />
@@ -54,7 +55,7 @@ function App() {
           element={<CreativeIAInstagramConnectionPage />}
         />
       </Route>
-    </Routes>
+    </Routes></HundredAppleIntelligenceProvider>
   )
 }
 

@@ -67,6 +67,8 @@ npx wrangler secret put INSTAGRAM_CLIENT_SECRET
 ```bash
 npx wrangler d1 migrations apply hundred-apps-prod --remote
 ```
+
+AI DesktopのAI編集用下書きは`ai_desktop_content_drafts`へ保存します。カテゴリ・コンテンツ単位でJSON、リビジョン、更新者を保持し、編集画面で確認してから正式カタログへ反映します。
 # Instagramフィード投稿で使用するR2
 
 Instagramが投稿画像を取得できるように、JPEG画像をR2へ保存し、Worker経由の公開URLを発行します。

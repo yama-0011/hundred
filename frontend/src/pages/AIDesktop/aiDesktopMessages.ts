@@ -1,0 +1,53 @@
+export const AI_DESKTOP_MESSAGES = {
+  image: {
+    listFailed: '画像一覧を取得できませんでした。',
+    uploadFailed: '画像をアップロードできませんでした。',
+    deleteFailed: '画像を削除できませんでした。',
+    copyUrlFailed: '画像URLをコピーできませんでした。',
+    imageRequired: '画像ファイルを貼り付けてください。',
+  },
+  app: {
+    invalidUrl: '有効なURLを入力してください。',
+    httpUrlRequired: 'http または https のURLを入力してください。',
+    nameRequired: 'APP名を入力してください。',
+    settingsSaveFailed: 'デスクトップ設定を保存できませんでした。',
+  },
+  content: {
+    targetCopied: '資料情報をクリップボードへコピーしました。',
+    saved: 'DBへ保存しました。',
+    saveFailed: 'DBへ保存できませんでした。',
+    imageCopied: 'ページ画像をクリップボードへコピーしました。',
+    imageCopyFailed: 'ページ画像をコピーできませんでした。',
+    invalidTemplate: 'コンテンツ雛形の形式を確認できませんでした。ダウンロードしたJSONの構造を維持してください。',
+    invalidTarget: 'JSONのtarget情報が正しくありません。serviceId、categoryId、contentIdを確認してください。',
+    differentTarget: (actual: string, current: string) => `このJSONは別のサービスまたはカテゴリ用です。JSON: ${actual}／現在: ${current}`,
+    mermaidInvalid: 'Mermaid構文が正しくない技術図があります。構文プレビューを確認してください。',
+    mermaidImportInvalid: 'Mermaid構文を解析できない技術図があります。diagram.kindとsourceを確認してください。',
+    groupNotEmpty: 'カテゴリが入っているグループは削除できません。先にカテゴリを移動または削除してください。',
+  },
+  draft: {
+    historyLoadFailed: '下書き履歴を取得できませんでした。',
+    saved: (revision: number) => `AI下書きを第${revision}版として保存しました。`,
+    saveFailed: 'AI下書きを保存できませんでした。',
+    notFound: '選択中のコンテンツには保存済みの下書きがありません。',
+    loaded: 'AI下書きを編集画面へ反映しました。内容を確認してDBへ保存してください。',
+    loadFailed: 'AI下書きを読み込めませんでした。',
+    previewFailed: '履歴をプレビューできませんでした。',
+    applied: (withGlossary: boolean) => `選択中のコンテンツへ反映しました${withGlossary ? '。用語一覧も反映しています' : ''}。内容を確認してDBへ保存してください。`,
+    historyDeleted: 'AI下書き履歴を削除しました。次回の保存は第1版になります。',
+    historyDeleteFailed: '下書き履歴を削除できませんでした。',
+  },
+} as const
+
+const errorTranslations: Record<string, string> = {
+  AUTH_REQUIRED: 'この操作にはサインインが必要です。',
+  INVALID_INPUT: '入力内容を確認してください。',
+  NOT_FOUND: '対象のデータが見つかりませんでした。',
+  CONFLICT: 'ほかの変更と競合しました。再読み込みしてからもう一度お試しください。',
+  AI_DESKTOP_IMAGE_DELETE_FAILED: '画像を削除できませんでした。',
+}
+
+export function localizedErrorMessage(error: unknown, fallback: string) {
+  if (!(error instanceof Error) || !error.message) return fallback
+  return errorTranslations[error.message] ?? (/^[A-Z0-9_]+$/u.test(error.message) ? fallback : error.message)
+}
