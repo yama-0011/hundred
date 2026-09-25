@@ -328,6 +328,7 @@ function DocumentsWorkspace({ kind, selectedServiceId, catalog, publications, mo
   const [createEyebrow, setCreateEyebrow] = useState('KNOWLEDGE BASE')
   const [createIntroduction, setCreateIntroduction] = useState('')
   const [busyServiceId, setBusyServiceId] = useState<ServiceId | null>(null)
+  if (isPersonal && !canEdit) return <div className="ad-auth-required"><span>✎</span><h1>マイ資料</h1><p>資料を作成・編集・公開するには、Hundredへサインインしてください。</p></div>
   const workspaceCatalog = Object.fromEntries(Object.entries(catalog).filter(([serviceId]) => isPersonal || (publications[serviceId]?.status ?? 'published') === 'published')) as Record<ServiceId, ServiceConfig>
   const publicationLabel = (serviceId: ServiceId) => { const status = publications[serviceId]?.status ?? 'published'; return status === 'published' ? '公開中' : status === 'draft' ? '下書き' : '非公開' }
   const publicationClass = (serviceId: ServiceId) => publications[serviceId]?.status ?? 'published'
@@ -374,8 +375,9 @@ function DocumentsWorkspace({ kind, selectedServiceId, catalog, publications, mo
 }
 
 function GenericContent({ id, canEdit, catalog, documents, customApps, visibility, onTheme, onSaveApps, onOpenProjectDocument }: { id: 'projects' | 'explorer' | 'settings'; canEdit: boolean; catalog: Record<ServiceId, ServiceConfig>; documents: AIDesktopDocument[]; customApps: AIDesktopCustomApp[]; visibility: Record<string, boolean>; onTheme: () => void; onSaveApps: (apps: AIDesktopCustomApp[], visibility: Record<string, boolean>) => void; onOpenProjectDocument: (document: AIDesktopProjectDocument, edit?: boolean) => void }) {
-  if (id === 'settings') return <div className="ad-generic"><p className="ad-eyebrow">PERSONALIZE</p><h1>設定</h1><div className="ad-setting-row"><div><strong>カラーモード</strong><p>デスクトップとウィンドウの表示を切り替え、DBへ保存します。</p></div><button onClick={onTheme}>ライト / ダークを切り替え</button></div><div className="ad-setting-row"><div><strong>壁紙</strong><p>現在の壁紙: Aurora</p></div><span className="ad-wallpaper-chip" /></div></div>
+  if (id === 'settings') return <div className="ad-generic"><p className="ad-eyebrow">PERSONALIZE</p><h1>設定</h1><div className="ad-setting-row"><div><strong>カラーモード</strong><p>{canEdit ? 'デスクトップとウィンドウの表示を切り替え、DBへ保存します。' : 'デスクトップとウィンドウの表示を切り替えます。ゲスト利用中の変更は保存されません。'}</p></div><button onClick={onTheme}>ライト / ダークを切り替え</button></div><div className="ad-setting-row"><div><strong>壁紙</strong><p>現在の壁紙: Aurora</p></div><span className="ad-wallpaper-chip" /></div></div>
   if (id === 'projects') return <ProjectsApp canManage={canEdit} catalog={catalog} publishedDocuments={documents.filter((document) => document.status === 'published')} onOpenDocument={onOpenProjectDocument} />
+  if (!canEdit) return <div className="ad-auth-required"><span>▰</span><h1>Explorer</h1><p>画像と追加APPを管理するには、Hundredへサインインしてください。</p></div>
   return <ImageExplorer canManage={canEdit} builtInApps={apps} customApps={customApps} visibility={visibility} onSaveApps={onSaveApps} />
 }
 

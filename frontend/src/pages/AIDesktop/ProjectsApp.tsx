@@ -564,7 +564,7 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
     catch { showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.content.shareUrlCopyFailed) }
   }
 
-  if (!canManage) return <div className="ad-projects-locked"><span>◆</span><h1>Projects</h1><p>プロジェクトの作成・設計・開発情報を管理するには、Hundredへサインインしてください。</p></div>
+  if (!canManage) return <div className="ad-auth-required"><span>◆</span><h1>Projects</h1><p>プロジェクトの作成・設計・開発情報を管理するには、Hundredへサインインしてください。</p></div>
 
   const documentHelp = <details className="ad-project-document-help"><summary aria-label="関連資料について">?</summary><div><strong>関連資料の拡張</strong><p>現在はHundredで作成した資料を関連付けられます。参照元は今後追加できる設計です。</p><ol><li><b>対応中</b> Hundredで作成した資料</li><li>外部URL</li><li>PDF・Excel・画像などの添付ファイル</li><li>GitHubのIssueやPull Request</li><li>Figmaの画面設計</li><li>D1のDDLやマイグレーション</li></ol></div></details>
   const documentCategoryTitle = (document: AIDesktopProjectDocument) => documentOptions.find((option) => option.serviceId === document.serviceId && option.categoryId === document.categoryId && option.contentId === document.contentId)?.categoryTitle ?? document.categoryId
