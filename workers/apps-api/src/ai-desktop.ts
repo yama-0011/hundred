@@ -3,7 +3,7 @@ export interface AIDesktopEnv {
   MEDIA: R2Bucket;
 }
 
-const serviceIds = new Set(["chatgpt", "codex", "claude", "ai-desktop"]);
+const validServiceId = (value: unknown): value is string => typeof value === "string" && /^[a-z0-9][a-z0-9-]{0,63}$/u.test(value);
 const blockTypes = new Set(["heading", "text", "image", "code", "checklist", "callout", "divider", "table", "link", "toc", "glossary", "card", "steps", "diagram", "columns"]);
 const badgeTones = new Set(["neutral", "info", "success", "warning", "danger"]);
 const diagramKinds = new Set(["flowchart", "sequence", "architecture", "er", "state"]);
@@ -77,16 +77,145 @@ function validateCatalog(value: unknown): Record<string, unknown> {
   return catalog;
 }
 
-export async function listAIDesktopCatalogs(env: AIDesktopEnv) {
-  const result = await env.DB.prepare(
-    "SELECT service_id, catalog_json, updated_at FROM ai_desktop_catalogs",
-  ).all<{ service_id: string; catalog_json: string; updated_at: number }>();
+export async function listAIDesktopCatalogs(env: AIDesktopEnv, includeUnpublished = false) {
+  const [result, metadataResult] = await Promise.all([
+    env.DB.prepare("SELECT service_id, catalog_json, updated_at FROM ai_desktop_catalogs").all<{ service_id: string; catalog_json: string; updated_at: number }>(),
+    env.DB.prepare("SELECT service_id, status, owner_id, created_by, updated_by, published_by, created_at, updated_at, published_at FROM ai_desktop_catalog_metadata").all<{ service_id: string; status: string; owner_id: string; created_by: string; updated_by: string; published_by: string | null; created_at: number; updated_at: number; published_at: number | null }>(),
+  ]);
+  const metadata = new Map(metadataResult.results.map((row) => [row.service_id, row]));
+  const visibleRows = result.results.filter((row) => includeUnpublished || (metadata.get(row.service_id)?.status ?? "published") === "published");
+  const catalogs = Object.fromEntries(visibleRows.map((row) => [row.service_id, JSON.parse(row.catalog_json) as Record<string, unknown>]));
+  const publications = Object.fromEntries(visibleRows.map((row) => {
+    const saved = metadata.get(row.service_id);
+    return [row.service_id, {
+      status: saved?.status === "draft" || saved?.status === "unpublished" ? saved.status : "published",
+      ownerId: saved?.owner_id ?? "system",
+      createdBy: saved?.created_by ?? "system",
+      updatedBy: saved?.updated_by ?? "system",
+      publishedBy: saved?.published_by ?? saved?.updated_by ?? "system",
+      createdAt: saved?.created_at ?? row.updated_at,
+      updatedAt: saved?.updated_at ?? row.updated_at,
+      publishedAt: saved?.published_at ?? row.updated_at,
+    }];
+  }));
   return {
-    catalogs: Object.fromEntries(
-      result.results.map((row) => [row.service_id, JSON.parse(row.catalog_json)]),
-    ),
+    catalogs,
+    publications,
     updatedAt: Math.max(0, ...result.results.map((row) => row.updated_at)),
   };
+}
+
+export async function createAIDesktopCatalog(request: Request, env: AIDesktopEnv, createdBy: string) {
+  const body = await request.json();
+  if (!isRecord(body) || !validText(body.name, 100) || !String(body.name).trim() || !validText(body.eyebrow, 100) || !validText(body.introduction, 2_000)) throw new AIDesktopContentError("INVALID_INPUT");
+  const baseId = String(body.name).normalize("NFKC").toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 48) || "material";
+  const serviceId = `${baseId}-${crypto.randomUUID().slice(0, 8)}`;
+  const catalog = validateCatalog({
+    schemaVersion: 3,
+    name: String(body.name).trim(),
+    eyebrow: String(body.eyebrow).trim() || "KNOWLEDGE BASE",
+    introduction: String(body.introduction).trim(),
+    categoryGroups: [{ id: `group-${crypto.randomUUID().slice(0, 8)}`, title: "知識", description: "資料のカテゴリを整理します。", categories: [] }],
+  });
+  const now = Date.now();
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO ai_desktop_catalogs (service_id, catalog_json, updated_at) VALUES (?, ?, ?)").bind(serviceId, JSON.stringify(catalog), now),
+    env.DB.prepare(`INSERT INTO ai_desktop_catalog_metadata (service_id, status, owner_id, created_by, updated_by, created_at, updated_at)
+      VALUES (?, 'draft', ?, ?, ?, ?, ?)`).bind(serviceId, createdBy, createdBy, createdBy, now, now),
+  ]);
+  return { serviceId, catalog, publication: { status: "draft" as const, ownerId: createdBy, createdBy, updatedBy: createdBy, publishedBy: null, createdAt: now, updatedAt: now, publishedAt: null } };
+}
+
+export async function setAIDesktopCatalogPublication(request: Request, env: AIDesktopEnv, updatedBy: string, serviceId: string) {
+  if (!validServiceId(serviceId)) throw new AIDesktopContentError("INVALID_INPUT");
+  const body = await request.json();
+  if (!isRecord(body) || typeof body.published !== "boolean") throw new AIDesktopContentError("INVALID_INPUT");
+  const exists = await env.DB.prepare("SELECT service_id FROM ai_desktop_catalogs WHERE service_id = ?").bind(serviceId).first();
+  if (!exists) throw new AIDesktopContentError("NOT_FOUND");
+  const now = Date.now();
+  const status = body.published ? "published" : "unpublished";
+  await env.DB.prepare(`INSERT INTO ai_desktop_catalog_metadata (service_id, status, owner_id, created_by, updated_by, published_by, created_at, updated_at, published_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(service_id) DO UPDATE SET status = excluded.status, updated_by = excluded.updated_by, updated_at = excluded.updated_at,
+      published_by = CASE WHEN excluded.status = 'published' THEN excluded.published_by ELSE ai_desktop_catalog_metadata.published_by END,
+      published_at = CASE WHEN excluded.status = 'published' THEN excluded.published_at ELSE ai_desktop_catalog_metadata.published_at END`)
+    .bind(serviceId, status, updatedBy, updatedBy, updatedBy, body.published ? updatedBy : null, now, now, body.published ? now : null).run();
+  return { publication: { serviceId, status, updatedBy, updatedAt: now, publishedBy: body.published ? updatedBy : null, publishedAt: body.published ? now : null } };
+}
+
+type CatalogDocument = {
+  key: string;
+  serviceId: string;
+  serviceName: string;
+  categoryId: string;
+  categoryTitle: string;
+  contentId: string;
+  title: string;
+  serialized: string;
+};
+
+function documentsFromCatalog(serviceId: string, catalog: Record<string, unknown>) {
+  const documents = new Map<string, CatalogDocument>();
+  const serviceName = typeof catalog.name === "string" ? catalog.name : serviceId;
+  const groups = Array.isArray(catalog.categoryGroups) ? catalog.categoryGroups : [];
+  for (const groupValue of groups) {
+    if (!isRecord(groupValue) || !Array.isArray(groupValue.categories)) continue;
+    for (const categoryValue of groupValue.categories) {
+      if (!isRecord(categoryValue) || typeof categoryValue.id !== "string" || !Array.isArray(categoryValue.items)) continue;
+      const categoryTitle = typeof categoryValue.title === "string" ? categoryValue.title : categoryValue.id;
+      for (const itemValue of categoryValue.items) {
+        if (!isRecord(itemValue) || typeof itemValue.id !== "string") continue;
+        const key = `${serviceId}:${categoryValue.id}:${itemValue.id}`;
+        documents.set(key, {
+          key,
+          serviceId,
+          serviceName,
+          categoryId: categoryValue.id,
+          categoryTitle,
+          contentId: itemValue.id,
+          title: typeof itemValue.navTitle === "string" ? itemValue.navTitle : itemValue.id,
+          serialized: JSON.stringify(itemValue),
+        });
+      }
+    }
+  }
+  return documents;
+}
+
+export async function listAIDesktopDocuments(env: AIDesktopEnv, includeUnpublished = false) {
+  const [catalogRows, metadataRows, catalogMetadataRows] = await Promise.all([
+    env.DB.prepare("SELECT service_id, catalog_json, updated_at FROM ai_desktop_catalogs").all<{ service_id: string; catalog_json: string; updated_at: number }>(),
+    env.DB.prepare("SELECT document_key, status, visibility, owner_id, created_by, updated_by, published_by, created_at, updated_at, published_at FROM ai_desktop_documents").all<{ document_key: string; status: string; visibility: string; owner_id: string; created_by: string; updated_by: string; published_by: string | null; created_at: number; updated_at: number; published_at: number | null }>(),
+    env.DB.prepare("SELECT service_id, status FROM ai_desktop_catalog_metadata").all<{ service_id: string; status: string }>(),
+  ]);
+  const metadata = new Map(metadataRows.results.map((row) => [row.document_key, row]));
+  const catalogStatuses = new Map(catalogMetadataRows.results.map((row) => [row.service_id, row.status]));
+  const documents = catalogRows.results.filter((row) => includeUnpublished || (catalogStatuses.get(row.service_id) ?? "published") === "published").flatMap((row) => {
+    const catalog = JSON.parse(row.catalog_json) as Record<string, unknown>;
+    return [...documentsFromCatalog(row.service_id, catalog).values()].map((document) => {
+      const saved = metadata.get(document.key);
+      const catalogStatus = catalogStatuses.get(row.service_id);
+      const status = catalogStatus === "draft" || catalogStatus === "unpublished" ? catalogStatus : "published";
+      return {
+        serviceId: document.serviceId,
+        serviceName: document.serviceName,
+        categoryId: document.categoryId,
+        categoryTitle: document.categoryTitle,
+        contentId: document.contentId,
+        title: document.title,
+        status,
+        visibility: saved?.visibility ?? "team",
+        ownerId: saved?.owner_id ?? "system",
+        createdBy: saved?.created_by ?? "system",
+        updatedBy: saved?.updated_by ?? "system",
+        publishedBy: saved?.published_by ?? saved?.updated_by ?? "system",
+        createdAt: saved?.created_at ?? row.updated_at,
+        updatedAt: saved?.updated_at ?? row.updated_at,
+        publishedAt: saved?.published_at ?? row.updated_at,
+      };
+    });
+  });
+  return { documents: documents.sort((a, b) => b.updatedAt - a.updatedAt) };
 }
 
 function collectImageReferences(value: unknown, path: string, references: Map<string, string[]>) {
@@ -134,8 +263,8 @@ export async function listAIDesktopImages(request: Request, env: AIDesktopEnv) {
     images: objects.objects.map((object) => {
       const id = object.key.slice("ai-desktop/".length);
       const imageReferences = references.get(id) ?? [];
-      const folders = new Set(imageReferences.map((reference) => reference.split(" / ", 1)[0]).filter((folder) => serviceIds.has(folder)));
-      if (object.customMetadata?.folder && serviceIds.has(object.customMetadata.folder)) folders.add(object.customMetadata.folder);
+      const folders = new Set(imageReferences.map((reference) => reference.split(" / ", 1)[0]).filter(validServiceId));
+      if (validServiceId(object.customMetadata?.folder)) folders.add(object.customMetadata.folder);
       return { id, url: `${origin}/api/ai-desktop/images/${id}`, name: object.customMetadata?.originalName ?? id, size: object.size, uploadedAt: object.uploaded.getTime(), references: imageReferences, folders: folders.size ? [...folders] : ["unfiled"] };
     }).sort((a, b) => b.uploadedAt - a.uploadedAt),
     truncated: objects.truncated,
@@ -146,22 +275,71 @@ export async function saveAIDesktopCatalog(
   request: Request,
   env: AIDesktopEnv,
   serviceId: string,
+  updatedBy: string,
 ) {
-  if (!serviceIds.has(serviceId)) throw new AIDesktopContentError("NOT_FOUND");
+  if (!validServiceId(serviceId)) throw new AIDesktopContentError("NOT_FOUND");
   const catalog = validateCatalog(await request.json());
   const updatedAt = Date.now();
-  await env.DB.prepare(
+  const currentRow = await env.DB.prepare("SELECT catalog_json FROM ai_desktop_catalogs WHERE service_id = ?").bind(serviceId).first<{ catalog_json: string }>();
+  const previousCatalog = currentRow ? JSON.parse(currentRow.catalog_json) as Record<string, unknown> : null;
+  const previousDocuments = previousCatalog ? documentsFromCatalog(serviceId, previousCatalog) : new Map<string, CatalogDocument>();
+  const nextDocuments = documentsFromCatalog(serviceId, catalog);
+  const saveCatalogStatement = env.DB.prepare(
     `INSERT INTO ai_desktop_catalogs (service_id, catalog_json, updated_at)
      VALUES (?, ?, ?)
      ON CONFLICT(service_id) DO UPDATE SET
        catalog_json = excluded.catalog_json,
        updated_at = excluded.updated_at`,
-  ).bind(serviceId, JSON.stringify(catalog), updatedAt).run();
+  ).bind(serviceId, JSON.stringify(catalog), updatedAt);
+  const statements: D1PreparedStatement[] = [];
+  for (const document of nextDocuments.values()) {
+    if (previousDocuments.get(document.key)?.serialized === document.serialized) continue;
+    statements.push(env.DB.prepare(`INSERT INTO ai_desktop_documents (document_key, service_id, category_id, content_id, title, status, visibility, owner_id, created_by, updated_by, published_by, created_at, updated_at, published_at)
+      VALUES (?, ?, ?, ?, ?, 'published', 'team', ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(document_key) DO UPDATE SET title = excluded.title, updated_by = excluded.updated_by, updated_at = excluded.updated_at`).bind(document.key, serviceId, document.categoryId, document.contentId, document.title, updatedBy, updatedBy, updatedBy, updatedBy, updatedAt, updatedAt, updatedAt));
+  }
+  for (const document of previousDocuments.values()) {
+    if (!nextDocuments.has(document.key)) statements.push(env.DB.prepare("UPDATE ai_desktop_documents SET status = 'unpublished', updated_by = ?, updated_at = ? WHERE document_key = ?").bind(updatedBy, updatedAt, document.key));
+  }
+  const updateCatalogMetadata = env.DB.prepare("UPDATE ai_desktop_catalog_metadata SET updated_by = ?, updated_at = ? WHERE service_id = ?").bind(updatedBy, updatedAt, serviceId);
+  await env.DB.batch([saveCatalogStatement, updateCatalogMetadata, ...statements]);
   return { catalog, updatedAt };
 }
 
+export async function createAIDesktopDocument(request: Request, env: AIDesktopEnv, createdBy: string) {
+  const body = await request.json();
+  if (!isRecord(body) || !validServiceId(body.serviceId) || !validText(body.categoryId, 300) || !validText(body.title, 200) || !String(body.title).trim()) throw new AIDesktopContentError("INVALID_INPUT");
+  const serviceId = String(body.serviceId);
+  const categoryId = String(body.categoryId);
+  const row = await env.DB.prepare("SELECT catalog_json FROM ai_desktop_catalogs WHERE service_id = ?").bind(serviceId).first<{ catalog_json: string }>();
+  if (!row) throw new AIDesktopContentError("NOT_FOUND");
+  const catalog = JSON.parse(row.catalog_json) as Record<string, unknown>;
+  const groups = Array.isArray(catalog.categoryGroups) ? catalog.categoryGroups : [];
+  let found = false;
+  const contentId = `document-${crypto.randomUUID()}`;
+  const title = String(body.title).trim();
+  catalog.categoryGroups = groups.map((groupValue) => {
+    if (!isRecord(groupValue) || !Array.isArray(groupValue.categories)) return groupValue;
+    return { ...groupValue, categories: groupValue.categories.map((categoryValue) => {
+      if (!isRecord(categoryValue) || categoryValue.id !== categoryId || !Array.isArray(categoryValue.items)) return categoryValue;
+      found = true;
+      return { ...categoryValue, items: [...categoryValue.items, { id: contentId, navTitle: title, blocks: [] }] };
+    }) };
+  });
+  if (!found) throw new AIDesktopContentError("NOT_FOUND");
+  const validatedCatalog = validateCatalog(catalog);
+  const now = Date.now();
+  const documentKey = `${serviceId}:${categoryId}:${contentId}`;
+  await env.DB.batch([
+    env.DB.prepare("UPDATE ai_desktop_catalogs SET catalog_json = ?, updated_at = ? WHERE service_id = ?").bind(JSON.stringify(validatedCatalog), now, serviceId),
+    env.DB.prepare(`INSERT INTO ai_desktop_documents (document_key, service_id, category_id, content_id, title, status, visibility, owner_id, created_by, updated_by, published_by, created_at, updated_at, published_at)
+      VALUES (?, ?, ?, ?, ?, 'draft', 'private', ?, ?, ?, NULL, ?, ?, NULL)`).bind(documentKey, serviceId, categoryId, contentId, title, createdBy, createdBy, createdBy, now, now),
+  ]);
+  return { document: { serviceId, categoryId, contentId, title, status: "draft" as const, visibility: "private" as const, ownerId: createdBy, createdBy, updatedBy: createdBy, publishedBy: null, createdAt: now, updatedAt: now, publishedAt: null }, catalog: validatedCatalog };
+}
+
 function draftKey(scope: string, serviceId: string, categoryId: string, contentId?: string) {
-  if ((scope !== "category" && scope !== "content") || !serviceIds.has(serviceId) || !categoryId || categoryId.length > 300 || (scope === "content" && (!contentId || contentId.length > 300))) throw new AIDesktopContentError("INVALID_INPUT");
+  if ((scope !== "category" && scope !== "content") || !validServiceId(serviceId) || !categoryId || categoryId.length > 300 || (scope === "content" && (!contentId || contentId.length > 300))) throw new AIDesktopContentError("INVALID_INPUT");
   return `${scope}:${serviceId}:${categoryId}:${scope === "content" ? contentId : "_"}`;
 }
 
@@ -192,20 +370,20 @@ export async function saveAIDesktopContentDraft(request: Request, env: AIDesktop
 }
 
 export async function listAIDesktopContentDraftHistory(env: AIDesktopEnv, serviceId: string, categoryId: string, contentId: string) {
-  if (!serviceIds.has(serviceId) || !categoryId || categoryId.length > 300 || !contentId || contentId.length > 300) throw new AIDesktopContentError("INVALID_INPUT");
+  if (!validServiceId(serviceId) || !categoryId || categoryId.length > 300 || !contentId || contentId.length > 300) throw new AIDesktopContentError("INVALID_INPUT");
   const result = await env.DB.prepare("SELECT id, content_id, content_title, revision, saved_by, saved_at, payload_json IS NOT NULL AS has_preview FROM ai_desktop_content_draft_history WHERE service_id = ? AND category_id = ? AND content_id = ? ORDER BY saved_at DESC, id DESC LIMIT 10").bind(serviceId, categoryId, contentId).all<{ id: number; content_id: string; content_title: string; revision: number; saved_by: string; saved_at: number; has_preview: number }>();
   return { history: result.results.map((row) => ({ id: row.id, contentId: row.content_id, contentTitle: row.content_title, revision: row.revision, savedBy: row.saved_by, savedAt: row.saved_at, hasPreview: Boolean(row.has_preview) })) };
 }
 
 export async function getAIDesktopContentDraftHistory(env: AIDesktopEnv, serviceId: string, categoryId: string, historyId: string) {
-  if (!serviceIds.has(serviceId) || !categoryId || categoryId.length > 300 || !/^\d+$/.test(historyId)) throw new AIDesktopContentError("INVALID_INPUT");
+  if (!validServiceId(serviceId) || !categoryId || categoryId.length > 300 || !/^\d+$/.test(historyId)) throw new AIDesktopContentError("INVALID_INPUT");
   const row = await env.DB.prepare("SELECT id, content_id, content_title, revision, saved_by, saved_at, payload_json FROM ai_desktop_content_draft_history WHERE id = ? AND service_id = ? AND category_id = ?").bind(Number(historyId), serviceId, categoryId).first<{ id: number; content_id: string; content_title: string; revision: number; saved_by: string; saved_at: number; payload_json: string | null }>();
   if (!row) throw new AIDesktopContentError("NOT_FOUND");
   return { history: { id: row.id, contentId: row.content_id, contentTitle: row.content_title, revision: row.revision, savedBy: row.saved_by, savedAt: row.saved_at, payload: row.payload_json ? JSON.parse(row.payload_json) : null } };
 }
 
 export async function deleteAIDesktopContentDraftHistory(env: AIDesktopEnv, serviceId: string, categoryId: string, contentId: string) {
-  if (!serviceIds.has(serviceId) || !categoryId || categoryId.length > 300 || !contentId || contentId.length > 300) throw new AIDesktopContentError("INVALID_INPUT");
+  if (!validServiceId(serviceId) || !categoryId || categoryId.length > 300 || !contentId || contentId.length > 300) throw new AIDesktopContentError("INVALID_INPUT");
   const key = draftKey("content", serviceId, categoryId, contentId);
   const [deleted] = await env.DB.batch([
     env.DB.prepare("DELETE FROM ai_desktop_content_draft_history WHERE service_id = ? AND category_id = ? AND content_id = ?").bind(serviceId, categoryId, contentId),
@@ -237,7 +415,7 @@ export async function uploadAIDesktopImage(
   const id = `${crypto.randomUUID()}.${extension}`;
   await env.MEDIA.put(`ai-desktop/${id}`, file.stream(), {
     httpMetadata: { contentType: file.type, cacheControl: "public, max-age=31536000, immutable" },
-    customMetadata: { originalName: file.name.slice(0, 200), ...(typeof requestedFolder === "string" && serviceIds.has(requestedFolder) ? { folder: requestedFolder } : {}) },
+    customMetadata: { originalName: file.name.slice(0, 200), ...(validServiceId(requestedFolder) ? { folder: requestedFolder } : {}) },
   });
   return {
     id,
@@ -261,13 +439,14 @@ export async function deleteAIDesktopImage(env: AIDesktopEnv, id: string) {
 }
 
 
-const desktopAppIds = ["chatgpt", "codex", "claude", "ai-desktop", "explorer", "settings"] as const;
+const desktopAppIds = ["my-documents", "documents", "projects", "explorer", "settings"] as const;
 
 function validateDesktopState(value: unknown) {
   if (!isRecord(value) || typeof value.taskbarVisible !== "boolean" || !isRecord(value.iconPositions)) throw new AIDesktopContentError("INVALID_INPUT");
   if (value.theme !== "light" && value.theme !== "dark") throw new AIDesktopContentError("INVALID_INPUT");
   const iconPositions = Object.fromEntries(desktopAppIds.map((id) => {
-    const position = value.iconPositions[id];
+    const fallbackPositions = { "my-documents": { x: 18, y: 18 }, documents: { x: 18, y: 110 }, projects: { x: 18, y: 202 }, explorer: { x: 18, y: 294 }, settings: { x: 18, y: 386 } } as const;
+    const position = value.iconPositions[id] ?? fallbackPositions[id];
     if (!isRecord(position) || typeof position.x !== "number" || typeof position.y !== "number" || !Number.isFinite(position.x) || !Number.isFinite(position.y) || position.x < 0 || position.y < 0 || position.x > 10_000 || position.y > 10_000) throw new AIDesktopContentError("INVALID_INPUT");
     return [id, { x: Math.round(position.x), y: Math.round(position.y) }];
   }));

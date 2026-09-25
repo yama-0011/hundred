@@ -26,9 +26,23 @@ async function requestAuthenticatedAIDesktopApi<T>(path: string, options: Reques
 }
 
 export function getAIDesktopCatalogs<T>() {
-  return requestAIDesktopApi<{ catalogs: Partial<Record<string, T>>; updatedAt: number }>(
+  return requestAIDesktopApi<{ catalogs: Partial<Record<string, T>>; publications: Record<string, AIDesktopCatalogPublication>; updatedAt: number }>(
     '/api/ai-desktop/catalogs',
   )
+}
+
+export function getManageableAIDesktopCatalogs<T>() {
+  return requestAuthenticatedAIDesktopApi<{ catalogs: Partial<Record<string, T>>; publications: Record<string, AIDesktopCatalogPublication>; updatedAt: number }>('/api/ai-desktop/catalogs/manage')
+}
+
+export type AIDesktopCatalogPublication = { status: 'draft' | 'published' | 'unpublished'; ownerId: string; createdBy: string; updatedBy: string; publishedBy: string | null; createdAt: number; updatedAt: number; publishedAt: number | null }
+
+export function createAIDesktopCatalog(name: string, eyebrow: string, introduction: string) {
+  return requestAuthenticatedAIDesktopApi<{ serviceId: string; catalog: unknown; publication: AIDesktopCatalogPublication }>('/api/ai-desktop/catalogs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, eyebrow, introduction }) })
+}
+
+export function setAIDesktopCatalogPublication(serviceId: string, published: boolean) {
+  return requestAuthenticatedAIDesktopApi<{ publication: Partial<AIDesktopCatalogPublication> & Pick<AIDesktopCatalogPublication, 'status'> }>(`/api/ai-desktop/catalogs/${encodeURIComponent(serviceId)}/publication`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ published }) })
 }
 
 export function saveAIDesktopCatalog<T>(serviceId: string, catalog: T) {
@@ -42,7 +56,38 @@ export function saveAIDesktopCatalog<T>(serviceId: string, catalog: T) {
   )
 }
 
-export function uploadAIDesktopImage(file: File, folder?: 'chatgpt' | 'codex' | 'claude' | 'ai-desktop') {
+export type AIDesktopDocument = {
+  serviceId: string
+  serviceName: string
+  categoryId: string
+  categoryTitle: string
+  contentId: string
+  title: string
+  status: 'draft' | 'published' | 'unpublished'
+  visibility: 'private' | 'team' | 'link'
+  ownerId: string
+  createdBy: string
+  updatedBy: string
+  publishedBy: string | null
+  createdAt: number
+  updatedAt: number
+  publishedAt: number | null
+}
+
+export function listAIDesktopDocuments(manage = false) {
+  return manage
+    ? requestAuthenticatedAIDesktopApi<{ documents: AIDesktopDocument[] }>('/api/ai-desktop/documents/manage')
+    : requestAIDesktopApi<{ documents: AIDesktopDocument[] }>('/api/ai-desktop/documents')
+}
+
+export function createAIDesktopDocument(serviceId: AIDesktopDocument['serviceId'], categoryId: string, title: string) {
+  return requestAuthenticatedAIDesktopApi<{
+    document: Pick<AIDesktopDocument, 'serviceId' | 'categoryId' | 'contentId' | 'title' | 'status' | 'visibility' | 'ownerId' | 'createdBy' | 'updatedBy' | 'publishedBy' | 'createdAt' | 'updatedAt' | 'publishedAt'>
+    catalog: unknown
+  }>('/api/ai-desktop/documents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ serviceId, categoryId, title }) })
+}
+
+export function uploadAIDesktopImage(file: File, folder?: string) {
   const formData = new FormData()
   formData.set('file', file)
   if (folder) formData.set('folder', folder)
@@ -82,7 +127,7 @@ export function listAIDesktopImages() {
 }
 
 export type AIDesktopSharedState = {
-  iconPositions: Record<'chatgpt' | 'codex' | 'claude' | 'ai-desktop' | 'explorer' | 'settings', { x: number; y: number }>
+  iconPositions: Record<'my-documents' | 'documents' | 'projects' | 'explorer' | 'settings', { x: number; y: number }>
   taskbarVisible: boolean
   theme: 'light' | 'dark'
   customApps?: AIDesktopCustomApp[]
@@ -98,6 +143,134 @@ export function saveAIDesktopState(state: AIDesktopSharedState) {
     '/api/ai-desktop/state',
     { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) },
   )
+}
+
+export type AIDesktopProjectStatus = 'planning' | 'proposal' | 'design' | 'development' | 'review' | 'completed' | 'on-hold'
+export type AIDesktopProjectDevelopmentMode = 'personal' | 'team'
+
+export type AIDesktopProjectDocument = {
+  serviceId: string
+  categoryId: string
+  contentId: string
+  title: string
+  phase?: string
+  documentType?: string
+  note?: string
+  sortOrder?: number
+}
+
+export type AIDesktopProjectDetail = {
+  name: string
+  description: string
+  category?: string
+  ddl?: string
+}
+
+export type AIDesktopProjectEnvironment = {
+  summary: {
+    os: string
+    runtime: string
+    packageManager: string
+    frontend: string
+    worker: string
+  }
+  prerequisites: Array<{ name: string; version: string; required: boolean; description: string }>
+  services: Array<{ name: string; endpoint: string; command: string }>
+  steps: Array<{ title: string; description: string; command: string }>
+  variables: Array<{ name: string; location: string; required: boolean; description: string }>
+  checks: Array<{ label: string }>
+}
+
+export type AIDesktopProjectCommand = AIDesktopProjectDetail & {
+  directory: string
+  command: string
+  environment: string
+  category?: string
+  pinned?: boolean
+}
+
+export type AIDesktopProjectLink = AIDesktopProjectDetail & {
+  type: string
+  url: string
+}
+
+export type AIDesktopProjectRule = AIDesktopProjectDetail & {
+  importance?: 'required' | 'recommended'
+}
+
+export type AIDesktopProjectMember = {
+  userId: string
+  displayName: string
+  role: 'owner' | 'member'
+}
+
+export type AIDesktopUserSearchResult = {
+  userId: string
+  displayName: string
+  isCurrentUser: boolean
+}
+
+export type AIDesktopProjectInput = {
+  name: string
+  customerName: string
+  summary: string
+  objective: string
+  status: AIDesktopProjectStatus
+  developmentMode: AIDesktopProjectDevelopmentMode
+  systemDiagramSource: string
+  fileStructure: string
+  technologyStack: AIDesktopProjectDetail[]
+  databaseInfo: AIDesktopProjectDetail[]
+  environmentSetup: AIDesktopProjectEnvironment
+  commands: AIDesktopProjectCommand[]
+  links: AIDesktopProjectLink[]
+  projectRules: AIDesktopProjectRule[]
+  designNotes: string
+  developmentNotes: string
+  relatedDocuments: AIDesktopProjectDocument[]
+  memberUserIds: string[]
+}
+
+export type AIDesktopProject = AIDesktopProjectInput & {
+  id: string
+  members: AIDesktopProjectMember[]
+  canEdit: boolean
+  createdBy: string
+  updatedBy: string
+  createdAt: number
+  updatedAt: number
+}
+
+export type AIDesktopProjectSummary = Pick<AIDesktopProject, 'id' | 'name' | 'customerName' | 'summary' | 'status' | 'developmentMode' | 'canEdit' | 'updatedBy' | 'createdAt' | 'updatedAt'>
+
+export function searchAIDesktopUsers(query: string) {
+  return requestAuthenticatedAIDesktopApi<{ users: AIDesktopUserSearchResult[] }>(`/api/ai-desktop/users?query=${encodeURIComponent(query)}`)
+}
+
+export function syncAIDesktopUserProfile(displayName: string) {
+  return requestAuthenticatedAIDesktopApi<{ user: { userId: string; displayName: string } }>('/api/ai-desktop/users/me', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ displayName }),
+  })
+}
+
+export function listAIDesktopProjects() {
+  return requestAuthenticatedAIDesktopApi<{ projects: AIDesktopProjectSummary[] }>('/api/ai-desktop/projects')
+}
+
+export function getAIDesktopProject(projectId: string) {
+  return requestAuthenticatedAIDesktopApi<{ project: AIDesktopProject }>(`/api/ai-desktop/projects/${encodeURIComponent(projectId)}`)
+}
+
+export function createAIDesktopProject(project: AIDesktopProjectInput) {
+  return requestAuthenticatedAIDesktopApi<{ project: AIDesktopProject }>('/api/ai-desktop/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(project) })
+}
+
+export function updateAIDesktopProject(projectId: string, project: AIDesktopProjectInput) {
+  return requestAuthenticatedAIDesktopApi<{ project: AIDesktopProject }>(`/api/ai-desktop/projects/${encodeURIComponent(projectId)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(project) })
+}
+
+export function deleteAIDesktopProject(projectId: string) {
+  return requestAuthenticatedAIDesktopApi<{ deleted: true; projectId: string }>(`/api/ai-desktop/projects/${encodeURIComponent(projectId)}`, { method: 'DELETE' })
 }
 
 export type AIDesktopContentDraft<T> = { scope: 'category' | 'content'; serviceId: string; categoryId: string; contentId: string | null; payload: T; revision: number; status: 'editing' | 'review' | 'applied'; updatedBy: string; createdAt: number; updatedAt: number }
