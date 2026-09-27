@@ -1,4 +1,5 @@
 local/**/*.json
 remote/**/*.json
+Workspace JSON.json
 !local/.gitkeep
 !remote/.gitkeep

@@ -25,13 +25,15 @@ import { AI_DESKTOP_MESSAGES, localizedErrorMessage } from './aiDesktopMessages'
 import { MermaidDiagram } from './MermaidDiagram'
 import { validateMermaidSource } from './mermaidDiagramValidation'
 import { showAIDesktopNotification } from './aiDesktopNotificationBus'
+import { isWorkspaceJsonFileCancelled, readWorkspaceJsonFile, selectWorkspaceJsonFile, supportsWorkspaceJsonFile, writeWorkspaceJsonFile } from './workspaceJsonFile'
 
 type ServiceId = AIDesktopProjectDocument['serviceId']
 type ProjectView = 'dashboard' | 'edit'
 type ArchitectureTab = 'system' | 'files'
 type ProjectDetailTab = 'technologyStack' | 'databaseInfo' | 'projectRules'
 type ProjectWorkspaceTab = ProjectDetailTab | 'environmentSetup' | 'commands' | 'links' | 'developmentNotes' | 'members'
-type ProjectTemplate = { format: 'hundred-ai-desktop-project'; version: 12; project: Omit<AIDesktopProjectInput, 'relatedDocuments' | 'memberUserIds' | 'customerName' | 'objective' | 'designNotes'> }
+type ProjectTemplateProject = Omit<AIDesktopProjectInput, 'relatedDocuments' | 'memberUserIds' | 'customerName' | 'objective' | 'designNotes'>
+type ProjectTemplate = { format: 'hundred-ai-desktop'; version: 1; resourceType: 'project'; target: { projectId: string | null }; guide?: Record<string, unknown>; reference?: Record<string, unknown>; data: { project: ProjectTemplateProject } }
 
 const statusLabels: Record<AIDesktopProjectStatus, string> = {
   planning: '企画', proposal: '提案', design: '設計', development: '開発', review: '確認', completed: '完了', 'on-hold': '保留',
@@ -71,23 +73,91 @@ const projectInput = (project: AIDesktopProject): AIDesktopProjectInput => ({
   databaseInfo: project.databaseInfo, environmentSetup: parseProjectEnvironment(project.environmentSetup ?? blankProjectEnvironment()), commands: project.commands ?? [], links: project.links ?? [], projectRules: project.projectRules ?? [], designNotes: project.designNotes, developmentNotes: project.developmentNotes, relatedDocuments: project.relatedDocuments, memberUserIds: project.memberUserIds ?? project.members?.filter((member) => member.role === 'member').map((member) => member.userId) ?? [],
 })
 
-const projectTemplate = (source: AIDesktopProjectInput): ProjectTemplate => ({
-  format: 'hundred-ai-desktop-project',
-  version: 12,
-  project: {
-    name: source.name || '新しいプロジェクト',
-    summary: source.summary,
-    status: source.status,
-    developmentMode: source.developmentMode,
-    systemDiagramSource: source.systemDiagramSource,
-    fileStructure: source.fileStructure,
-    technologyStack: source.technologyStack,
-    databaseInfo: source.databaseInfo,
-    environmentSetup: source.environmentSetup,
-    commands: source.commands,
-    links: source.links,
-    developmentNotes: source.developmentNotes,
-    projectRules: source.projectRules,
+const projectData = (source: AIDesktopProjectInput): ProjectTemplateProject => ({
+  name: source.name || '新しいプロジェクト',
+  summary: source.summary,
+  status: source.status,
+  developmentMode: source.developmentMode,
+  systemDiagramSource: source.systemDiagramSource,
+  fileStructure: source.fileStructure,
+  technologyStack: source.technologyStack,
+  databaseInfo: source.databaseInfo,
+  environmentSetup: source.environmentSetup,
+  commands: source.commands,
+  links: source.links,
+  developmentNotes: source.developmentNotes,
+  projectRules: source.projectRules,
+})
+
+const projectTemplate = (source: AIDesktopProjectInput, projectId: string | null = null): ProjectTemplate => ({
+  format: 'hundred-ai-desktop',
+  version: 1,
+  resourceType: 'project',
+  target: { projectId },
+  data: { project: projectData(source) },
+})
+
+const projectExample: ProjectTemplateProject = {
+  name: 'サンプルWebアプリ',
+  summary: '利用者が情報を登録・検索できるWebアプリケーションです。Reactの画面からWorker APIを呼び出し、D1へデータを保存します。',
+  status: 'development',
+  developmentMode: 'personal',
+  systemDiagramSource: 'flowchart LR\n  User[ユーザー] --> Frontend[React]\n  Frontend --> API[Cloudflare Worker]\n  API --> DB[(Cloudflare D1)]',
+  fileStructure: 'sample-app/\n├── frontend/\n│   └── src/\n├── workers/\n│   └── api/\n└── README.md',
+  technologyStack: [{ name: 'React', description: '画面UIを実装します。', category: 'フロントエンド', ddl: '' }],
+  databaseInfo: [{ name: 'items', description: '利用者が登録した情報を保存します。', category: 'Cloudflare D1', ddl: 'CREATE TABLE items (\n  id TEXT PRIMARY KEY,\n  title TEXT NOT NULL,\n  created_at INTEGER NOT NULL\n);' }],
+  environmentSetup: {
+    summary: { os: 'macOS', runtime: 'Node.js 22', packageManager: 'npm', frontend: 'Vite', worker: 'Wrangler' },
+    prerequisites: [{ name: 'Node.js', version: '22', required: true, description: '開発サーバーとビルドに使用します。' }],
+    services: [{ name: 'Frontend', endpoint: 'http://localhost:5173', command: 'npm run dev' }],
+    steps: [{ title: '依存関係をインストール', description: 'frontendで実行します。', command: 'npm install' }],
+    variables: [{ name: 'VITE_API_ORIGIN', location: 'frontend/.env.local', required: true, description: 'APIの接続先です。' }],
+    checks: [{ label: '画面を開き、一覧を取得できることを確認する。' }],
+  },
+  commands: [{ name: 'フロントエンドを起動', description: 'Vite開発サーバーを起動します。', directory: 'frontend', command: 'npm run dev', environment: 'ローカル', category: '起動', pinned: true }],
+  links: [{ name: 'React公式ドキュメント', description: 'Reactの仕様を確認します。', type: '公式資料', url: 'https://react.dev/' }],
+  developmentNotes: '重要な調査結果や再開時に必要な情報を記載します。',
+  projectRules: [{ name: 'コミットメッセージ', description: '変更内容が分かる日本語で記載します。', category: 'Git', importance: 'required' }],
+}
+
+const projectEditingTemplate = (source: AIDesktopProjectInput, projectId: string | null = null): ProjectTemplate => ({
+  ...projectTemplate(source, projectId),
+  guide: {
+    purpose: 'HundredのProjectを新規作成または編集するためのJSONテンプレートです。実際に反映されるのはdata.projectだけです。guideとreferenceは説明用です。',
+    editableSection: 'data.project',
+    steps: [
+      'reference.exampleとreference.fieldDefinitionsを参考にdata.projectの各項目を入力します。',
+      'format、version、resourceType、target、dataのキー名と配列・オブジェクト構造を維持してJSONを保存します。',
+      'HundredのProject編集画面で「JSONをインポート」または「JSONから読み込む」を実行します。',
+      '編集画面へ反映された内容を確認し、「保存」を押してProjectへ反映します。',
+    ],
+    requiredFields: ['data.project.name', 'data.project.status', 'data.project.developmentMode'],
+    optionalFields: ['data.project.summary', 'data.project.systemDiagramSource', 'data.project.fileStructure', 'data.project.technologyStack', 'data.project.databaseInfo', 'data.project.environmentSetup', 'data.project.commands', 'data.project.links', 'data.project.developmentNotes', 'data.project.projectRules'],
+    managedInHundred: ['関連資料', 'メンバー'],
+    cautions: ['data.project以外はインポートされません。', '配列を使用しない場合も空配列[]を維持してください。', 'URLはhttp://またはhttps://から始めてください。', 'systemDiagramSourceにはMermaid flowchart構文を使用してください。'],
+  },
+  reference: {
+    allowedValues: { status: Object.keys(statusLabels), developmentMode: Object.keys(developmentModeLabels), ruleImportance: ['required', 'recommended'] },
+    fieldDefinitions: {
+      name: { description: 'プロジェクト名。必須です。', maxLength: 120 },
+      summary: { description: 'プロジェクトの概要。目的、対象、提供する価値を簡潔に記載します。', maxLength: 2_000 },
+      systemDiagramSource: { description: 'システム構成図として表示するMermaid flowchart構文です。', maxLength: 50_000 },
+      fileStructure: { description: '主要なフォルダとファイルの構成をツリー形式で記載します。', maxLength: 50_000 },
+      technologyStack: { item: { name: '技術名', description: '用途や採用理由', category: 'カテゴリ', ddl: '' } },
+      databaseInfo: { item: { name: 'テーブル名', description: '用途', category: 'データベース名や分類', ddl: 'CREATE TABLE ...' } },
+      environmentSetup: {
+        summary: { os: 'OS', runtime: '実行環境', packageManager: 'パッケージ管理', frontend: 'フロントエンド', worker: 'バックエンドやWorker' },
+        prerequisites: { item: { name: '前提ソフトウェア', version: 'バージョン', required: true, description: '説明' } },
+        services: { item: { name: 'サービス名', endpoint: '接続先', command: '起動コマンド' } },
+        steps: { item: { title: '手順名', description: '説明', command: '実行コマンド' } },
+        variables: { item: { name: '環境変数名', location: '設定場所', required: true, description: '用途' } },
+        checks: { item: { label: '動作確認項目' } },
+      },
+      commands: { item: { name: '表示名', description: '用途', directory: '実行場所', command: 'コマンド', environment: '環境', category: '分類', pinned: false } },
+      links: { item: { name: '表示名', description: '用途', type: '分類', url: 'https://...' } },
+      projectRules: { item: { name: 'ルール名', description: '内容', category: '分類', importance: 'required | recommended' } },
+    },
+    example: projectExample,
   },
 })
 
@@ -133,11 +203,20 @@ function parseProjectEnvironment(value: unknown): AIDesktopProjectEnvironment {
   }
 }
 
-function parseProjectTemplate(value: unknown): ProjectTemplate {
+function parseProjectTemplate(value: unknown): ProjectTemplateProject {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(AI_DESKTOP_MESSAGES.project.templateInvalid)
   const template = value as Record<string, unknown>
-  if (template.format !== 'hundred-ai-desktop-project' || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].includes(Number(template.version)) || !template.project || typeof template.project !== 'object' || Array.isArray(template.project)) throw new Error(AI_DESKTOP_MESSAGES.project.templateInvalid)
-  const source = template.project as Record<string, unknown>
+  let source: Record<string, unknown>
+  if (template.format === 'hundred-ai-desktop') {
+    if (template.version !== 1 || template.resourceType !== 'project') throw new Error(template.resourceType === 'content' ? AI_DESKTOP_MESSAGES.project.wrongResourceType : AI_DESKTOP_MESSAGES.project.templateInvalid)
+    if (!template.data || typeof template.data !== 'object' || Array.isArray(template.data)) throw new Error(AI_DESKTOP_MESSAGES.project.templateInvalid)
+    const data = template.data as Record<string, unknown>
+    if (!data.project || typeof data.project !== 'object' || Array.isArray(data.project)) throw new Error(AI_DESKTOP_MESSAGES.project.templateInvalid)
+    source = data.project as Record<string, unknown>
+  } else {
+    if (template.format !== 'hundred-ai-desktop-project' || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].includes(Number(template.version)) || !template.project || typeof template.project !== 'object' || Array.isArray(template.project)) throw new Error(AI_DESKTOP_MESSAGES.project.templateInvalid)
+    source = template.project as Record<string, unknown>
+  }
   const requiredText = (key: string, max: number, allowEmpty = false) => {
     const field = source[key]
     if (typeof field !== 'string' || (!allowEmpty && !field.trim()) || field.length > max) throw new Error(AI_DESKTOP_MESSAGES.project.templateInvalid)
@@ -190,12 +269,9 @@ function parseProjectTemplate(value: unknown): ProjectTemplate {
   }
   if (!Object.hasOwn(statusLabels, String(source.status)) || !Object.hasOwn(developmentModeLabels, String(source.developmentMode))) throw new Error(AI_DESKTOP_MESSAGES.project.templateInvalid)
   return {
-    format: 'hundred-ai-desktop-project', version: 12,
-    project: {
-      name: requiredText('name', 120), summary: requiredText('summary', 2_000, true),
-      status: String(source.status) as AIDesktopProjectStatus, developmentMode: String(source.developmentMode) as AIDesktopProjectDevelopmentMode,
-      systemDiagramSource: requiredText('systemDiagramSource', 50_000, true), fileStructure: source.fileStructure === undefined ? '' : requiredText('fileStructure', 50_000, true), technologyStack: detailList('technologyStack', 100), databaseInfo: detailList('databaseInfo', 100), environmentSetup: source.environmentSetup === undefined ? blankProjectEnvironment() : parseProjectEnvironment(source.environmentSetup), commands: commandList(), links: linkList(), developmentNotes: source.developmentNotes === undefined ? '' : requiredText('developmentNotes', 50_000, true), projectRules: source.projectRules === undefined ? [] : ruleList(),
-    },
+    name: requiredText('name', 120), summary: requiredText('summary', 2_000, true),
+    status: String(source.status) as AIDesktopProjectStatus, developmentMode: String(source.developmentMode) as AIDesktopProjectDevelopmentMode,
+    systemDiagramSource: requiredText('systemDiagramSource', 50_000, true), fileStructure: source.fileStructure === undefined ? '' : requiredText('fileStructure', 50_000, true), technologyStack: detailList('technologyStack', 100), databaseInfo: detailList('databaseInfo', 100), environmentSetup: source.environmentSetup === undefined ? blankProjectEnvironment() : parseProjectEnvironment(source.environmentSetup), commands: commandList(), links: linkList(), developmentNotes: source.developmentNotes === undefined ? '' : requiredText('developmentNotes', 50_000, true), projectRules: source.projectRules === undefined ? [] : ruleList(),
   }
 }
 
@@ -513,15 +589,71 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
   }
   const removeMember = (userId: string) => setDraft((current) => ({ ...current, memberUserIds: current.memberUserIds.filter((candidate) => candidate !== userId) }))
 
-  const downloadTemplate = () => {
-    const blob = new Blob([`${JSON.stringify(projectTemplate(draft), null, 2)}\n`], { type: 'application/json' })
+  const downloadProjectJson = (payload = projectTemplate(draft, project?.id ?? null), fileName = 'Hundred_Project.json', message: string | null = AI_DESKTOP_MESSAGES.project.jsonDownloaded) => {
+    const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = 'Hundred_Project_雛形.json'
+    anchor.download = fileName
     anchor.click()
     URL.revokeObjectURL(url)
-    showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.project.templateDownloaded)
+    if (message) showAIDesktopNotification('success', message)
+  }
+
+  const downloadProjectTemplate = () => {
+    downloadProjectJson(projectEditingTemplate(draft, project?.id ?? null), 'Hundred_Project_テンプレート.json', AI_DESKTOP_MESSAGES.project.templateDownloaded)
+  }
+
+  const applyTemplate = async (content: string) => {
+    const importedProject = parseProjectTemplate(JSON.parse(content) as unknown)
+    if (importedProject.systemDiagramSource.trim() && !await validateMermaidSource('flowchart', importedProject.systemDiagramSource)) throw new Error(AI_DESKTOP_MESSAGES.project.templateMermaidInvalid)
+    setDraft((current) => ({ ...current, ...importedProject }))
+  }
+
+  const writeWorkspaceTemplate = async () => {
+    if (!window.confirm(`現在のProject情報をJSONへ書き出しますか？\n\n選択中のJSONは上書きされます。`)) return
+    try {
+      const name = await writeWorkspaceJsonFile(`${JSON.stringify(projectEditingTemplate(draft, project?.id ?? null), null, 2)}\n`)
+      showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.project.workspaceWritten(name))
+    } catch (error) {
+      if (isWorkspaceJsonFileCancelled(error)) return
+      if (!supportsWorkspaceJsonFile()) {
+        downloadProjectJson(projectEditingTemplate(draft, project?.id ?? null), 'Hundred_Project_テンプレート.json', null)
+        showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.project.workspaceUnsupported)
+        return
+      }
+      showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.project.workspaceWriteFailed)
+    }
+  }
+
+  const readWorkspaceTemplate = async () => {
+    if (!window.confirm(`JSONのProject情報を編集画面へ読み込みますか？\n\n現在の未保存の編集内容は置き換えられます。`)) return
+    if (!supportsWorkspaceJsonFile()) {
+      importInputRef.current?.click()
+      return
+    }
+    try {
+      const file = await readWorkspaceJsonFile()
+      await applyTemplate(file.content)
+      showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.project.workspaceRead(file.name))
+    } catch (error) {
+      if (isWorkspaceJsonFileCancelled(error)) return
+      showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.project.workspaceReadFailed))
+    }
+  }
+
+  const changeWorkspaceFile = async () => {
+    if (!supportsWorkspaceJsonFile()) {
+      showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.project.workspaceUnsupported)
+      return
+    }
+    try {
+      const name = await selectWorkspaceJsonFile()
+      showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.project.workspaceSelected(name))
+    } catch (error) {
+      if (isWorkspaceJsonFileCancelled(error)) return
+      showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.project.workspaceSelectFailed)
+    }
   }
 
   const importTemplate = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -529,9 +661,7 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
     event.currentTarget.value = ''
     if (!file) return
     try {
-      const template = parseProjectTemplate(JSON.parse(await file.text()) as unknown)
-      if (template.project.systemDiagramSource.trim() && !await validateMermaidSource('flowchart', template.project.systemDiagramSource)) throw new Error(AI_DESKTOP_MESSAGES.project.templateMermaidInvalid)
-      setDraft((current) => ({ ...current, ...template.project }))
+      await applyTemplate(await file.text())
       showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.project.templateImported)
     } catch (error) {
       showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.project.templateInvalid))
@@ -648,7 +778,31 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
   return <div className="ad-projects">
     <aside className="ad-project-list"><header><div><small>PROJECT WORKSPACE</small><h1>Projects</h1></div><button type="button" onClick={startCreate}>＋ 新規</button></header><div className="ad-project-list-body">{loading && projects.length === 0 ? <p>読み込んでいます…</p> : projects.length === 0 ? <div className="ad-project-empty"><span>◇</span><strong>プロジェクトがありません</strong></div> : projects.map((item) => <button type="button" key={item.id} className={item.id === selectedId ? 'active' : ''} onClick={() => selectProject(item.id)}><span className={`status ${item.status}`}>{statusLabels[item.status]}</span><strong>{item.name}</strong><small>{developmentModeLabels[item.developmentMode]} ・ {new Date(item.updatedAt).toLocaleDateString('ja-JP')}</small></button>)}</div></aside>
     <main className="ad-project-main">{!creating && !project ? <div className="ad-project-welcome"><span>◆</span><h2>プロジェクトを選択してください</h2><button type="button" onClick={startCreate}>新しいプロジェクトを作成</button></div> : <>
-      <header className="ad-project-header"><div><small>{creating ? 'NEW PROJECT' : `PROJECT · ${developmentModeLabels[draft.developmentMode]}`}</small><h2>{draft.name || '新しいプロジェクト'}</h2></div><nav>{project && <button type="button" className={view === 'dashboard' ? 'active' : ''} onClick={() => { if (dirty && !window.confirm('保存していない変更があります。変更を破棄してダッシュボードへ移動しますか？')) return; if (dirty) setDraft(projectInput(project)); setView('dashboard') }}>ダッシュボード</button>}{project && project.canEdit !== false && <button type="button" className={view === 'edit' ? 'active' : ''} onClick={() => setView('edit')}>編集</button>}<button type="button" onClick={() => void copyProjectInfo()} disabled={!draft.name.trim()}>Project情報をコピー</button>{project && project.canEdit !== false && view === 'edit' && <button type="button" className="danger" onClick={() => void remove()} disabled={saving}>削除</button>}{view === 'edit' && (creating || project?.canEdit !== false) && <><button type="button" onClick={downloadTemplate}>雛形をダウンロード</button><button type="button" onClick={() => importInputRef.current?.click()}>JSONをインポート</button><button type="button" className="primary" onClick={() => void save()} disabled={!draft.name.trim() || saving || (!dirty && !creating)}>{saving ? '保存中…' : '保存'}</button><input ref={importInputRef} className="ad-project-import-input" type="file" accept="application/json,.json" onChange={(event) => void importTemplate(event)} /></>}</nav></header>
+      <header className="ad-project-header">
+        <div className="ad-project-header-title"><small>{creating ? 'NEW PROJECT' : `PROJECT · ${developmentModeLabels[draft.developmentMode]}`}</small><h2>{draft.name || '新しいプロジェクト'}</h2></div>
+        <nav className="ad-project-toolbar">
+          {project && <div className="ad-project-view-switch" aria-label="Projectの表示モード">
+            <button type="button" className={view === 'dashboard' ? 'active' : ''} onClick={() => { if (dirty && !window.confirm('保存していない変更があります。変更を破棄してダッシュボードへ移動しますか？')) return; if (dirty) setDraft(projectInput(project)); setView('dashboard') }}>ダッシュボード</button>
+            {project.canEdit !== false && <button type="button" className={view === 'edit' ? 'active' : ''} onClick={() => setView('edit')}>編集</button>}
+          </div>}
+          <div className="ad-project-toolbar-actions">
+            <button type="button" onClick={() => void copyProjectInfo()} disabled={!draft.name.trim()}>コンテキストをコピー</button>
+            {view === 'edit' && (creating || project?.canEdit !== false) && <>
+              {(dirty || creating) && <span className="ad-project-unsaved"><i />未保存</span>}
+              <details className="ad-project-json-menu ad-project-json-menu--labeled">
+                <summary>JSON連携 <span aria-hidden="true">⌄</span></summary>
+                <div>
+                  <section><strong>連携ファイル</strong><button type="button" onClick={() => void writeWorkspaceTemplate()}>JSONへ書き出す</button><button type="button" onClick={() => void readWorkspaceTemplate()}>JSONから読み込む</button><button type="button" onClick={() => void changeWorkspaceFile()}>連携ファイルを変更</button></section>
+                  <section><strong>ファイル操作</strong><button type="button" onClick={() => downloadProjectJson()}>JSONをダウンロード</button><button type="button" onClick={() => importInputRef.current?.click()}>JSONをインポート</button><button type="button" onClick={downloadProjectTemplate}>テンプレートをダウンロード</button></section>
+                  {project && <section className="danger-zone"><button type="button" className="danger" onClick={() => void remove()} disabled={saving}>Projectを削除</button></section>}
+                </div>
+              </details>
+              <button type="button" className="primary" onClick={() => void save()} disabled={!draft.name.trim() || saving || (!dirty && !creating)}>{saving ? '保存中…' : '保存'}</button>
+              <input ref={importInputRef} className="ad-project-import-input" type="file" accept="application/json,.json" onChange={(event) => void importTemplate(event)} />
+            </>}
+          </div>
+        </nav>
+      </header>
       {view === 'dashboard' && project ? <div className="ad-project-scroll ad-project-dashboard">
         <section className="ad-project-dashboard-summary"><div className="ad-project-summary-content"><header><small>OVERVIEW</small><h3>概要</h3></header>{draft.summary ? <p>{draft.summary}</p> : <EmptyValue>概要はまだ登録されていません。</EmptyValue>}</div><dl><div><dt>開発体制</dt><dd>{developmentModeLabels[draft.developmentMode]}</dd></div><div><dt>状態</dt><dd>{statusLabels[draft.status]}</dd></div></dl></section>
         <section className="ad-project-architecture"><header><div><small>PROJECT MAP</small><h3>全体図</h3></div>{architectureTabs}</header>{architectureTab === 'system' ? (draft.systemDiagramSource.trim() ? <MermaidDiagram id={`project-${project.id}`} kind="flowchart" title="" source={draft.systemDiagramSource} /> : <EmptyValue>システム構成図はまだ登録されていません。</EmptyValue>) : (draft.fileStructure.trim() ? <pre className="ad-project-file-structure">{draft.fileStructure}</pre> : <EmptyValue>ファイル構成はまだ登録されていません。</EmptyValue>)}</section>

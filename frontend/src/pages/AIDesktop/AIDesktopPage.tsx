@@ -14,6 +14,7 @@ import ProjectsApp from './ProjectsApp'
 import { AI_DESKTOP_MESSAGES, localizedErrorMessage } from './aiDesktopMessages'
 import AIDesktopNotifications from './AIDesktopNotifications'
 import { showAIDesktopNotification } from './aiDesktopNotificationBus'
+import { isWorkspaceJsonFileCancelled, readWorkspaceJsonFile, selectWorkspaceJsonFile, supportsWorkspaceJsonFile, writeWorkspaceJsonFile } from './workspaceJsonFile'
 import '../../styles/AIDesktop/ai-desktop.css'
 import '../../styles/AIDesktop/ai-desktop-projects.css'
 import '../../styles/Hundred/hundred-login-status.css'
@@ -115,6 +116,36 @@ const validateContentDiagrams = async (blocks: ContentBlock[]): Promise<boolean>
   return true
 }
 
+const contentTemplateGuide = {
+  purpose: 'Hundredの選択中コンテンツを作成・編集するためのJSONテンプレートです。実際に反映されるのはdata.contentとdata.glossaryです。guideとreferenceは説明用です。',
+  prerequisites: ['Hundredで資料、カテゴリ、コンテンツを作成し、編集したいコンテンツを選択してください。'],
+  steps: [
+    'reference.exampleとreference.blockTemplatesを参考にdata.content.navTitleとdata.content.blocksを編集します。',
+    '必要な用語がある場合はdata.glossaryへ追加します。',
+    'format、version、resourceType、target、dataのキー名とid・type・data構造を維持してJSONを保存します。',
+    'Hundredのコンテンツ編集画面で「JSONをインポート」または「JSONから読み込む」を実行します。',
+    '編集画面へ反映された内容を確認し、「DBへ保存」を押して資料へ反映します。',
+  ],
+  requiredFields: ['data.content.id', 'data.content.navTitle', 'data.content.blocks', '各blockのid・type・data'],
+  optionalFields: ['data.glossary'],
+  screenOnlyFields: ['資料名', 'カテゴリ名', '所属グループ', 'アイコン', '公開・非公開設定'],
+  cautions: ['data以外は本文として読み込まれません。', '新しいブロックのidは重複しない値に変更してください。', 'targetのserviceIdとcategoryIdは変更しないでください。'],
+}
+
+const contentTemplateExample = {
+  glossary: [{ id: 'term-api', term: 'API', description: 'アプリケーション同士が情報をやり取りするための仕組みです。' }],
+  content: {
+    id: 'example-content',
+    navTitle: 'Webアプリケーションの基本',
+    blocks: [
+      { id: 'heading-overview', type: 'heading', data: { text: 'Webアプリケーションの基本', level: 1 } },
+      { id: 'text-overview', type: 'text', data: { text: 'ブラウザから利用できるアプリケーションの構成と役割を説明します。' } },
+      { id: 'callout-point', type: 'callout', data: { tone: 'tip', title: 'ポイント', text: '利用者、画面、API、データベースの流れで整理すると理解しやすくなります。' } },
+      { id: 'diagram-system', type: 'diagram', data: { kind: 'flowchart', title: '基本構成', source: 'flowchart LR\n  User[利用者] --> Frontend[画面]\n  Frontend --> API[API]\n  API --> DB[(Database)]', caption: '一般的なWebアプリケーションの構成例' } },
+    ],
+  },
+}
+
 function ServiceHome({ service, mode, canEdit, publicationStatus, publicationBusy, onMaterialList, onPublication, onMode, onCategory, onAddCategory, onUpdateService }: { service: ServiceConfig; mode: ServiceMode; canEdit: boolean; publicationStatus?: 'draft' | 'published' | 'unpublished'; publicationBusy?: boolean; onMaterialList: () => void; onPublication?: () => void; onMode: (mode: ServiceMode) => void; onCategory: (id: string) => void; onAddCategory: (groupId: string) => void; onUpdateService: (service: ServiceConfig) => void }) {
   const [draggedCategoryId, setDraggedCategoryId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<{ groupId: string; categoryId: string | null } | null>(null)
@@ -179,20 +210,53 @@ function CategoryEditor({ serviceId, service, category, groupId, initialSelected
   const updateGlossary = (index: number, changes: Partial<GlossaryEntry>) => setGlossary((current) => current.map((entry, candidateIndex) => candidateIndex === index ? { ...entry, ...changes } : entry))
   const addGlossaryEntry = () => { setGlossary((current) => [...current, { id: `term-${Date.now()}`, term: '', description: '' }]); setGlossaryOpen(true) }
   const currentContentPayload = () => selectedItem ? { format: 'hundred-ai-desktop-content', version: 1, target: { serviceId, categoryId: category.id, contentId: selectedItem.id, source: 'published', databaseTarget: import.meta.env.DEV ? 'local' : 'remote' }, instructions: ['content内の文章とブロックを編集し、id・type・data構造を維持してください。', 'glossaryはカテゴリ共通の用語一覧です。必要な用語の追加・編集・削除ができます。各用語は重複しないid、term、descriptionを維持してください。', 'カテゴリ名、説明、所属グループ、アイコンなどのカテゴリ設定は変更しないでください。', 'ページ幅はウィンドウに合わせて自動調整されます。pageWidthは設定しないでください。', 'calloutのtoneはinfo・warning・tip、表の列widthは10〜100です。'], glossary, content: withAutomaticPageLayout({ ...selectedItem, blocks: normalizeTableWidths(withoutPageGlossary(selectedItem.blocks)) }) } : null
+  const contentJsonData = () => selectedItem ? { glossary, content: withAutomaticPageLayout({ ...selectedItem, blocks: normalizeTableWidths(withoutPageGlossary(selectedItem.blocks)) }) } : null
+  const contentExportPayload = () => {
+    const data = contentJsonData()
+    return data ? { format: 'hundred-ai-desktop', version: 1, resourceType: 'content', target: { serviceId, categoryId: category.id, contentId: selectedItem!.id, source: 'published', databaseTarget: import.meta.env.DEV ? 'local' : 'remote' }, data } : null
+  }
   const refreshDraftHistory = async () => { if (!selectedItem) { setDraftHistory([]); setSelectedDraftHistoryId(null); return [] } const { history } = await listAIDesktopContentDraftHistory(serviceId, category.id, selectedItem.id); setDraftHistory(history); setSelectedDraftHistoryId((current) => history.some((entry) => entry.id === current && entry.hasPreview) ? current : history.find((entry) => entry.hasPreview)?.id ?? null); return history }
   const openDraftDialog = async () => { setDraftDialogOpen(true); setDraftBusy(true); try { await refreshDraftHistory() } catch (error) { showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.draft.historyLoadFailed)) } finally { setDraftBusy(false) } }
-  const saveContentDraft = async () => { const payload = currentContentPayload(); if (!selectedItem || !payload) return; setDraftBusy(true); try { if (!await validateContentDiagrams(selectedItem.blocks)) throw new Error('Mermaid構文が正しくない技術図があります。構文プレビューを確認してください。'); const { draft } = await saveAIDesktopContentDraft('content', serviceId, category.id, payload, selectedItem.id, contentDraftRevisions[selectedItem.id] || undefined); setContentDraftRevisions((current) => ({ ...current, [selectedItem.id]: draft.revision })); await refreshDraftHistory(); showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.draft.saved(draft.revision)) } catch (error) { showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.draft.saveFailed)) } finally { setDraftBusy(false) } }
+  const saveContentDraft = async () => { const payload = currentContentPayload(); if (!selectedItem || !payload || !window.confirm(`「${selectedItem.navTitle || '名称未設定'}」の現在の編集内容を下書きとして保存しますか？\n\n正式な資料にはまだ反映されません。`)) return; setDraftBusy(true); try { if (!await validateContentDiagrams(selectedItem.blocks)) throw new Error('Mermaid構文が正しくない技術図があります。構文プレビューを確認してください。'); const { draft } = await saveAIDesktopContentDraft('content', serviceId, category.id, payload, selectedItem.id, contentDraftRevisions[selectedItem.id] || undefined); setContentDraftRevisions((current) => ({ ...current, [selectedItem.id]: draft.revision })); await refreshDraftHistory(); showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.draft.saved(draft.revision)) } catch (error) { showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.draft.saveFailed)) } finally { setDraftBusy(false) } }
   const readDraftHistory = async (entry: AIDesktopDraftHistoryEntry) => { const { history } = await getAIDesktopContentDraftHistory<unknown>(serviceId, category.id, entry.id); if (!isRecord(history.payload) || history.payload.format !== 'hundred-ai-desktop-content' || history.payload.version !== 1) throw new Error('FORMAT'); const item = importedContent(history.payload.content); if (!item) throw new Error('CONTENT'); const previewGlossary = history.payload.glossary === undefined ? null : importedGlossary(history.payload.glossary); if (history.payload.glossary !== undefined && !previewGlossary) throw new Error('GLOSSARY'); return { item: { ...item, blocks: normalizeTableWidths(withoutPageGlossary(item.blocks)) }, glossary: previewGlossary, contentId: history.contentId, revision: history.revision, savedAt: history.savedAt } }
   const previewDraftHistory = async (entry: AIDesktopDraftHistoryEntry) => { if (!entry.hasPreview) return; setSelectedDraftHistoryId(entry.id); setDraftBusy(true); try { setDraftPreview(await readDraftHistory(entry)) } catch (error) { showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.draft.previewFailed)) } finally { setDraftBusy(false) } }
   const applyDraft = (draft: { item: ContentItem; glossary: GlossaryEntry[] | null; contentId: string; revision: number; savedAt: number }) => { updateItem({ ...draft.item, id: draft.contentId }); if (draft.glossary) setGlossary(draft.glossary); setSelectedItemId(draft.contentId); setContentDraftRevisions((current) => ({ ...current, [draft.contentId]: draft.revision })); setDraftPreview(null); setDraftDialogOpen(false); setPageEditorOpen(true); setSaveState('idle'); showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.draft.applied(Boolean(draft.glossary))) }
   const applyDraftPreview = () => { if (draftPreview) applyDraft(draftPreview) }
   const applySelectedDraftHistory = async () => { const entry = draftHistory.find((candidate) => candidate.id === selectedDraftHistoryId && candidate.hasPreview); if (!entry) return; setDraftBusy(true); try { applyDraft(await readDraftHistory(entry)) } catch (error) { showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.draft.loadFailed)) } finally { setDraftBusy(false) } }
   const deleteDraftHistory = async () => { if (!selectedItem || !draftHistory.length || !window.confirm(`「${selectedItem.navTitle || '名称未設定'}」の下書き履歴をすべて削除しますか？\n現在の下書きは残り、次回の保存は第1版になります。`)) return; const contentId = selectedItem.id; setDraftBusy(true); try { await deleteAIDesktopContentDraftHistory(serviceId, category.id, contentId); setDraftHistory([]); setSelectedDraftHistoryId(null); setContentDraftRevisions((current) => ({ ...current, [contentId]: 0 })); showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.draft.historyDeleted) } catch (error) { showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.draft.historyDeleteFailed)) } finally { setDraftBusy(false) } }
+  const contentEditingTemplate = () => {
+    const payload = contentExportPayload()
+    if (!payload) return null
+    const catalog = createContentBlockCatalog()
+    return {
+      ...payload,
+      guide: contentTemplateGuide,
+      reference: {
+        allowedValues: { blockTypes: catalog.allowedTypes, nestedBlockTypes: catalog.nestedAllowedTypes, calloutTones: ['info', 'warning', 'tip'], badgeTones: ['neutral', 'info', 'success', 'warning', 'danger'] },
+        fieldDefinitions: {
+          content: '選択中ページのタイトルとブロックです。id、navTitle、blocksを維持してください。',
+          glossary: 'カテゴリ内で共有する用語一覧です。各項目に重複しないid、term、descriptionを設定します。',
+          blocks: '各ブロックは重複しないid、許可されたtype、typeに対応するdataを持ちます。',
+        },
+        blockTemplates: catalog.templates,
+        example: contentTemplateExample,
+      },
+    }
+  }
+  const downloadContentJson = (payload: unknown, fileName: string, message?: string) => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }))
+    const anchor = document.createElement('a'); anchor.href = url; anchor.download = fileName; anchor.click(); window.setTimeout(() => URL.revokeObjectURL(url), 0)
+    if (message) showAIDesktopNotification('success', message)
+  }
+  const downloadCurrentContentJson = () => {
+    if (!selectedItem) return
+    const payload = contentExportPayload()
+    if (payload) downloadContentJson(payload, `${selectedItem.navTitle.trim().replace(/[/:*?"<>|]/g, '-') || 'content'}.json`, AI_DESKTOP_MESSAGES.content.jsonDownloaded)
+  }
   const downloadContentTemplate = () => {
     if (!selectedItem) return
-    const payload = { format: 'hundred-ai-desktop-content', version: 1, target: { serviceId, categoryId: category.id, contentId: selectedItem.id, source: 'published', databaseTarget: import.meta.env.DEV ? 'local' : 'remote' }, instructions: ['content内の文章やブロックを編集してください。', 'glossaryはカテゴリ共通の用語一覧です。必要な用語の追加・編集・削除ができます。各用語には重複しないidと、term、descriptionを必ず設定してください。', 'カテゴリ名、説明、所属グループ、アイコンなどのカテゴリ設定は変更しないでください。', 'ページ幅はウィンドウに合わせて自動調整されます。pageWidthは設定しないでください。', 'content.blocksへブロックを追加する場合はblockCatalog.templatesの構造見本を利用してください。', '使用できるtypeはblockCatalog.allowedTypesのみです。2カラム内ではblockCatalog.nestedAllowedTypesのみ使用できます。', 'blockCatalogのexample-で始まる見本IDは、重複しない新しいIDへ変更してください。2カラム内ではblockCatalog.nestedAllowedTypesだけを使用してください。', 'blockCatalogは参照情報であり、本文としてはインポートされません。', 'id、type、dataの構造は変更しないでください。', 'calloutのtoneは補足=info、注意=warning、ヒント=tipです。titleには内容固有の短い見出しを設定してください。', 'badgeは独立ブロックではありません。cardまたはstepsのitems内へ設定し、toneはneutral・info・success・warning・dangerから選んでください。', 'diagram.sourceにはdiagram.kindと一致する有効なMermaid構文を設定してください。diagramは2カラム内に配置できません。', '表の各列widthは10から100の範囲で設定してください。', '完成後、このJSONファイルをそのままインポートしてください。'], glossary, blockCatalog: createContentBlockCatalog(), content: withAutomaticPageLayout({ ...selectedItem, blocks: withoutPageGlossary(selectedItem.blocks) }) }
-    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }))
-    const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${selectedItem.navTitle.trim().replace(/[\\/:*?"<>|]/g, '-') || 'content'}-template.json`; anchor.click(); window.setTimeout(() => URL.revokeObjectURL(url), 0)
+    const payload = contentEditingTemplate()
+    if (payload) downloadContentJson(payload, `${selectedItem.navTitle.trim().replace(/[/:*?"<>|]/g, '-') || 'content'}-template.json`, AI_DESKTOP_MESSAGES.content.templateDownloaded)
   }
   const copyContentTarget = async () => {
     if (!selectedItem) return
@@ -220,40 +284,95 @@ ${targetJson}
     }
     showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.content.targetCopied)
   }
-  const importContentTemplate = () => {
+  const showContentImportError = (error: unknown) => {
+    if (error instanceof Error && error.message.startsWith('TARGET_SCOPE:')) {
+      const actual = error.message.slice('TARGET_SCOPE:'.length)
+      showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.content.differentTarget(actual, `${serviceId}/${category.id}`))
+      return
+    }
+    showAIDesktopNotification('error', error instanceof Error && error.message === 'RESOURCE_TYPE' ? AI_DESKTOP_MESSAGES.content.wrongResourceType : error instanceof Error && error.message === 'TARGET_FORMAT' ? AI_DESKTOP_MESSAGES.content.invalidTarget : error instanceof Error && error.message === 'MERMAID' ? AI_DESKTOP_MESSAGES.content.mermaidImportInvalid : AI_DESKTOP_MESSAGES.content.invalidTemplate)
+  }
+  const applyContentJson = async (text: string) => {
+    if (!selectedItem) return false
+    const payload = JSON.parse(text) as unknown
+    if (!isRecord(payload) || payload.version !== 1) throw new Error('FORMAT')
+    let data: Record<string, unknown>
+    if (payload.format === 'hundred-ai-desktop') {
+      if (payload.resourceType !== 'content') throw new Error(payload.resourceType === 'project' ? 'RESOURCE_TYPE' : 'FORMAT')
+      if (!isRecord(payload.data)) throw new Error('FORMAT')
+      data = payload.data
+    } else if (payload.format === 'hundred-ai-desktop-content') {
+      data = payload
+    } else {
+      throw new Error('FORMAT')
+    }
+    const target = payload.target
+    if (target !== undefined && (!isRecord(target) || typeof target.serviceId !== 'string' || typeof target.categoryId !== 'string' || typeof target.contentId !== 'string')) throw new Error('TARGET_FORMAT')
+    if (isRecord(target) && (target.serviceId !== serviceId || target.categoryId !== category.id)) throw new Error(`TARGET_SCOPE:${target.serviceId}/${target.categoryId}`)
+    const imported = importedContent(data.content)
+    if (!imported) throw new Error('CONTENT')
+    if (!await validateContentDiagrams(imported.blocks)) throw new Error('MERMAID')
+    const targetId = selectedItem.id
+    const nextGlossary = data.glossary === undefined ? null : importedGlossary(data.glossary)
+    if (data.glossary !== undefined && !nextGlossary) throw new Error('GLOSSARY')
+    const next = withAutomaticPageLayout({ ...imported, id: targetId, blocks: normalizeTableWidths(withoutPageGlossary(imported.blocks)) })
+    updateItem(next)
+    setSelectedItemId(targetId)
+    if (nextGlossary) setGlossary(nextGlossary)
+    setSaveState('idle')
+    return Boolean(nextGlossary)
+  }
+  const importContentJson = () => {
     if (!selectedItem) return
     const picker = document.createElement('input'); picker.type = 'file'; picker.accept = 'application/json,.json'
     picker.onchange = () => {
       const file = picker.files?.[0]
       if (!file) return
       void file.text().then(async (text) => {
-        const payload = JSON.parse(text) as unknown
-        if (!isRecord(payload) || payload.format !== 'hundred-ai-desktop-content' || payload.version !== 1) throw new Error('FORMAT')
-        const target = payload.target
-        if (target !== undefined && (!isRecord(target) || typeof target.serviceId !== 'string' || typeof target.categoryId !== 'string' || typeof target.contentId !== 'string')) throw new Error('TARGET_FORMAT')
-        if (isRecord(target) && (target.serviceId !== serviceId || target.categoryId !== category.id)) throw new Error(`TARGET_SCOPE:${target.serviceId}/${target.categoryId}`)
-        const imported = importedContent(payload.content)
-        if (!imported) throw new Error('CONTENT')
-        if (!await validateContentDiagrams(imported.blocks)) throw new Error('MERMAID')
-        const targetId = selectedItem.id
-        const nextGlossary = payload.glossary === undefined ? null : importedGlossary(payload.glossary)
-        if (payload.glossary !== undefined && !nextGlossary) throw new Error('GLOSSARY')
-        const next = withAutomaticPageLayout({ ...imported, id: targetId, blocks: normalizeTableWidths(withoutPageGlossary(imported.blocks)) })
-        updateItem(next)
-        setSelectedItemId(targetId)
-        if (nextGlossary) setGlossary(nextGlossary)
-        setSaveState('idle')
-        showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.draft.applied(Boolean(nextGlossary)))
-      }).catch((error) => {
-        if (error instanceof Error && error.message.startsWith('TARGET_SCOPE:')) {
-          const actual = error.message.slice('TARGET_SCOPE:'.length)
-          showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.content.differentTarget(actual, `${serviceId}/${category.id}`))
-          return
-        }
-        showAIDesktopNotification('error', error instanceof Error && error.message === 'TARGET_FORMAT' ? AI_DESKTOP_MESSAGES.content.invalidTarget : error instanceof Error && error.message === 'MERMAID' ? AI_DESKTOP_MESSAGES.content.mermaidImportInvalid : AI_DESKTOP_MESSAGES.content.invalidTemplate)
-      })
+        const withGlossary = await applyContentJson(text)
+        showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.draft.applied(withGlossary))
+      }).catch(showContentImportError)
     }
     picker.click()
+  }
+  const writeContentWorkspaceJson = async () => {
+    const payload = contentEditingTemplate()
+    if (!selectedItem || !payload || !window.confirm(`現在のコンテンツをJSONへ書き出しますか？\n\n選択中のJSONは上書きされます。`)) return
+    try {
+      const name = await writeWorkspaceJsonFile(`${JSON.stringify(payload, null, 2)}\n`)
+      showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.project.workspaceWritten(name))
+    } catch (error) {
+      if (isWorkspaceJsonFileCancelled(error)) return
+      if (!supportsWorkspaceJsonFile()) {
+        downloadContentJson(payload, `${selectedItem.navTitle.trim().replace(/[/:*?"<>|]/g, '-') || 'content'}-template.json`)
+        showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.project.workspaceUnsupported)
+        return
+      }
+      showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.project.workspaceWriteFailed)
+    }
+  }
+  const readContentWorkspaceJson = async () => {
+    if (!selectedItem || !window.confirm(`JSONのコンテンツ情報を編集画面へ読み込みますか？\n\n現在の未保存の編集内容は置き換えられます。`)) return
+    if (!supportsWorkspaceJsonFile()) { importContentJson(); return }
+    try {
+      const file = await readWorkspaceJsonFile()
+      await applyContentJson(file.content)
+      showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.project.workspaceRead(file.name))
+    } catch (error) {
+      if (isWorkspaceJsonFileCancelled(error)) return
+      if (error instanceof Error && (error.message.startsWith('TARGET_SCOPE:') || ['RESOURCE_TYPE', 'TARGET_FORMAT', 'MERMAID', 'FORMAT', 'CONTENT', 'GLOSSARY'].includes(error.message))) { showContentImportError(error); return }
+      showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.project.workspaceReadFailed)
+    }
+  }
+  const changeContentWorkspaceJson = async () => {
+    if (!supportsWorkspaceJsonFile()) { showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.project.workspaceUnsupported); return }
+    try {
+      const name = await selectWorkspaceJsonFile()
+      showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.project.workspaceSelected(name))
+    } catch (error) {
+      if (isWorkspaceJsonFileCancelled(error)) return
+      showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.project.workspaceSelectFailed)
+    }
   }
   const save = async () => {
     setSaveState('saving')
@@ -276,7 +395,23 @@ ${targetJson}
       setSaveState('idle')
     }
   }
-  return <div className="ad-category-editor"><header className="ad-content-head ad-category-editor-head"><div><p className="ad-eyebrow">{service.name.toUpperCase()} / PAGE EDITOR</p><h1>カテゴリを編集</h1></div><div className="ad-home-controls"><div className="ad-mode-switch" aria-label="詳細カテゴリの表示モード"><button type="button" onClick={switchToView}>閲覧</button><button type="button" className="active" aria-current="page">編集</button></div><button type="button" className="ad-editor-header-back" onClick={backToCategories}>一覧へ戻る</button><button type="button" className="ad-editor-header-delete" onClick={onDelete}>カテゴリを削除</button><button type="button" className="ad-editor-header-save" disabled={!canSave || saveState === 'saving'} onClick={() => void save()}>{saveState === 'saving' ? '保存中…' : 'DBへ保存'}</button></div></header><section className={`ad-category-settings ${categorySettingsOpen ? 'open' : ''}`}><button type="button" className="ad-category-settings-toggle" aria-expanded={categorySettingsOpen} onClick={() => setCategorySettingsOpen((current) => !current)}><span><strong>カテゴリ設定</strong><small>{title.trim() || 'カテゴリ名未設定'} ・ {service.categoryGroups.find((group) => group.id === targetGroupId)?.title ?? '所属グループ未設定'}</small></span><i>{categorySettingsOpen ? '−' : '＋'}</i></button>{categorySettingsOpen && <div className="ad-editor-grid"><section className="ad-editor-form"><label><span>カテゴリ名</span><input value={title} maxLength={32} onChange={(event) => setTitle(event.target.value)} /></label><label><span>短い説明</span><input value={description} maxLength={60} onChange={(event) => setDescription(event.target.value)} /></label><label><span>所属グループ</span><select value={targetGroupId} onChange={(event) => setTargetGroupId(event.target.value)}>{service.categoryGroups.map((group) => <option value={group.id} key={group.id}>{group.title}</option>)}</select></label><label><span>アイコン</span><input value={icon} maxLength={3} onChange={(event) => setIcon(event.target.value)} /></label></section><aside className="ad-editor-preview"><span>カテゴリプレビュー</span><div className="ad-category"><i className="ad-category-icon">{icon || '◫'}</i><div><strong>{title || 'カテゴリ名'}</strong><small>{description || 'カテゴリの説明'}</small></div><b className="ad-arrow">✎</b></div><p>詳細画面には {items.length} 件のコンテンツが表示されます。</p></aside></div>}</section><section className={`ad-category-settings ad-category-glossary-settings ${glossaryOpen ? 'open' : ''}`}><button type="button" className="ad-category-settings-toggle" aria-expanded={glossaryOpen} onClick={() => setGlossaryOpen((current) => !current)}><span><strong>用語編集</strong><small>{glossary.length ? `${glossary.length}件の用語` : '用語は登録されていません'}</small></span><i>{glossaryOpen ? '−' : '＋'}</i></button>{glossaryOpen && <div className="ad-category-glossary-editor"><p>カテゴリ内の全ページで用語を自動リンクします。</p>{glossary.map((entry, index) => <div className="ad-category-glossary-row" key={entry.id}><label><span>用語</span><input value={entry.term} placeholder="例: SDK" onChange={(event) => updateGlossary(index, { term: event.target.value })} /></label><label><span>説明</span><textarea value={entry.description} placeholder="用語の説明を入力してください。" onChange={(event) => updateGlossary(index, { description: event.target.value })} /></label><button type="button" aria-label={`${entry.term || '用語'}を削除`} onClick={() => setGlossary((current) => current.filter((_, candidateIndex) => candidateIndex !== index))}>×</button></div>)}<button type="button" className="ad-glossary-add" onClick={addGlossaryEntry}>＋ 用語を追加</button></div>}</section><section className={`ad-item-editor ${pageEditorOpen ? 'open' : ''}`}><header><button type="button" className="ad-item-editor-toggle" aria-expanded={pageEditorOpen} onClick={() => setPageEditorOpen((current) => !current)}><span><h2>ページ編集</h2><p>{pageEditorOpen ? 'ブロックの追加、編集、削除、並び替えができます。' : `${items.length}件のコンテンツ`}</p></span><i>{pageEditorOpen ? '−' : '＋'}</i></button>{pageEditorOpen && selectedItem && <div className="ad-content-exchange ad-content-exchange--header"><button type="button" className="draft-save" disabled={draftBusy} onClick={() => void saveContentDraft()}>AI下書きに保存</button><button type="button" className="draft-history" disabled={draftBusy} onClick={() => void openDraftDialog()}>AI下書きを開く</button><details className="ad-draft-help"><summary aria-label="AI下書きについて">?</summary><div><strong>AI下書きとは</strong><p>正式公開前の編集内容を、版ごとに保存して確認・復元する機能です。「DBへ保存」を押すまで資料内容は変更されません。</p></div></details><div className={`ad-copy-content-control ${includeAiPrompt ? 'with-prompt' : ''}`} role="group" aria-label="資料情報のコピー"><label><input type="checkbox" checked={includeAiPrompt} onChange={(event) => setIncludeAiPrompt(event.target.checked)} /><span>AI用プロンプト付き</span></label><button type="button" onClick={() => void copyContentTarget()}>資料情報をコピー<span aria-hidden="true">⧉</span></button></div><button type="button" onClick={downloadContentTemplate}>雛形をダウンロード</button><button type="button" onClick={importContentTemplate}>JSONをインポート</button></div>}{pageEditorOpen && <button type="button" className="ad-add-content" onClick={addItem}>＋ コンテンツを追加</button>}</header>{pageEditorOpen && <div className="ad-item-editor-grid"><div className="ad-item-list">{items.length === 0 ? <p>コンテンツがありません。</p> : items.map((candidate, index) => <button key={candidate.id} className={candidate.id === selectedItemId ? 'active' : ''} onClick={() => setSelectedItemId(candidate.id)}><span>{String(index + 1).padStart(2, '0')}</span><strong>{candidate.navTitle || '名称未設定'}</strong><i>›</i></button>)}</div><div className="ad-item-fields">{selectedItem ? <><ContentCanvas item={selectedItem} onChange={updateItem} /><div className="ad-item-meta"><span>識別子</span><code>{selectedItem.id}</code></div><button className="danger" onClick={deleteItem}>このコンテンツを削除</button></> : <div className="ad-item-empty"><span>＋</span><p>コンテンツを追加すると、ここでページを編集できます。</p></div>}</div></div>}</section>{draftDialogOpen && <div className="ad-draft-dialog-overlay" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget && !draftBusy) setDraftDialogOpen(false) }}><section className="ad-draft-dialog" role="dialog" aria-modal="true" aria-labelledby="ad-draft-dialog-title"><header><div><span>AI DRAFT</span><h2 id="ad-draft-dialog-title">AI下書き</h2><p>対象: {selectedItem?.navTitle || 'コンテンツ未選択'}</p></div><button type="button" aria-label="閉じる" disabled={draftBusy} onClick={() => setDraftDialogOpen(false)}>×</button></header><div className="ad-draft-history"><div className="ad-draft-history-heading"><strong>直近の保存履歴</strong><button type="button" disabled={draftBusy || draftHistory.length === 0} onClick={() => void deleteDraftHistory()}>履歴をすべて削除</button></div>{draftBusy && draftHistory.length === 0 ? <p>読み込み中…</p> : draftHistory.length === 0 ? <p>下書き保存の履歴はありません。</p> : <ol>{draftHistory.map((entry) => <li className={entry.id === selectedDraftHistoryId ? 'selected' : ''} key={entry.id}><button type="button" className="ad-draft-history-preview" aria-pressed={entry.id === selectedDraftHistoryId} disabled={draftBusy || !entry.hasPreview} onClick={() => void previewDraftHistory(entry)}><time>{new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short' }).format(entry.savedAt)}</time><span>{entry.contentTitle}</span><small>{entry.hasPreview ? entry.id === selectedDraftHistoryId ? `選択中・第${entry.revision}版` : `第${entry.revision}版をプレビュー ›` : 'プレビュー情報なし'}</small></button></li>)}</ol>}</div><footer><button type="button" className="load" disabled={draftBusy || !selectedDraftHistoryId} onClick={() => void applySelectedDraftHistory()}>編集画面に反映</button></footer></section></div>}{draftPreview && <div className="ad-content-preview-overlay ad-draft-preview-overlay" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget) setDraftPreview(null) }}><section className="ad-content-preview-dialog ad-draft-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="ad-draft-preview-title"><header><div><span>DRAFT HISTORY · 第{draftPreview.revision}版 · {new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short' }).format(draftPreview.savedAt)}</span><h2 id="ad-draft-preview-title">{draftPreview.item.navTitle || '名称未設定'}</h2></div><button type="button" aria-label="履歴プレビューを閉じる" onClick={() => setDraftPreview(null)}>×</button></header><div className="ad-draft-preview-body"><div className="ad-article-stage"><article className="ad-article"><p className="ad-breadcrumb">{service.name} / {title.trim() || 'カテゴリ名'} / 保存履歴</p>{draftPreview.item.blocks.length ? draftPreview.item.blocks.map((block) => <BlockRenderer block={block} pageBlocks={withCategoryGlossary(draftPreview.item.blocks, draftPreview.glossary ?? glossary)} key={block.id} />) : <div className="ad-empty-page"><p>この履歴にはブロックがありません。</p></div>}</article><ContentTableOfContents blocks={withCategoryGlossary(draftPreview.item.blocks, draftPreview.glossary ?? glossary)} /></div></div><footer className="ad-draft-preview-actions"><p>コンテンツと用語を反映した後、編集画面の「DBへ保存」で資料に反映できます。</p><button type="button" onClick={() => setDraftPreview(null)}>閉じる</button><button type="button" className="apply" onClick={applyDraftPreview}>編集画面へ反映</button></footer></section></div>}</div>
+  return <div className="ad-category-editor"><header className="ad-content-head ad-category-editor-head"><div><p className="ad-eyebrow">{service.name.toUpperCase()} / PAGE EDITOR</p><h1>カテゴリを編集</h1></div><div className="ad-home-controls"><div className="ad-mode-switch" aria-label="詳細カテゴリの表示モード"><button type="button" onClick={switchToView}>閲覧</button><button type="button" className="active" aria-current="page">編集</button></div><button type="button" className="ad-editor-header-back" onClick={backToCategories}>一覧へ戻る</button><button type="button" className="ad-editor-header-delete" onClick={onDelete}>カテゴリを削除</button><button type="button" className="ad-editor-header-save" disabled={!canSave || saveState === 'saving'} onClick={() => void save()}>{saveState === 'saving' ? '保存中…' : 'DBへ保存'}</button></div></header><section className={`ad-category-settings ${categorySettingsOpen ? 'open' : ''}`}><button type="button" className="ad-category-settings-toggle" aria-expanded={categorySettingsOpen} onClick={() => setCategorySettingsOpen((current) => !current)}><span><strong>カテゴリ設定</strong><small>{title.trim() || 'カテゴリ名未設定'} ・ {service.categoryGroups.find((group) => group.id === targetGroupId)?.title ?? '所属グループ未設定'}</small></span><i>{categorySettingsOpen ? '−' : '＋'}</i></button>{categorySettingsOpen && <div className="ad-editor-grid"><section className="ad-editor-form"><label><span>カテゴリ名</span><input value={title} maxLength={32} onChange={(event) => setTitle(event.target.value)} /></label><label><span>短い説明</span><input value={description} maxLength={60} onChange={(event) => setDescription(event.target.value)} /></label><label><span>所属グループ</span><select value={targetGroupId} onChange={(event) => setTargetGroupId(event.target.value)}>{service.categoryGroups.map((group) => <option value={group.id} key={group.id}>{group.title}</option>)}</select></label><label><span>アイコン</span><input value={icon} maxLength={3} onChange={(event) => setIcon(event.target.value)} /></label></section><aside className="ad-editor-preview"><span>カテゴリプレビュー</span><div className="ad-category"><i className="ad-category-icon">{icon || '◫'}</i><div><strong>{title || 'カテゴリ名'}</strong><small>{description || 'カテゴリの説明'}</small></div><b className="ad-arrow">✎</b></div><p>詳細画面には {items.length} 件のコンテンツが表示されます。</p></aside></div>}</section><section className={`ad-category-settings ad-category-glossary-settings ${glossaryOpen ? 'open' : ''}`}><button type="button" className="ad-category-settings-toggle" aria-expanded={glossaryOpen} onClick={() => setGlossaryOpen((current) => !current)}><span><strong>用語編集</strong><small>{glossary.length ? `${glossary.length}件の用語` : '用語は登録されていません'}</small></span><i>{glossaryOpen ? '−' : '＋'}</i></button>{glossaryOpen && <div className="ad-category-glossary-editor"><p>カテゴリ内の全ページで用語を自動リンクします。</p>{glossary.map((entry, index) => <div className="ad-category-glossary-row" key={entry.id}><label><span>用語</span><input value={entry.term} placeholder="例: SDK" onChange={(event) => updateGlossary(index, { term: event.target.value })} /></label><label><span>説明</span><textarea value={entry.description} placeholder="用語の説明を入力してください。" onChange={(event) => updateGlossary(index, { description: event.target.value })} /></label><button type="button" aria-label={`${entry.term || '用語'}を削除`} onClick={() => setGlossary((current) => current.filter((_, candidateIndex) => candidateIndex !== index))}>×</button></div>)}<button type="button" className="ad-glossary-add" onClick={addGlossaryEntry}>＋ 用語を追加</button></div>}</section><section className={`ad-item-editor ${pageEditorOpen ? 'open' : ''}`}><header><button type="button" className="ad-item-editor-toggle" aria-expanded={pageEditorOpen} onClick={() => setPageEditorOpen((current) => !current)}><span><h2>ページ編集</h2><p>{pageEditorOpen ? 'ブロックの追加、編集、削除、並び替えができます。' : `${items.length}件のコンテンツ`}</p></span><i>{pageEditorOpen ? '−' : '＋'}</i></button>{pageEditorOpen && selectedItem && <div className="ad-content-exchange ad-content-exchange--header">
+  <div className="ad-content-draft-actions" role="group" aria-label="AI下書き">
+    <button type="button" className="draft-save" disabled={draftBusy} onClick={() => void saveContentDraft()}>下書き保存</button>
+    <button type="button" className="draft-history" disabled={draftBusy} onClick={() => void openDraftDialog()}>下書き履歴</button>
+  </div>
+  <div className={`ad-copy-content-control ${includeAiPrompt ? 'with-prompt' : ''}`} role="group" aria-label="コンテキストのコピー">
+    <label><input type="checkbox" checked={includeAiPrompt} onChange={(event) => setIncludeAiPrompt(event.target.checked)} /><span>AI用指示付き</span></label>
+    <button type="button" onClick={() => void copyContentTarget()}>コンテキストをコピー<span aria-hidden="true">⧉</span></button>
+  </div>
+  <details className="ad-project-json-menu ad-project-json-menu--labeled">
+    <summary>JSON連携 <span aria-hidden="true">⌄</span></summary>
+    <div>
+      <section><strong>連携ファイル</strong><button type="button" onClick={() => void writeContentWorkspaceJson()}>JSONへ書き出す</button><button type="button" onClick={() => void readContentWorkspaceJson()}>JSONから読み込む</button><button type="button" onClick={() => void changeContentWorkspaceJson()}>連携ファイルを変更</button></section>
+      <section><strong>ファイル操作</strong><button type="button" onClick={downloadCurrentContentJson}>JSONをダウンロード</button><button type="button" onClick={importContentJson}>JSONをインポート</button><button type="button" onClick={downloadContentTemplate}>テンプレートをダウンロード</button></section>
+    </div>
+  </details>
+</div>}{pageEditorOpen && <button type="button" className="ad-add-content" onClick={addItem}>＋ コンテンツを追加</button>}</header>{pageEditorOpen && <div className="ad-item-editor-grid"><div className="ad-item-list">{items.length === 0 ? <p>コンテンツがありません。</p> : items.map((candidate, index) => <button key={candidate.id} className={candidate.id === selectedItemId ? 'active' : ''} onClick={() => setSelectedItemId(candidate.id)}><span>{String(index + 1).padStart(2, '0')}</span><strong>{candidate.navTitle || '名称未設定'}</strong><i>›</i></button>)}</div><div className="ad-item-fields">{selectedItem ? <><ContentCanvas item={selectedItem} onChange={updateItem} /><div className="ad-item-meta"><span>識別子</span><code>{selectedItem.id}</code></div><button className="danger" onClick={deleteItem}>このコンテンツを削除</button></> : <div className="ad-item-empty"><span>＋</span><p>コンテンツを追加すると、ここでページを編集できます。</p></div>}</div></div>}</section>{draftDialogOpen && <div className="ad-draft-dialog-overlay" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget && !draftBusy) setDraftDialogOpen(false) }}><section className="ad-draft-dialog" role="dialog" aria-modal="true" aria-labelledby="ad-draft-dialog-title"><header><div><span>AI DRAFT</span><h2 id="ad-draft-dialog-title">AI下書き</h2><p>対象: {selectedItem?.navTitle || 'コンテンツ未選択'}</p></div><button type="button" aria-label="閉じる" disabled={draftBusy} onClick={() => setDraftDialogOpen(false)}>×</button></header><div className="ad-draft-history"><div className="ad-draft-history-heading"><strong>直近の保存履歴</strong><button type="button" disabled={draftBusy || draftHistory.length === 0} onClick={() => void deleteDraftHistory()}>履歴をすべて削除</button></div>{draftBusy && draftHistory.length === 0 ? <p>読み込み中…</p> : draftHistory.length === 0 ? <p>下書き保存の履歴はありません。</p> : <ol>{draftHistory.map((entry) => <li className={entry.id === selectedDraftHistoryId ? 'selected' : ''} key={entry.id}><button type="button" className="ad-draft-history-preview" aria-pressed={entry.id === selectedDraftHistoryId} disabled={draftBusy || !entry.hasPreview} onClick={() => void previewDraftHistory(entry)}><time>{new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short' }).format(entry.savedAt)}</time><span>{entry.contentTitle}</span><small>{entry.hasPreview ? entry.id === selectedDraftHistoryId ? `選択中・第${entry.revision}版` : `第${entry.revision}版をプレビュー ›` : 'プレビュー情報なし'}</small></button></li>)}</ol>}</div><footer><button type="button" className="load" disabled={draftBusy || !selectedDraftHistoryId} onClick={() => void applySelectedDraftHistory()}>編集画面に反映</button></footer></section></div>}{draftPreview && <div className="ad-content-preview-overlay ad-draft-preview-overlay" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget) setDraftPreview(null) }}><section className="ad-content-preview-dialog ad-draft-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="ad-draft-preview-title"><header><div><span>DRAFT HISTORY · 第{draftPreview.revision}版 · {new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short' }).format(draftPreview.savedAt)}</span><h2 id="ad-draft-preview-title">{draftPreview.item.navTitle || '名称未設定'}</h2></div><button type="button" aria-label="履歴プレビューを閉じる" onClick={() => setDraftPreview(null)}>×</button></header><div className="ad-draft-preview-body"><div className="ad-article-stage"><article className="ad-article"><p className="ad-breadcrumb">{service.name} / {title.trim() || 'カテゴリ名'} / 保存履歴</p>{draftPreview.item.blocks.length ? draftPreview.item.blocks.map((block) => <BlockRenderer block={block} pageBlocks={withCategoryGlossary(draftPreview.item.blocks, draftPreview.glossary ?? glossary)} key={block.id} />) : <div className="ad-empty-page"><p>この履歴にはブロックがありません。</p></div>}</article><ContentTableOfContents blocks={withCategoryGlossary(draftPreview.item.blocks, draftPreview.glossary ?? glossary)} /></div></div><footer className="ad-draft-preview-actions"><p>コンテンツと用語を反映した後、編集画面の「DBへ保存」で資料に反映できます。</p><button type="button" onClick={() => setDraftPreview(null)}>閉じる</button><button type="button" className="apply" onClick={applyDraftPreview}>編集画面へ反映</button></footer></section></div>}</div>
 }
 
 function CategoryDetail({ serviceId, service, category, selectedId, canEdit, onBack, onSelect, onMode }: { serviceId: ServiceId; service: ServiceConfig; category: Category; selectedId: string; canEdit: boolean; onBack: () => void; onSelect: (id: string) => void; onMode: (mode: ServiceMode) => void }) {
