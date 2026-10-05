@@ -1,7 +1,9 @@
 const DATABASE_NAME = 'hundred-ai-desktop'
 const STORE_NAME = 'workspace-files'
 // Keep the original key so existing browser selections remain available after this utility became shared.
-const WORKSPACE_JSON_KEY = 'project-workspace-json'
+const DEFAULT_WORKSPACE_JSON_KEY = 'project-workspace-json'
+
+type WorkspaceJsonFileOptions = { storageKey?: string; suggestedName?: string }
 
 type FilePermissionMode = 'read' | 'readwrite'
 
@@ -34,11 +36,11 @@ function openWorkspaceDatabase() {
   })
 }
 
-async function getStoredHandle() {
+async function getStoredHandle(storageKey: string) {
   const database = await openWorkspaceDatabase()
   return new Promise<PersistentFileHandle | null>((resolve, reject) => {
     const transaction = database.transaction(STORE_NAME, 'readonly')
-    const request = transaction.objectStore(STORE_NAME).get(WORKSPACE_JSON_KEY)
+    const request = transaction.objectStore(STORE_NAME).get(storageKey)
     request.onsuccess = () => resolve(request.result instanceof FileSystemFileHandle ? request.result as PersistentFileHandle : null)
     request.onerror = () => reject(request.error)
     transaction.oncomplete = () => database.close()
@@ -46,11 +48,11 @@ async function getStoredHandle() {
   })
 }
 
-async function storeHandle(handle: PersistentFileHandle) {
+async function storeHandle(handle: PersistentFileHandle, storageKey: string) {
   const database = await openWorkspaceDatabase()
   return new Promise<void>((resolve, reject) => {
     const transaction = database.transaction(STORE_NAME, 'readwrite')
-    transaction.objectStore(STORE_NAME).put(handle, WORKSPACE_JSON_KEY)
+    transaction.objectStore(STORE_NAME).put(handle, storageKey)
     transaction.oncomplete = () => { database.close(); resolve() }
     transaction.onerror = () => { database.close(); reject(transaction.error) }
     transaction.onabort = () => { database.close(); reject(transaction.error) }
@@ -62,8 +64,8 @@ async function hasPermission(handle: PersistentFileHandle, mode: FilePermissionM
   return await handle.requestPermission({ mode }) === 'granted'
 }
 
-async function storedHandleWithPermission(mode: FilePermissionMode) {
-  const handle = await getStoredHandle().catch(() => null)
+async function storedHandleWithPermission(mode: FilePermissionMode, storageKey: string) {
+  const handle = await getStoredHandle(storageKey).catch(() => null)
   if (!handle || !await hasPermission(handle, mode)) return null
   return handle
 }
@@ -73,37 +75,40 @@ export function supportsWorkspaceJsonFile() {
   return typeof pickerWindow.showOpenFilePicker === 'function' && typeof pickerWindow.showSaveFilePicker === 'function' && 'indexedDB' in window
 }
 
-export async function writeWorkspaceJsonFile(content: string) {
+export async function writeWorkspaceJsonFile(content: string, options: WorkspaceJsonFileOptions = {}) {
   const pickerWindow = window as FilePickerWindow
   if (!supportsWorkspaceJsonFile() || !pickerWindow.showSaveFilePicker) throw new Error('FILE_SYSTEM_ACCESS_UNSUPPORTED')
-  const handle = await storedHandleWithPermission('readwrite') ?? await pickerWindow.showSaveFilePicker({
-    suggestedName: 'Workspace JSON.json',
+  const storageKey = options.storageKey ?? DEFAULT_WORKSPACE_JSON_KEY
+  const handle = await storedHandleWithPermission('readwrite', storageKey) ?? await pickerWindow.showSaveFilePicker({
+    suggestedName: options.suggestedName ?? 'Workspace JSON.json',
     types: jsonFileTypes,
   })
   if (!await hasPermission(handle, 'readwrite')) throw new Error('FILE_PERMISSION_DENIED')
-  await storeHandle(handle).catch(() => undefined)
+  await storeHandle(handle, storageKey).catch(() => undefined)
   const writable = await handle.createWritable()
   await writable.write(content)
   await writable.close()
   return handle.name
 }
 
-export async function readWorkspaceJsonFile() {
+export async function readWorkspaceJsonFile(options: WorkspaceJsonFileOptions = {}) {
   const pickerWindow = window as FilePickerWindow
   if (!supportsWorkspaceJsonFile() || !pickerWindow.showOpenFilePicker) throw new Error('FILE_SYSTEM_ACCESS_UNSUPPORTED')
-  const handle = await storedHandleWithPermission('read') ?? (await pickerWindow.showOpenFilePicker({ multiple: false, types: jsonFileTypes }))[0]
+  const storageKey = options.storageKey ?? DEFAULT_WORKSPACE_JSON_KEY
+  const handle = await storedHandleWithPermission('read', storageKey) ?? (await pickerWindow.showOpenFilePicker({ multiple: false, types: jsonFileTypes }))[0]
   if (!handle || !await hasPermission(handle, 'read')) throw new Error('FILE_PERMISSION_DENIED')
-  await storeHandle(handle).catch(() => undefined)
+  await storeHandle(handle, storageKey).catch(() => undefined)
   const file = await handle.getFile()
   return { name: file.name, content: await file.text() }
 }
 
-export async function selectWorkspaceJsonFile() {
+export async function selectWorkspaceJsonFile(options: WorkspaceJsonFileOptions = {}) {
   const pickerWindow = window as FilePickerWindow
   if (!supportsWorkspaceJsonFile() || !pickerWindow.showOpenFilePicker) throw new Error('FILE_SYSTEM_ACCESS_UNSUPPORTED')
+  const storageKey = options.storageKey ?? DEFAULT_WORKSPACE_JSON_KEY
   const handle = (await pickerWindow.showOpenFilePicker({ multiple: false, types: jsonFileTypes }))[0]
   if (!handle || !await hasPermission(handle, 'readwrite')) throw new Error('FILE_PERMISSION_DENIED')
-  await storeHandle(handle)
+  await storeHandle(handle, storageKey)
   return handle.name
 }
 

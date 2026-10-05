@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { executeAppleIntelligenceProposal, getAppleIntelligenceStatus, sendAppleIntelligenceMessage, type AppleIntelligenceMessage, type AppleIntelligenceProposal, type AppleIntelligenceTarget } from '../../services/AppleIntelligence/appleIntelligenceApi'
+import { confirmAIDesktop } from './aiDesktopConfirmBus'
 
 type Props = {
   target: AppleIntelligenceTarget
@@ -67,7 +68,7 @@ function AppleIntelligenceEditor({ target, contentTitle, initialContent, onClose
   const saveProposal = async () => {
     if (!proposal || busy) return
     const environment = proposal.environment === 'remote' ? '本番D1' : 'ローカルD1'
-    if (!window.confirm(`Apple Intelligenceの修正案を${environment}の下書きと履歴へ登録しますか？\n正式公開データは変更されません。`)) return
+    if (!(await confirmAIDesktop({ title: `Apple Intelligenceの修正案を${environment}の下書きと履歴へ登録しますか？`, message: '正式公開データは変更されません。', confirmLabel: '登録' }))) return
     setBusy(true)
     setNotice('')
     try {

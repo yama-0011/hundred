@@ -1,0 +1,429 @@
+.ai-desktop {
+  --ad-bg: #f5f7fb;
+  --ad-content-background:
+    radial-gradient(circle at 78% 10%, rgba(65, 124, 196, 0.08), transparent 34%),
+    linear-gradient(145deg, #f8faff 0%, #f3f6fb 55%, #eef3f9 100%);
+  --ad-header-bg: linear-gradient(135deg, #e7edf6 0%, #dce6f3 100%);
+  --ad-header-text: #172033;
+  --ad-header-muted: #667085;
+  --ad-header-border: rgba(56, 71, 104, 0.14);
+  --ad-header-control-bg: rgba(255, 255, 255, 0.56);
+  --ad-header-control-hover: rgba(255, 255, 255, 0.9);
+  --ad-sidebar-bg: linear-gradient(180deg, #eef3f9 0%, #e8eef6 100%);
+  --ad-surface: #ffffff;
+  --ad-surface-subtle: #f8fafc;
+  --ad-surface-raised: #ffffff;
+  --ad-text: #172033;
+  --ad-text-muted: #667085;
+  --ad-border: rgba(56, 71, 104, 0.14);
+  --ad-primary: #3975cf;
+  --ad-primary-hover: #2f68ba;
+  --ad-focus: rgba(57, 117, 207, 0.24);
+  --ad-radius-sm: 6px;
+  --ad-radius-md: 9px;
+  --ad-radius-lg: 12px;
+  --ad-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --ad-shadow-md: 0 10px 30px rgba(15, 23, 42, 0.1);
+  --ad-header-height: 56px;
+  --panel: var(--ad-surface);
+  --text: var(--ad-text);
+  --muted: var(--ad-text-muted);
+  --line: var(--ad-border);
+  --glass: color-mix(in srgb, var(--ad-surface) 88%, transparent);
+}
+
+.ai-desktop.dark {
+  --ad-bg: #162131;
+  --ad-content-background:
+    radial-gradient(circle at 78% 12%, rgba(54, 117, 190, 0.1), transparent 36%),
+    linear-gradient(145deg, #172436 0%, #152130 55%, #121d2b 100%);
+  --ad-header-bg: linear-gradient(135deg, #0b1421 0%, #101d2d 100%);
+  --ad-header-text: #f1f5ff;
+  --ad-header-muted: #96a5bc;
+  --ad-header-border: rgba(255, 255, 255, 0.09);
+  --ad-header-control-bg: rgba(255, 255, 255, 0.045);
+  --ad-header-control-hover: rgba(255, 255, 255, 0.1);
+  --ad-sidebar-bg: linear-gradient(180deg, #111c2b 0%, #142235 100%);
+  --ad-surface: #1b2839;
+  --ad-surface-subtle: #182536;
+  --ad-surface-raised: #213044;
+  --ad-text: #edf2ff;
+  --ad-text-muted: #aab4c8;
+  --ad-border: rgba(255, 255, 255, 0.11);
+  --ad-primary: #4f8de7;
+  --ad-primary-hover: #66a0ef;
+  --ad-focus: rgba(79, 141, 231, 0.3);
+  --ad-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --ad-shadow-md: 0 14px 36px rgba(0, 0, 0, 0.26);
+}
+
+.ad-app-shell {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  color: var(--ad-text);
+  background: var(--ad-content-background);
+  user-select: text;
+}
+
+.ad-app-shell--split {
+  grid-template-columns: 270px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.ad-app-header {
+  min-height: var(--ad-header-height);
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--ad-header-border);
+  color: var(--ad-header-text);
+  background: var(--ad-header-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.ad-app-header__identity {
+  min-width: 0;
+}
+
+.ad-app-header__eyebrow,
+.ad-app-header__breadcrumb {
+  margin: 0 0 2px;
+  color: var(--ad-header-muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.06em;
+}
+
+.ad-app-header__eyebrow {
+  color: var(--ad-primary);
+  letter-spacing: 0.12em;
+}
+
+.ad-app-header__title {
+  margin: 0;
+  overflow: hidden;
+  color: var(--ad-header-text);
+  font-size: 17px;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ad-app-header .ad-app-header__title {
+  font-size: 17px;
+}
+
+.ad-app-header__description {
+  max-width: 720px;
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--ad-header-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.55;
+}
+
+.ad-app-header__actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ad-app-header__actions :where(button, a):not(.primary):not([data-variant="primary"]) {
+  border-color: var(--ad-header-border);
+  color: var(--ad-header-text);
+}
+
+.ad-app-header__actions :where(button, a):not(.primary):not([data-variant="primary"]):hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.ad-app-toolbar {
+  min-height: 54px;
+  padding: 9px 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--ad-border);
+  background: var(--ad-surface);
+}
+
+.ad-app-sidebar {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  border-right: 1px solid var(--ad-border);
+  background: var(--ad-sidebar-bg);
+}
+
+.ad-app-main {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--ad-content-background);
+}
+
+.ad-app-content-area {
+  min-width: 0;
+  min-height: 0;
+  padding: 24px;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.ad-app-shell button,
+.ad-app-shell input,
+.ad-app-shell select,
+.ad-app-shell textarea {
+  font-family: inherit;
+}
+
+.ad-app-shell :where(button, input, select, textarea, summary):focus-visible {
+  outline: 3px solid var(--ad-focus);
+  outline-offset: 2px;
+}
+
+.ad-app-shell :where(.primary, [data-variant="primary"]) {
+  border-color: var(--ad-primary) !important;
+  color: #fff !important;
+  background: var(--ad-primary) !important;
+}
+
+.ad-app-shell :where(.primary, [data-variant="primary"]):hover:not(:disabled) {
+  background: var(--ad-primary-hover) !important;
+}
+
+/* Legacy APP integration. These rules keep existing feature CSS inside the shared shell. */
+.ad-app-shell.ad-documents-home,
+.ad-app-shell.ad-design-home {
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.ad-app-shell.ad-documents-home > .ad-app-header,
+.ad-app-shell.ad-design-home > .ad-app-header {
+  margin: 0;
+  align-items: center;
+}
+
+.ad-app-shell.ad-documents-home > .ad-app-content-area,
+.ad-app-shell.ad-design-home > .ad-app-content-area {
+  min-height: 0;
+}
+
+.ad-app-shell.ad-documents-home .ad-document-library-layout {
+  margin: 0;
+}
+
+.ad-app-shell.ad-design-home .ad-design-project-grid {
+  margin-top: 0;
+}
+
+.ad-design-workspace--category-layout > .ad-app-header.ad-design-workspace-header,
+.ad-design-project-section-page > .ad-app-header.ad-design-workspace-header {
+  min-height: var(--ad-header-height);
+  height: var(--ad-header-height);
+  margin: 0;
+  padding: 8px 20px;
+  border-color: var(--ad-header-border);
+  background: var(--ad-header-bg);
+}
+
+.ad-design-workspace--category-layout > .ad-app-header.ad-design-workspace-header .ad-app-header__breadcrumb,
+.ad-design-project-section-page > .ad-app-header.ad-design-workspace-header .ad-app-header__breadcrumb {
+  margin-bottom: 2px;
+  color: var(--ad-header-muted);
+  font-size: 10px;
+}
+
+/*
+ * APP region backgrounds
+ *
+ * Older APP screens still own their structural class names. Connecting those
+ * classes here keeps the header, sidebar and main canvas identical across APPs
+ * without flattening cards, tables and document blocks inside them.
+ */
+.ai-desktop :is(
+  .ad-app-shell,
+  .ad-app-main,
+  .ad-documents-content,
+  .ad-app-content,
+  .ad-article-layout,
+  .ad-design-home,
+  .ad-design-workspace,
+  .ad-design-project-section-page,
+  .ad-design-template-manager,
+  .ad-design-template-editor,
+  .ad-projects
+) {
+  background: var(--ad-content-background);
+}
+
+.ai-desktop :is(
+  .ad-app-sidebar,
+  .ad-project-list,
+  .ad-design-sidebar,
+  .ad-design-workspace > aside,
+  .ai-desktop-sidebar,
+  .ad-explorer > aside
+) {
+  background: var(--ad-sidebar-bg);
+}
+
+.ai-desktop :is(
+  .ad-app-header,
+  .ad-project-header,
+  .ad-design-header,
+  .ad-design-workspace > main > header,
+  .ad-project-list > header
+) {
+  border-color: var(--ad-header-border);
+  color: var(--ad-header-text);
+  background: var(--ad-header-bg);
+}
+
+.ai-desktop :is(
+  .ad-project-header,
+  .ad-design-header,
+  .ad-design-workspace > main > header,
+  .ad-project-list > header
+) :where(h1, h2, h3) {
+  color: var(--ad-header-text);
+}
+
+.ai-desktop :is(
+  .ad-project-header,
+  .ad-design-header,
+  .ad-design-workspace > main > header,
+  .ad-project-list > header
+) :where(p, small) {
+  color: var(--ad-header-muted);
+}
+
+/* Header content always sits on the dark header surface, including light mode. */
+.ai-desktop .ad-app-header .ad-app-header__title {
+  color: var(--ad-header-text);
+}
+
+.ai-desktop .ad-app-header :is(
+  .ad-app-header__breadcrumb,
+  .ad-app-header__description
+) {
+  color: var(--ad-header-muted);
+}
+
+.ai-desktop .ad-app-header .ad-app-header__eyebrow {
+  color: var(--ad-primary);
+}
+
+.ai-desktop .ad-app-header .ad-app-header__actions :is(button, a):not(.primary):not(.active):not([data-variant="primary"]) {
+  border-color: var(--ad-header-border);
+  color: var(--ad-header-text);
+  background: var(--ad-header-control-bg);
+  box-shadow: none;
+}
+
+.ai-desktop .ad-app-header .ad-app-header__actions :is(button, a):not(.primary):not(.active):not([data-variant="primary"]):hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--ad-primary) 42%, var(--ad-header-border));
+  color: var(--ad-header-text);
+  background: var(--ad-header-control-hover);
+}
+
+.ai-desktop .ad-app-header .ad-app-header__actions :is(button, a):disabled {
+  color: color-mix(in srgb, var(--ad-header-text) 45%, transparent);
+}
+
+.ai-desktop :is(.ad-project-scroll, .ad-design-view, .ad-design-editor, .ad-article-stage) {
+  background: transparent;
+}
+
+/* The desktop launcher uses the same shape, elevation and focus language as APP content. */
+.ad-desktop-icons > button {
+  width: 92px;
+  min-height: 88px;
+  padding: 8px 4px;
+  gap: 7px;
+  border-radius: var(--ad-radius-md);
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.ad-desktop-icons > button:hover,
+.ad-desktop-icons > button.selected {
+  transform: translateY(-1px);
+}
+
+.ad-desktop-icons > button:focus-visible {
+  outline: 3px solid rgba(255, 255, 255, 0.38);
+  outline-offset: 2px;
+}
+
+.ad-app-icon.large {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--app-color) 82%, white), var(--app-color));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2), 0 8px 18px rgba(6, 18, 38, 0.2);
+}
+
+.ad-desktop-icons span:last-child {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+@media (max-width: 900px) {
+  .ad-app-shell--split {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .ad-app-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .ad-app-header__actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 650px) {
+  .ad-app-shell--split {
+    display: block;
+    overflow: auto;
+  }
+
+  .ad-app-header {
+    min-height: auto;
+    padding: 14px 18px;
+  }
+
+  .ad-app-header__title {
+    font-size: 21px;
+  }
+
+  .ad-app-toolbar,
+  .ad-app-content-area {
+    padding-inline: 18px;
+  }
+}

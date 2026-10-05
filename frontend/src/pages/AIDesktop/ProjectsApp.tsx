@@ -25,14 +25,17 @@ import { AI_DESKTOP_MESSAGES, localizedErrorMessage } from './aiDesktopMessages'
 import { MermaidDiagram } from './MermaidDiagram'
 import { validateMermaidSource } from './mermaidDiagramValidation'
 import { showAIDesktopNotification } from './aiDesktopNotificationBus'
+import { AppHeader, AppMain, AppShell, AppSidebar } from './AppLayout'
 import { isWorkspaceJsonFileCancelled, readWorkspaceJsonFile, selectWorkspaceJsonFile, supportsWorkspaceJsonFile, writeWorkspaceJsonFile } from './workspaceJsonFile'
+import { confirmAIDesktop } from './aiDesktopConfirmBus'
+import { isRecordValue, readAIDesktopSessionState, useAIDesktopSessionStateSaver } from './aiDesktopSessionState'
 
 type ServiceId = AIDesktopProjectDocument['serviceId']
 type ProjectView = 'dashboard' | 'edit'
 type ArchitectureTab = 'system' | 'files'
 type ProjectDetailTab = 'technologyStack' | 'databaseInfo' | 'projectRules'
 type ProjectWorkspaceTab = ProjectDetailTab | 'environmentSetup' | 'commands' | 'links' | 'developmentNotes' | 'members'
-type ProjectTemplateProject = Omit<AIDesktopProjectInput, 'relatedDocuments' | 'memberUserIds' | 'customerName' | 'objective' | 'designNotes'>
+type ProjectTemplateProject = Omit<AIDesktopProjectInput, 'relatedDocuments' | 'memberUserIds' | 'editableMemberUserIds' | 'customerName' | 'objective' | 'designNotes'>
 type ProjectTemplate = { format: 'hundred-ai-desktop'; version: 1; resourceType: 'project'; target: { projectId: string | null }; guide?: Record<string, unknown>; reference?: Record<string, unknown>; data: { project: ProjectTemplateProject } }
 
 const statusLabels: Record<AIDesktopProjectStatus, string> = {
@@ -64,13 +67,14 @@ const blankProjectEnvironment = (): AIDesktopProjectEnvironment => ({
 
 const blankProject = (): AIDesktopProjectInput => ({
   name: '', customerName: '', summary: '', objective: '', status: 'planning', developmentMode: 'personal',
-  systemDiagramSource: initialDiagram, fileStructure: initialFileStructure, technologyStack: [], databaseInfo: [], environmentSetup: blankProjectEnvironment(), commands: [], links: [], projectRules: [], designNotes: '', developmentNotes: '', relatedDocuments: [], memberUserIds: [],
+  systemDiagramSource: initialDiagram, fileStructure: initialFileStructure, technologyStack: [], databaseInfo: [], environmentSetup: blankProjectEnvironment(), commands: [], links: [], projectRules: [], designNotes: '', developmentNotes: '', relatedDocuments: [], memberUserIds: [], editableMemberUserIds: [],
 })
 
 const projectInput = (project: AIDesktopProject): AIDesktopProjectInput => ({
   name: project.name, customerName: project.customerName, summary: project.summary, objective: project.objective, status: project.status,
   developmentMode: project.developmentMode, systemDiagramSource: project.systemDiagramSource, fileStructure: project.fileStructure ?? '', technologyStack: project.technologyStack,
   databaseInfo: project.databaseInfo, environmentSetup: parseProjectEnvironment(project.environmentSetup ?? blankProjectEnvironment()), commands: project.commands ?? [], links: project.links ?? [], projectRules: project.projectRules ?? [], designNotes: project.designNotes, developmentNotes: project.developmentNotes, relatedDocuments: project.relatedDocuments, memberUserIds: project.memberUserIds ?? project.members?.filter((member) => member.role === 'member').map((member) => member.userId) ?? [],
+  editableMemberUserIds: project.editableMemberUserIds ?? project.members?.filter((member) => member.role === 'member' && member.canEdit).map((member) => member.userId) ?? [],
 })
 
 const projectData = (source: AIDesktopProjectInput): ProjectTemplateProject => ({
@@ -397,14 +401,20 @@ function ProjectEnvironmentEditor({ environment, onChange }: { environment: AIDe
   </div>
 }
 
-export default function ProjectsApp({ canManage, catalog, publishedDocuments, onOpenDocument }: {
+// リロードしても同じプロジェクトとタブを開けるよう、選択だけをタブ単位で保つ。編集画面は保たず、ダッシュボードで開き直す。
+type ProjectsSession = { selectedId: string | null; workspaceTab: ProjectWorkspaceTab }
+const isProjectsSession = (value: unknown): value is ProjectsSession => isRecordValue(value) && (value.selectedId === null || typeof value.selectedId === 'string') && Object.hasOwn(workspaceTabLabels, String(value.workspaceTab))
+
+export default function ProjectsApp({ canManage, catalog, publishedDocuments, onOpenDocument, onOpenDesignDocuments }: {
   canManage: boolean
   catalog: Record<ServiceId, ServiceConfig>
   publishedDocuments: AIDesktopDocument[]
   onOpenDocument: (document: AIDesktopProjectDocument, edit?: boolean) => void
+  onOpenDesignDocuments: (projectId: string) => void
 }) {
   const [projects, setProjects] = useState<AIDesktopProjectSummary[]>([])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [restoredSession] = useState(() => readAIDesktopSessionState('projects', isProjectsSession))
+  const [selectedId, setSelectedId] = useState<string | null>(restoredSession?.selectedId ?? null)
   const [project, setProject] = useState<AIDesktopProject | null>(null)
   const [draft, setDraft] = useState<AIDesktopProjectInput>(blankProject)
   const [view, setView] = useState<ProjectView>('dashboard')
@@ -412,7 +422,8 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
   const [loading, setLoading] = useState(canManage)
   const [saving, setSaving] = useState(false)
   const [architectureTab, setArchitectureTab] = useState<ArchitectureTab>('system')
-  const [workspaceTab, setWorkspaceTab] = useState<ProjectWorkspaceTab>('technologyStack')
+  const [workspaceTab, setWorkspaceTab] = useState<ProjectWorkspaceTab>(restoredSession?.workspaceTab ?? 'technologyStack')
+  useAIDesktopSessionStateSaver('projects', { selectedId, workspaceTab })
   const [expandedDatabaseIndex, setExpandedDatabaseIndex] = useState<number | null>(null)
   const [commandCategory, setCommandCategory] = useState('すべて')
   const [expandedCommandIndex, setExpandedCommandIndex] = useState<number | null>(null)
@@ -471,7 +482,8 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
     void listAIDesktopProjects().then(async (result) => {
       if (!active) return
       setProjects(result.projects)
-      const firstId = result.projects[0]?.id ?? null
+      const restoredId = restoredSession?.selectedId
+      const firstId = restoredId && result.projects.some((item) => item.id === restoredId) ? restoredId : result.projects[0]?.id ?? null
       setSelectedId(firstId)
       if (!firstId) return
       const detail = await getAIDesktopProject(firstId)
@@ -481,10 +493,10 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
       setKnownMembers(Object.fromEntries((detail.project.members ?? []).map((member) => [member.userId, member.displayName])))
     }).catch((error) => showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.project.listFailed))).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [canManage])
+  }, [canManage, restoredSession])
 
   useEffect(() => {
-    if (workspaceTab !== 'members' || view !== 'edit' || (!creating && project?.canEdit === false)) return
+    if (workspaceTab !== 'members' || view !== 'edit' || !(creating || project?.canManageMembers)) return
     let active = true
     const timeout = window.setTimeout(() => {
       setSearchingMembers(true)
@@ -495,11 +507,11 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
       }).catch((error) => { if (active) showAIDesktopNotification('error', localizedErrorMessage(error, 'ユーザーを検索できませんでした。')) }).finally(() => { if (active) setSearchingMembers(false) })
     }, 250)
     return () => { active = false; window.clearTimeout(timeout) }
-  }, [creating, memberQuery, project?.canEdit, view, workspaceTab])
+  }, [creating, memberQuery, project?.canManageMembers, view, workspaceTab])
 
-  const confirmDiscard = () => !dirty || window.confirm('保存していない変更があります。変更を破棄して移動しますか？')
-  const selectProject = (id: string) => { if (!confirmDiscard()) return; setSelectedId(id); setCreating(false); void loadProject(id) }
-  const startCreate = () => { if (!confirmDiscard()) return; setSelectedId(null); setProject(null); setDraft(blankProject()); setCreating(true); setView('edit') }
+  const confirmDiscard = async () => !dirty || await confirmAIDesktop({ title: '保存していない変更があります', message: '移動すると、変更内容は破棄されます。', confirmLabel: '破棄して移動', tone: 'danger' })
+  const selectProject = async (id: string) => { if (!(await confirmDiscard())) return; setSelectedId(id); setCreating(false); void loadProject(id) }
+  const startCreate = async () => { if (!(await confirmDiscard())) return; setSelectedId(null); setProject(null); setDraft(blankProject()); setCreating(true); setView('edit') }
 
   const save = async () => {
     if (!draft.name.trim() || saving) return
@@ -526,7 +538,8 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
         links: draft.links.map((link) => ({ name: link.name.trim(), description: link.description.trim(), type: link.type.trim(), url: link.url.trim() })).filter((link) => link.name && link.url),
         relatedDocuments: draft.relatedDocuments.map((document, index) => ({ ...document, phase: document.phase || 'common', documentType: document.documentType || 'other', note: document.note?.trim() ?? '', sortOrder: index })),
       }
-      const result = creating || !project ? await createAIDesktopProject(normalized) : await updateAIDesktopProject(project.id, normalized)
+      const isNewProject = creating || !project
+      const result = isNewProject ? await createAIDesktopProject(normalized) : await updateAIDesktopProject(project.id, normalized)
       setProject(result.project)
       setDraft(projectInput(result.project))
       setKnownMembers(Object.fromEntries((result.project.members ?? []).map((member) => [member.userId, member.displayName])))
@@ -540,7 +553,7 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
   }
 
   const remove = async () => {
-    if (!project || saving || !window.confirm(`「${project.name}」を削除しますか？\n関連資料そのものは削除されません。`)) return
+    if (!project || saving || !(await confirmAIDesktop({ title: `「${project.name}」を削除しますか？`, message: '関連資料そのものは削除されません。', confirmLabel: '削除', tone: 'danger' }))) return
     setSaving(true)
     try {
       await deleteAIDesktopProject(project.id)
@@ -587,7 +600,10 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
     setKnownMembers((current) => ({ ...current, [user.userId]: user.displayName }))
     setDraft((current) => ({ ...current, memberUserIds: [...current.memberUserIds, user.userId] }))
   }
-  const removeMember = (userId: string) => setDraft((current) => ({ ...current, memberUserIds: current.memberUserIds.filter((candidate) => candidate !== userId) }))
+  const removeMember = (userId: string) => setDraft((current) => ({ ...current, memberUserIds: current.memberUserIds.filter((candidate) => candidate !== userId), editableMemberUserIds: current.editableMemberUserIds.filter((candidate) => candidate !== userId) }))
+  const setMemberCanEdit = (userId: string, canEdit: boolean) => setDraft((current) => ({ ...current, editableMemberUserIds: canEdit ? [...new Set([...current.editableMemberUserIds, userId])] : current.editableMemberUserIds.filter((candidate) => candidate !== userId) }))
+  // メンバーの追加・解除・権限変更は作成者だけが行える。新規作成中は作成者本人なので変更できる。
+  const canManageMembers = creating || project?.canManageMembers === true
 
   const downloadProjectJson = (payload = projectTemplate(draft, project?.id ?? null), fileName = 'Hundred_Project.json', message: string | null = AI_DESKTOP_MESSAGES.project.jsonDownloaded) => {
     const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: 'application/json' })
@@ -611,7 +627,7 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
   }
 
   const writeWorkspaceTemplate = async () => {
-    if (!window.confirm(`現在のProject情報をJSONへ書き出しますか？\n\n選択中のJSONは上書きされます。`)) return
+    if (!(await confirmAIDesktop({ title: '現在のプロジェクト情報をJSONへ書き出しますか？', message: '選択中のJSONは上書きされます。', confirmLabel: '書き出す' }))) return
     try {
       const name = await writeWorkspaceJsonFile(`${JSON.stringify(projectEditingTemplate(draft, project?.id ?? null), null, 2)}\n`)
       showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.project.workspaceWritten(name))
@@ -627,7 +643,7 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
   }
 
   const readWorkspaceTemplate = async () => {
-    if (!window.confirm(`JSONのProject情報を編集画面へ読み込みますか？\n\n現在の未保存の編集内容は置き換えられます。`)) return
+    if (!(await confirmAIDesktop({ title: 'JSONのプロジェクト情報を読み込みますか？', message: '現在の未保存の編集内容は置き換えられます。', confirmLabel: '読み込む' }))) return
     if (!supportsWorkspaceJsonFile()) {
       importInputRef.current?.click()
       return
@@ -754,10 +770,10 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
                 {visibleMembers.map((member) => <article key={member.userId}>
                   <div className="ad-project-member-person"><span>{member.displayName.charAt(0).toUpperCase()}</span><strong>{member.displayName}</strong></div>
                   <b className={`ad-project-member-role ${member.role}`}>{member.role === 'owner' ? '作成者' : 'メンバー'}</b>
-                  <small>{member.role === 'owner' ? '閲覧・編集' : '閲覧のみ'}</small>
+                  <small>{member.canEdit ? '閲覧・編集' : '閲覧のみ'}</small>
                 </article>)}
               </div>
-              {addedMemberCount === 0 && <div className="ad-project-member-empty"><strong>追加メンバーはいません</strong><span>作成者が編集画面からメンバーを追加できます。</span></div>}
+              {addedMemberCount === 0 && <div className="ad-project-member-empty"><strong>追加メンバーはいません</strong><span>作成者が編集画面からメンバーを追加し、権限を設定できます。</span></div>}
             </div> : <EmptyValue>メンバーはまだ登録されていません。</EmptyValue>
   const editorWorkspaceContent = workspaceTab === 'environmentSetup'
     ? <ProjectEnvironmentEditor environment={draft.environmentSetup} onChange={(environmentSetup) => setDraft((current) => ({ ...current, environmentSetup }))} />
@@ -773,19 +789,18 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
           ? <div className="ad-project-edit-list ad-project-link-editor">{draft.links.map((link, index) => <div key={index}><input maxLength={200} value={link.name} placeholder="名前（例：Cloudflare Dashboard）" onChange={(event) => updateLink(index, 'name', event.target.value)} /><input maxLength={100} value={link.type} placeholder="種類（例：インフラ）" onChange={(event) => updateLink(index, 'type', event.target.value)} /><input maxLength={2000} type="url" value={link.url} placeholder="URL" onChange={(event) => updateLink(index, 'url', event.target.value)} /><input maxLength={1000} value={link.description} placeholder="説明" onChange={(event) => updateLink(index, 'description', event.target.value)} /><button type="button" aria-label="削除" onClick={() => removeLink(index)}>×</button></div>)}{draft.links.length === 0 && <EmptyValue>リンクを追加してください。</EmptyValue>}</div>
           : workspaceTab === 'developmentNotes'
             ? <textarea className="ad-project-development-editor" rows={14} maxLength={50000} value={draft.developmentNotes} placeholder={'例：\nnpm run dev\nnpx wrangler d1 migrations apply hundred-apps-prod --local'} onChange={(event) => setDraft({ ...draft, developmentNotes: event.target.value })} />
-            : <div className="ad-project-member-editor"><section><h4>プロジェクトメンバー</h4>{!project && <p>作成者は保存時に自動追加されます。</p>}{(project?.members ?? []).filter((member) => member.role === 'owner').map((member) => <article key={member.userId}><span>{member.displayName.charAt(0).toUpperCase()}</span><strong>{member.displayName}</strong><small>作成者</small></article>)}{draft.memberUserIds.map((userId) => <article key={userId}><span>{(knownMembers[userId] ?? userId).charAt(0).toUpperCase()}</span><strong>{knownMembers[userId] ?? userId}</strong><small>メンバー</small><button type="button" onClick={() => removeMember(userId)}>解除</button></article>)}</section><section><h4>Hundredユーザーを検索</h4><input type="search" maxLength={100} value={memberQuery} placeholder="表示名を入力" onChange={(event) => setMemberQuery(event.target.value)} />{searchingMembers ? <p>検索しています…</p> : <div className="ad-project-member-results">{memberResults.map((user) => { const added = draft.memberUserIds.includes(user.userId); return <button type="button" key={user.userId} disabled={user.isCurrentUser || added} onClick={() => addMember(user)}><span>{user.displayName.charAt(0).toUpperCase()}</span><strong>{user.displayName}</strong><small>{user.isCurrentUser ? '自分' : added ? '追加済み' : '追加'}</small></button> })}</div>}</section></div>
+            : <div className="ad-project-member-editor"><section><h4>プロジェクトメンバー</h4>{!project && <p>作成者は保存時に自動追加されます。</p>}{(project?.members ?? []).filter((member) => member.role === 'owner').map((member) => <article key={member.userId}><span>{member.displayName.charAt(0).toUpperCase()}</span><strong>{member.displayName}</strong><small>作成者</small></article>)}{draft.memberUserIds.map((userId) => <article key={userId}><span>{(knownMembers[userId] ?? userId).charAt(0).toUpperCase()}</span><strong>{knownMembers[userId] ?? userId}</strong>{canManageMembers ? <select aria-label={`${knownMembers[userId] ?? userId}の権限`} value={draft.editableMemberUserIds.includes(userId) ? 'edit' : 'view'} onChange={(event) => setMemberCanEdit(userId, event.target.value === 'edit')}><option value="view">閲覧のみ</option><option value="edit">閲覧・編集</option></select> : <small>{draft.editableMemberUserIds.includes(userId) ? '閲覧・編集' : '閲覧のみ'}</small>}{canManageMembers && <button type="button" onClick={() => removeMember(userId)}>解除</button>}</article>)}</section>{canManageMembers ? <section><h4>Hundredユーザーを検索</h4><input type="search" maxLength={100} value={memberQuery} placeholder="表示名を入力" onChange={(event) => setMemberQuery(event.target.value)} />{searchingMembers ? <p>検索しています…</p> : <div className="ad-project-member-results">{memberResults.map((user) => { const added = draft.memberUserIds.includes(user.userId); return <button type="button" key={user.userId} disabled={user.isCurrentUser || added} onClick={() => addMember(user)}><span>{user.displayName.charAt(0).toUpperCase()}</span><strong>{user.displayName}</strong><small>{user.isCurrentUser ? '自分' : added ? '追加済み' : '追加'}</small></button> })}</div>}</section> : <section><p>メンバーの追加・解除と権限の変更は、作成者だけが行えます。</p></section>}</div>
 
-  return <div className="ad-projects">
-    <aside className="ad-project-list"><header><div><small>PROJECT WORKSPACE</small><h1>Projects</h1></div><button type="button" onClick={startCreate}>＋ 新規</button></header><div className="ad-project-list-body">{loading && projects.length === 0 ? <p>読み込んでいます…</p> : projects.length === 0 ? <div className="ad-project-empty"><span>◇</span><strong>プロジェクトがありません</strong></div> : projects.map((item) => <button type="button" key={item.id} className={item.id === selectedId ? 'active' : ''} onClick={() => selectProject(item.id)}><span className={`status ${item.status}`}>{statusLabels[item.status]}</span><strong>{item.name}</strong><small>{developmentModeLabels[item.developmentMode]} ・ {new Date(item.updatedAt).toLocaleDateString('ja-JP')}</small></button>)}</div></aside>
-    <main className="ad-project-main">{!creating && !project ? <div className="ad-project-welcome"><span>◆</span><h2>プロジェクトを選択してください</h2><button type="button" onClick={startCreate}>新しいプロジェクトを作成</button></div> : <>
-      <header className="ad-project-header">
-        <div className="ad-project-header-title"><small>{creating ? 'NEW PROJECT' : `PROJECT · ${developmentModeLabels[draft.developmentMode]}`}</small><h2>{draft.name || '新しいプロジェクト'}</h2></div>
-        <nav className="ad-project-toolbar">
+  return <AppShell className="ad-projects" split>
+    <AppSidebar className="ad-project-list"><header><div><small>PROJECT WORKSPACE</small><h1>Projects</h1></div><button type="button" onClick={startCreate}>＋ 新規</button></header><div className="ad-project-list-body">{loading && projects.length === 0 ? <p>読み込んでいます…</p> : projects.length === 0 ? <div className="ad-project-empty"><span>◇</span><strong>プロジェクトがありません</strong></div> : projects.map((item) => <button type="button" key={item.id} className={item.id === selectedId ? 'active' : ''} onClick={() => selectProject(item.id)}><span className={`status ${item.status}`}>{statusLabels[item.status]}</span><strong>{item.name}</strong><small>{developmentModeLabels[item.developmentMode]} ・ {new Date(item.updatedAt).toLocaleDateString('ja-JP')}</small></button>)}</div></AppSidebar>
+    <AppMain className="ad-project-main">{!creating && !project ? <div className="ad-project-welcome"><span>◆</span><h2>プロジェクトを選択してください</h2><button type="button" onClick={startCreate}>新しいプロジェクトを作成</button></div> : <>
+      <AppHeader className="ad-project-header" eyebrow={creating ? 'NEW PROJECT' : `PROJECT · ${developmentModeLabels[draft.developmentMode]}`} title={draft.name || '新しいプロジェクト'} titleAs="h2" actions={<nav className="ad-project-toolbar">
           {project && <div className="ad-project-view-switch" aria-label="Projectの表示モード">
-            <button type="button" className={view === 'dashboard' ? 'active' : ''} onClick={() => { if (dirty && !window.confirm('保存していない変更があります。変更を破棄してダッシュボードへ移動しますか？')) return; if (dirty) setDraft(projectInput(project)); setView('dashboard') }}>ダッシュボード</button>
+            <button type="button" className={view === 'dashboard' ? 'active' : ''} onClick={async () => { if (dirty && !(await confirmAIDesktop({ title: '保存していない変更があります', message: 'ダッシュボードへ移動すると、変更内容は破棄されます。', confirmLabel: '破棄して移動', tone: 'danger' }))) return; if (dirty) setDraft(projectInput(project)); setView('dashboard') }}>ダッシュボード</button>
             {project.canEdit !== false && <button type="button" className={view === 'edit' ? 'active' : ''} onClick={() => setView('edit')}>編集</button>}
           </div>}
           <div className="ad-project-toolbar-actions">
+            {project && !creating && <button type="button" onClick={() => onOpenDesignDocuments(project.id)}>ドキュメントを開く</button>}
             <button type="button" onClick={() => void copyProjectInfo()} disabled={!draft.name.trim()}>コンテキストをコピー</button>
             {view === 'edit' && (creating || project?.canEdit !== false) && <>
               {(dirty || creating) && <span className="ad-project-unsaved"><i />未保存</span>}
@@ -794,15 +809,14 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
                 <div>
                   <section><strong>連携ファイル</strong><button type="button" onClick={() => void writeWorkspaceTemplate()}>JSONへ書き出す</button><button type="button" onClick={() => void readWorkspaceTemplate()}>JSONから読み込む</button><button type="button" onClick={() => void changeWorkspaceFile()}>連携ファイルを変更</button></section>
                   <section><strong>ファイル操作</strong><button type="button" onClick={() => downloadProjectJson()}>JSONをダウンロード</button><button type="button" onClick={() => importInputRef.current?.click()}>JSONをインポート</button><button type="button" onClick={downloadProjectTemplate}>テンプレートをダウンロード</button></section>
-                  {project && <section className="danger-zone"><button type="button" className="danger" onClick={() => void remove()} disabled={saving}>Projectを削除</button></section>}
+                  {project?.canManageMembers && <section className="danger-zone"><button type="button" className="danger" onClick={() => void remove()} disabled={saving}>Projectを削除</button></section>}
                 </div>
               </details>
               <button type="button" className="primary" onClick={() => void save()} disabled={!draft.name.trim() || saving || (!dirty && !creating)}>{saving ? '保存中…' : '保存'}</button>
               <input ref={importInputRef} className="ad-project-import-input" type="file" accept="application/json,.json" onChange={(event) => void importTemplate(event)} />
             </>}
           </div>
-        </nav>
-      </header>
+        </nav>} />
       {view === 'dashboard' && project ? <div className="ad-project-scroll ad-project-dashboard">
         <section className="ad-project-dashboard-summary"><div className="ad-project-summary-content"><header><small>OVERVIEW</small><h3>概要</h3></header>{draft.summary ? <p>{draft.summary}</p> : <EmptyValue>概要はまだ登録されていません。</EmptyValue>}</div><dl><div><dt>開発体制</dt><dd>{developmentModeLabels[draft.developmentMode]}</dd></div><div><dt>状態</dt><dd>{statusLabels[draft.status]}</dd></div></dl></section>
         <section className="ad-project-architecture"><header><div><small>PROJECT MAP</small><h3>全体図</h3></div>{architectureTabs}</header>{architectureTab === 'system' ? (draft.systemDiagramSource.trim() ? <MermaidDiagram id={`project-${project.id}`} kind="flowchart" title="" source={draft.systemDiagramSource} /> : <EmptyValue>システム構成図はまだ登録されていません。</EmptyValue>) : (draft.fileStructure.trim() ? <pre className="ad-project-file-structure">{draft.fileStructure}</pre> : <EmptyValue>ファイル構成はまだ登録されていません。</EmptyValue>)}</section>
@@ -813,6 +827,6 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
         <section className="ad-project-architecture-editor"><header><div><small>PROJECT MAP</small><h3>全体図</h3></div>{architectureTabs}</header>{architectureTab === 'system' ? <div><label><span>Mermaid構文（flowchart）</span><textarea spellCheck={false} rows={12} maxLength={50000} value={draft.systemDiagramSource} onChange={(event) => setDraft({ ...draft, systemDiagramSource: event.target.value })} /></label><div className="ad-project-architecture-preview">{draft.systemDiagramSource.trim() ? <MermaidDiagram id="project-editor" kind="flowchart" title="" source={draft.systemDiagramSource} /> : <EmptyValue>Mermaid構文を入力してください。</EmptyValue>}</div></div> : <label className="ad-project-file-structure-editor"><span>ディレクトリ・ファイル構成</span><textarea spellCheck={false} rows={16} maxLength={50000} value={draft.fileStructure} placeholder={initialFileStructure} onChange={(event) => setDraft({ ...draft, fileStructure: event.target.value })} /></label>}</section>
         <section className="ad-project-workspace-editor"><header>{workspaceTabs}{detailTab ? <button type="button" onClick={() => addListItem(detailTab)}>＋ 追加</button> : workspaceTab === 'commands' ? <button type="button" onClick={addCommand}>＋ 追加</button> : workspaceTab === 'links' ? <button type="button" onClick={addLink}>＋ 追加</button> : null}</header>{editorWorkspaceContent}</section>
         <section className="ad-project-documents"><header><div><span>DOCUMENTS</span><h3>関連資料</h3></div><div>{documentHelp}<strong>{draft.relatedDocuments.length}件</strong></div></header>{documentList(true)}<div className="ad-project-document-tools"><article><h4>Hundredの資料を追加</h4>{documentOptions.length ? <div className="ad-project-document-form"><label><span>資料</span><select value={selectedDocumentServiceId} onChange={(event) => { setDocumentServiceId(event.target.value); setDocumentCategoryId(''); setDocumentContentId('') }}>{documentServiceIds.map((id) => <option value={id} key={id}>{catalog[id]?.name ?? id}</option>)}</select></label><label><span>カテゴリ</span><select value={selectedCategoryId} onChange={(event) => { setDocumentCategoryId(event.target.value); setDocumentContentId('') }}>{categories.map((category) => <option value={category.id} key={category.id}>{category.title}</option>)}</select></label><label><span>ページ</span><select value={selectedContentId} onChange={(event) => setDocumentContentId(event.target.value)}>{contents.map((item) => <option value={item.contentId} key={item.contentId}>{item.title}</option>)}</select></label><label><span>工程フェーズ</span><select value={documentPhase} onChange={(event) => setDocumentPhase(event.target.value)}>{documentPhases.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label><span>資料種別</span><select value={documentType} onChange={(event) => setDocumentType(event.target.value)}>{documentTypes.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label className="note"><span>メモ（任意）</span><input maxLength={1000} value={documentNote} placeholder="資料の役割や確認ポイント" onChange={(event) => setDocumentNote(event.target.value)} /></label><button type="button" className="primary" onClick={addExistingDocument} disabled={!selectedContentId}>追加</button></div> : <p className="ad-project-document-no-options">公開中の資料がありません。マイ資料で資料を公開すると追加できます。</p>}</article></div></section>
-      </div>}</>}</main>
-  </div>
+      </div>}</>}</AppMain>
+  </AppShell>
 }

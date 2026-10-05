@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties, type FormEvent } from 'react'
 import { deleteAIDesktopImage, listAIDesktopImages, uploadAIDesktopImage, type AIDesktopCustomApp, type AIDesktopImageAsset } from '../../services/AIDesktop/aiDesktopApi'
 import { AI_DESKTOP_MESSAGES } from './aiDesktopMessages'
 import { showAIDesktopNotification } from './aiDesktopNotificationBus'
+import { confirmAIDesktop } from './aiDesktopConfirmBus'
 
 type ServiceId = 'chatgpt' | 'codex' | 'claude' | 'ai-desktop'
 type ImageFolderId = ServiceId | 'unfiled'
@@ -47,12 +48,12 @@ export default function ImageExplorer({ canManage, builtInApps, customApps, visi
   }, [canManage])
 
   const upload = (folderId: ImageFolderId) => { if (folderId === 'unfiled') return; const picker = document.createElement('input'); picker.type = 'file'; picker.accept = 'image/jpeg,image/png,image/webp,image/gif,image/avif'; picker.multiple = true; picker.onchange = () => { const files = [...(picker.files ?? [])]; if (!files.length) return; setLoading(true); void Promise.all(files.map((file) => uploadAIDesktopImage(file, folderId))).then(load).catch(() => { setLoading(false); showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.image.uploadFailed) }) }; picker.click() }
-  const remove = (image: AIDesktopImageAsset) => { if (image.references.length || !window.confirm(`「${image.name}」を完全に削除しますか？`)) return; void deleteAIDesktopImage(image.id).then(() => setImages((current) => current.filter((candidate) => candidate.id !== image.id))).catch(() => showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.image.deleteFailed)) }
+  const remove = async (image: AIDesktopImageAsset) => { if (image.references.length || !(await confirmAIDesktop({ title: `「${image.name}」を完全に削除しますか？`, confirmLabel: '削除', tone: 'danger' }))) return; void deleteAIDesktopImage(image.id).then(() => setImages((current) => current.filter((candidate) => candidate.id !== image.id))).catch(() => showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.image.deleteFailed)) }
   const copy = (url: string) => void navigator.clipboard.writeText(url).catch(() => showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.image.copyUrlFailed))
   const setVisible = (id: string, checked: boolean) => onSaveApps(customApps, { ...visibility, [id]: checked })
   const editApp = (app: AIDesktopCustomApp) => setAppDraft({ ...app, visible: visibility[app.id] !== false })
-  const deleteApp = (app: AIDesktopCustomApp) => {
-    if (!window.confirm(`「${app.name}」を削除しますか？`)) return
+  const deleteApp = async (app: AIDesktopCustomApp) => {
+    if (!(await confirmAIDesktop({ title: `「${app.name}」を削除しますか？`, confirmLabel: '削除', tone: 'danger' }))) return
     const nextVisibility = { ...visibility }; delete nextVisibility[app.id]
     onSaveApps(customApps.filter((candidate) => candidate.id !== app.id), nextVisibility)
   }

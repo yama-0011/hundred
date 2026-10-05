@@ -30,7 +30,7 @@ export type DiagramBlock = BlockBase<'diagram', { kind: DiagramKind; title: stri
 export type LeafBlock = HeadingBlock | TextBlock | ImageBlock | CodeBlock | ChecklistBlock | CalloutBlock | DividerBlock | TableBlock | LinkBlock | TocBlock | GlossaryBlock | CardBlock | StepsBlock | DiagramBlock
 export type ColumnsBlock = BlockBase<'columns', { left: LeafBlock[]; right: LeafBlock[] }>
 export type ContentBlock = LeafBlock | ColumnsBlock
-export type ContentItem = { id: string; navTitle: string; pageWidth?: ContentLayout; blocks: ContentBlock[] }
+export type ContentItem = { id: string; navTitle: string; parentId?: string; pageWidth?: ContentLayout; blocks: ContentBlock[] }
 export type Category = { id: string; title: string; description: string; icon: string; glossary?: GlossaryEntry[]; items: ContentItem[] }
 export type CategoryGroup = { id: string; title: string; description: string; categories: Category[] }
 export type ServiceConfig = { schemaVersion: 3; name: string; eyebrow: string; introduction: string; categoryGroups: CategoryGroup[] }
@@ -317,8 +317,8 @@ function BlocksEditor<T extends ContentBlock>({ blocks, nested = false, selected
   return <div className="ad-block-list">{blocks.map((block, index) => <section className={`ad-block-card ${selectedBlockId === block.id ? 'selected' : ''}`} key={block.id} onPointerDown={(event) => { event.stopPropagation(); onSelectBlock(block.id) }} onFocusCapture={() => onSelectBlock(block.id)}><header><strong>{labels[block.type]}</strong>{selectedBlockId === block.id && <span className="ad-block-selected-label">選択中</span>}<div><button type="button" disabled={index === 0} aria-label="上へ移動" onClick={() => move(index, -1)}>↑</button><button type="button" disabled={index === blocks.length - 1} aria-label="下へ移動" onClick={() => move(index, 1)}>↓</button><button type="button" className="danger" onClick={() => remove(index, block.id)}>削除</button></div></header><div className="ad-block-fields">{block.type === 'columns' ? <div className="ad-columns-editor"><div><strong>Left</strong><BlocksEditor blocks={block.data.left} nested selectedBlockId={selectedBlockId} onSelectBlock={onSelectBlock} onChange={(left) => update(index, { ...block, data: { ...block.data, left } } as T)} /></div><div><strong>Right</strong><BlocksEditor blocks={block.data.right} nested selectedBlockId={selectedBlockId} onSelectBlock={onSelectBlock} onChange={(right) => update(index, { ...block, data: { ...block.data, right } } as T)} /></div></div> : <LeafBlockFields block={block} onChange={(next) => update(index, next as T)} />}</div></section>)}<BlockPicker nested={nested} onPick={(type) => { const block = createBlock(type) as T; onChange([...blocks, block]); onSelectBlock(block.id) }} /></div>
 }
 
-export function ContentCanvas({ item, onChange }: { item: ContentItem; onChange: (item: ContentItem) => void }) {
+export function ContentCanvas({ item, onChange, nameLabel = 'コンテンツ名（左ペイン）' }: { item: ContentItem; onChange: (item: ContentItem) => void; nameLabel?: string }) {
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(item.blocks[0]?.id ?? null)
-  useEffect(() => { setSelectedBlockId(item.blocks[0]?.id ?? null) }, [item.id])
-  return <div className="ad-canvas"><div className="ad-canvas-settings"><label><span>コンテンツ名（左ペイン）</span><input value={item.navTitle} maxLength={80} onChange={(event) => onChange({ ...item, navTitle: event.target.value })} /></label></div><BlocksEditor blocks={item.blocks} selectedBlockId={selectedBlockId} onSelectBlock={setSelectedBlockId} onChange={(blocks) => onChange({ ...item, blocks })} /></div>
+  const activeBlockId = item.blocks.some((block) => block.id === selectedBlockId) ? selectedBlockId : item.blocks[0]?.id ?? null
+  return <div className="ad-canvas"><div className="ad-canvas-settings"><label><span>{nameLabel}</span><input value={item.navTitle} maxLength={80} onChange={(event) => onChange({ ...item, navTitle: event.target.value })} /></label></div><BlocksEditor blocks={item.blocks} selectedBlockId={activeBlockId} onSelectBlock={setSelectedBlockId} onChange={(blocks) => onChange({ ...item, blocks })} /></div>
 }
