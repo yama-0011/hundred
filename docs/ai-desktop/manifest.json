@@ -1,0 +1,34 @@
+{
+  "note": "AI Desktopが書き出したファイルの一覧と、各設計書のAI Desktop上の最終更新日時です。次の書き出しで、不要になったファイルの片付けと、書き出し待ちの確認に使います。",
+  "files": [
+    "docs/ai-desktop/README.md",
+    "docs/ai-desktop/block-reference.json",
+    "docs/design/01-企画/01-プロジェクト計画書.md",
+    "docs/design/02-要件定義/01-要件定義書.md",
+    "docs/design/02-要件定義/02-非機能要件定義書.md",
+    "docs/design/03-基本設計/01-Hundred 文書管理.md",
+    "docs/design/03-基本設計/02-Hundred システム概要.md",
+    "docs/design/03-基本設計/03-Hundred 画面設計書.md",
+    "docs/design/03-基本設計/04-Hundred データベース設計書.md",
+    "docs/design/03-基本設計/05-Hundred 権限・セキュリティ.md",
+    "docs/design/README.md",
+    "docs/project/commands.md",
+    "docs/project/database.md",
+    "docs/project/environment.md",
+    "docs/project/links.md",
+    "docs/project/notes.md",
+    "docs/project/overview.md",
+    "docs/project/rules.md",
+    "docs/project/tech-stack.md"
+  ],
+  "documents": {
+    "09b637e0-0da0-4242-9d80-a443d89a1760": 1790718521623,
+    "14b1b4a5-e6d0-45e1-90ef-57b2c9998b66": 1790873259380,
+    "2ed416e3-3c63-4cc2-beb6-81326bb479b1": 1790718521623,
+    "3c1eb6d4-c347-4054-9ea8-b3e14b05a85a": 1790719277940,
+    "3d87acea-231f-470a-99d9-afe7788dad2e": 1790914116896,
+    "62b4938f-6422-49d6-b140-9da36dc8bb54": 1790718521623,
+    "b93e5d47-7d3a-49ad-9869-6640774c8269": 1790875670356,
+    "bb72ab3c-4d08-4fba-a027-82bed4049440": 1790875651956
+  }
+}

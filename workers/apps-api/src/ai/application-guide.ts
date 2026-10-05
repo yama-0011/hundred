@@ -1,4 +1,4 @@
-import creativeIAGuide from "../../../../ドキュメント/AI向け/Creative-IA_AI利用ガイド.md";
+import creativeIAGuide from "../../content/Creative-IA_AI利用ガイド.md";
 
 const maxSelectedSections = 5;
 const maxContextLength = 12_000;

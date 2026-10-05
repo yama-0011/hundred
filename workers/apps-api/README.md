@@ -26,7 +26,7 @@ Hundred上の各アプリで共用するCloudflare Workerです。Creative IAの
 
 ## Creative IA利用ガイド
 
-Creative IA自身の機能・操作方法への回答には、`ドキュメント/AI向け/Creative-IA_AI利用ガイド.md`を使用します。Markdownはデプロイ時にText ModuleとしてWorkerへ組み込み、質問に関係する見出しだけをGeminiへ渡します。内部設計書や秘密情報は回答用の情報源に使用しません。
+Creative IA自身の機能・操作方法への回答には、`workers/apps-api/content/Creative-IA_AI利用ガイド.md`を使用します。Markdownはデプロイ時にText ModuleとしてWorkerへ組み込み、質問に関係する見出しだけをGeminiへ渡します。内部設計書や秘密情報は回答用の情報源に使用しません。
 
 ## Cognito認証
 

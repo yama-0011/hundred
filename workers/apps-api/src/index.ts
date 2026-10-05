@@ -143,6 +143,41 @@ import {
   updateAIDesktopProject,
 } from "./ai-desktop-projects";
 import {
+  AIDesktopDesignDocumentError,
+  createAIDesktopDesignDocument,
+  deleteAIDesktopDesignDocument,
+  getAIDesktopDesignDocument,
+  listAIDesktopDesignDocuments,
+  updateAIDesktopDesignDocument,
+  uploadAIDesktopDesignDocumentFile,
+  getAIDesktopDesignDocumentFile,
+  markAIDesktopDesignDocumentEditing,
+  clearAIDesktopDesignDocumentEditing,
+} from "./ai-desktop-design-documents";
+import {
+  AIDesktopDesignDeliveryError,
+  createAIDesktopDesignDelivery,
+  deleteAIDesktopDesignDelivery,
+  getAIDesktopDesignDelivery,
+  listAIDesktopDesignDeliveries,
+  updateAIDesktopDesignDelivery,
+} from "./ai-desktop-design-deliveries";
+import {
+  AIDesktopDesignTemplateError,
+  createAIDesktopDesignTemplate,
+  deleteAIDesktopDesignTemplate,
+  listAIDesktopDesignTemplates,
+  updateAIDesktopDesignTemplate,
+} from "./ai-desktop-design-templates";
+import { listAIDesktopDesignMasterTemplates } from "./ai-desktop-design-master-templates";
+import {
+  AIDesktopDesignCategoryError,
+  createAIDesktopDesignCategory,
+  deleteAIDesktopDesignCategory,
+  listAIDesktopDesignCategories,
+  updateAIDesktopDesignCategory,
+} from "./ai-desktop-design-categories";
+import {
   appendAppleIntelligenceMessage,
   AppleIntelligenceChatError,
   createAppleIntelligenceChat,
@@ -662,6 +697,210 @@ export default {
         if (error instanceof AIDesktopProjectError || error instanceof SyntaxError) return json(request, env, { error: "プロジェクトの入力内容が正しくありません" }, 400);
         console.error("Failed to process AI Desktop project", { projectId: aiDesktopProjectMatch[1], error });
         return json(request, env, { error: "プロジェクトを処理できませんでした" }, 500);
+      }
+    }
+
+    if (url.pathname === "/api/ai-desktop/design-categories" && (request.method === "GET" || request.method === "POST")) {
+      try {
+        const identity = await verifyCognitoAccessToken(request, env);
+        if (request.method === "GET") return json(request, env, await listAIDesktopDesignCategories(env, identity));
+        return json(request, env, await createAIDesktopDesignCategory(request, env, identity), 201);
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        if (error instanceof AIDesktopDesignCategoryError && error.code === "FORBIDDEN") return json(request, env, { error: "このProjectでカテゴリを管理する権限がありません" }, 403);
+        if (error instanceof AIDesktopDesignCategoryError && error.code === "NOT_FOUND") return json(request, env, { error: "Projectが見つかりません" }, 404);
+        if (error instanceof AIDesktopDesignCategoryError && error.code === "CONFLICT") return json(request, env, { error: "同じカテゴリはすでに作成されています" }, 409);
+        if (error instanceof AIDesktopDesignCategoryError || error instanceof SyntaxError) return json(request, env, { error: "カテゴリの入力内容が正しくありません" }, 400);
+        console.error("Failed to process AI Desktop design category collection", error);
+        return json(request, env, { error: "カテゴリを処理できませんでした" }, 500);
+      }
+    }
+
+    const aiDesktopDesignCategoryMatch = url.pathname.match(/^\/api\/ai-desktop\/design-categories\/([0-9a-f-]+)$/iu);
+    if (aiDesktopDesignCategoryMatch && (request.method === "PUT" || request.method === "DELETE")) {
+      try {
+        const identity = await verifyCognitoAccessToken(request, env);
+        const categoryId = aiDesktopDesignCategoryMatch[1];
+        if (request.method === "DELETE") return json(request, env, await deleteAIDesktopDesignCategory(env, identity, categoryId));
+        return json(request, env, await updateAIDesktopDesignCategory(request, env, identity, categoryId));
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        if (error instanceof AIDesktopDesignCategoryError && error.code === "NOT_FOUND") return json(request, env, { error: "カテゴリが見つかりません" }, 404);
+        if (error instanceof AIDesktopDesignCategoryError && error.code === "FORBIDDEN") return json(request, env, { error: "このカテゴリを編集する権限がありません" }, 403);
+        if (error instanceof AIDesktopDesignCategoryError && error.code === "CONFLICT") return json(request, env, { error: "同じ名前のカテゴリはすでに作成されています" }, 409);
+        if (error instanceof AIDesktopDesignCategoryError || error instanceof SyntaxError) return json(request, env, { error: "カテゴリの入力内容が正しくありません" }, 400);
+        console.error("Failed to process AI Desktop design category", { categoryId: aiDesktopDesignCategoryMatch[1], error });
+        return json(request, env, { error: "カテゴリを処理できませんでした" }, 500);
+      }
+    }
+
+    if (url.pathname === "/api/ai-desktop/design-documents/files" && request.method === "POST") {
+      try {
+        const identity = await verifyCognitoAccessToken(request, env);
+        return json(request, env, await uploadAIDesktopDesignDocumentFile(request, env, identity), 201);
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        if (error instanceof AIDesktopDesignDocumentError && error.code === "FORBIDDEN") return json(request, env, { error: "このプロジェクトでドキュメントを作成する権限がありません" }, 403);
+        if (error instanceof AIDesktopDesignDocumentError && error.code === "NOT_FOUND") return json(request, env, { error: "プロジェクトが見つかりません" }, 404);
+        if (error instanceof AIDesktopDesignDocumentError || error instanceof TypeError) return json(request, env, { error: "PDF・Word・Excelのファイル（25MBまで）を選択してください" }, 400);
+        console.error("Failed to upload AI Desktop design document file", error);
+        return json(request, env, { error: "ファイルを取り込めませんでした" }, 500);
+      }
+    }
+
+    const aiDesktopDesignDocumentFileMatch = url.pathname.match(/^\/api\/ai-desktop\/design-documents\/([0-9a-f-]+)\/file$/iu);
+    if (aiDesktopDesignDocumentFileMatch && request.method === "GET") {
+      try {
+        const identity = await verifyCognitoAccessToken(request, env);
+        const file = await getAIDesktopDesignDocumentFile(env, identity, aiDesktopDesignDocumentFileMatch[1]);
+        return new Response(file.body, {
+          headers: {
+            "Content-Type": file.contentType,
+            "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file.fileName)}`,
+            "Cache-Control": "private, no-store",
+            ...getCorsHeaders(request, env),
+          },
+        });
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        if (error instanceof AIDesktopDesignDocumentError) return json(request, env, { error: "ファイルが見つかりません" }, 404);
+        console.error("Failed to serve AI Desktop design document file", error);
+        return json(request, env, { error: "ファイルを取得できませんでした" }, 500);
+      }
+    }
+
+    const aiDesktopDesignDocumentEditingMatch = url.pathname.match(/^\/api\/ai-desktop\/design-documents\/([0-9a-f-]+)\/editing$/iu);
+    if (aiDesktopDesignDocumentEditingMatch && (request.method === "PUT" || request.method === "DELETE")) {
+      try {
+        const identity = await verifyCognitoAccessToken(request, env);
+        if (request.method === "DELETE") return json(request, env, await clearAIDesktopDesignDocumentEditing(env, identity, aiDesktopDesignDocumentEditingMatch[1]));
+        return json(request, env, await markAIDesktopDesignDocumentEditing(request, env, identity, aiDesktopDesignDocumentEditingMatch[1]));
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        if (error instanceof AIDesktopDesignDocumentError && error.code === "LOCKED") return json(request, env, { error: `${error.lock?.name ?? "ほかのメンバー"}さんが編集中のため、変更できません`, code: "LOCKED", lockedBy: error.lock?.name ?? null, lastSeenAt: error.lock?.lastSeenAt ?? null, canTakeOver: error.lock?.canTakeOver ?? false }, 423);
+        if (error instanceof AIDesktopDesignDocumentError && error.code === "FORBIDDEN") return json(request, env, { error: "このドキュメントを編集する権限がありません" }, 403);
+        if (error instanceof AIDesktopDesignDocumentError) return json(request, env, { error: "ドキュメントが見つかりません" }, 404);
+        console.error("Failed to record AI Desktop design document editing", error);
+        return json(request, env, { error: "編集中の状態を記録できませんでした" }, 500);
+      }
+    }
+
+    if (url.pathname === "/api/ai-desktop/design-documents" && (request.method === "GET" || request.method === "POST")) {
+      try {
+        const identity = await verifyCognitoAccessToken(request, env);
+        if (request.method === "GET") return json(request, env, await listAIDesktopDesignDocuments(env, identity));
+        return json(request, env, await createAIDesktopDesignDocument(request, env, identity), 201);
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        if (error instanceof AIDesktopDesignDocumentError && error.code === "FORBIDDEN") return json(request, env, { error: "このProjectで設計書を作成する権限がありません" }, 403);
+        if (error instanceof AIDesktopDesignDocumentError && error.code === "NOT_FOUND") return json(request, env, { error: "Projectが見つかりません" }, 404);
+        if (error instanceof AIDesktopDesignDocumentError && error.code === "CONFLICT") return json(request, env, { error: "同じ種類または同じ名前の設計書はすでに作成されています" }, 409);
+        if (error instanceof AIDesktopDesignDocumentError && error.code === "TOO_LARGE") return json(request, env, { error: "ドキュメントが大きすぎます（1.5MBまで）。ページを分けてください。" }, 413);
+        if (error instanceof AIDesktopDesignDocumentError || error instanceof SyntaxError) return json(request, env, { error: "設計書の入力内容が正しくありません" }, 400);
+        console.error("Failed to process AI Desktop design document collection", error);
+        return json(request, env, { error: "設計書を処理できませんでした" }, 500);
+      }
+    }
+
+    const aiDesktopDesignDocumentMatch = url.pathname.match(/^\/api\/ai-desktop\/design-documents\/([0-9a-f-]+)$/iu);
+    if (aiDesktopDesignDocumentMatch && (request.method === "GET" || request.method === "PUT" || request.method === "DELETE")) {
+      try {
+        const identity = await verifyCognitoAccessToken(request, env);
+        const designDocumentId = aiDesktopDesignDocumentMatch[1];
+        if (request.method === "GET") return json(request, env, await getAIDesktopDesignDocument(env, identity, designDocumentId));
+        if (request.method === "DELETE") return json(request, env, await deleteAIDesktopDesignDocument(env, identity, designDocumentId));
+        return json(request, env, await updateAIDesktopDesignDocument(request, env, identity, designDocumentId));
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        if (error instanceof AIDesktopDesignDocumentError && error.code === "NOT_FOUND") return json(request, env, { error: "設計書が見つかりません" }, 404);
+        if (error instanceof AIDesktopDesignDocumentError && error.code === "FORBIDDEN") return json(request, env, { error: "この設計書を編集する権限がありません" }, 403);
+        if (error instanceof AIDesktopDesignDocumentError && error.code === "STALE") return json(request, env, { error: "編集中に、ほかの画面でこのドキュメントが更新されました", code: "STALE" }, 409);
+        if (error instanceof AIDesktopDesignDocumentError && error.code === "LOCKED") return json(request, env, { error: `${error.lock?.name ?? "ほかのメンバー"}さんが編集中のため、変更できません`, code: "LOCKED", lockedBy: error.lock?.name ?? null, lastSeenAt: error.lock?.lastSeenAt ?? null, canTakeOver: error.lock?.canTakeOver ?? false }, 423);
+        if (error instanceof AIDesktopDesignDocumentError && error.code === "CONFLICT") return json(request, env, { error: "同じ種類または同じ名前の設計書はすでに作成されています" }, 409);
+        if (error instanceof AIDesktopDesignDocumentError && error.code === "TOO_LARGE") return json(request, env, { error: "ドキュメントが大きすぎます（1.5MBまで）。ページを分けてください。" }, 413);
+        if (error instanceof AIDesktopDesignDocumentError || error instanceof SyntaxError) return json(request, env, { error: "設計書の入力内容が正しくありません" }, 400);
+        console.error("Failed to process AI Desktop design document", { designDocumentId: aiDesktopDesignDocumentMatch[1], error });
+        return json(request, env, { error: "設計書を処理できませんでした" }, 500);
+      }
+    }
+
+    if (url.pathname === "/api/ai-desktop/design-deliveries" && (request.method === "GET" || request.method === "POST")) {
+      try {
+        const identity = await verifyCognitoAccessToken(request, env);
+        if (request.method === "GET") return json(request, env, await listAIDesktopDesignDeliveries(env, identity));
+        return json(request, env, await createAIDesktopDesignDelivery(request, env, identity), 201);
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        if (error instanceof AIDesktopDesignDeliveryError && error.code === "FORBIDDEN") return json(request, env, { error: "このProjectの成果物を管理する権限がありません" }, 403);
+        if (error instanceof AIDesktopDesignDeliveryError && error.code === "NOT_FOUND") return json(request, env, { error: "Projectまたは設計書が見つかりません" }, 404);
+        if (error instanceof AIDesktopDesignDeliveryError || error instanceof SyntaxError) return json(request, env, { error: "成果物の入力内容が正しくありません" }, 400);
+        console.error("Failed to process AI Desktop design delivery collection", error);
+        return json(request, env, { error: "成果物を処理できませんでした" }, 500);
+      }
+    }
+
+    const aiDesktopDesignDeliveryMatch = url.pathname.match(/^\/api\/ai-desktop\/design-deliveries\/([0-9a-f-]+)$/iu);
+    if (aiDesktopDesignDeliveryMatch && (request.method === "GET" || request.method === "PUT" || request.method === "DELETE")) {
+      try {
+        const identity = await verifyCognitoAccessToken(request, env);
+        const deliveryId = aiDesktopDesignDeliveryMatch[1];
+        if (request.method === "GET") return json(request, env, await getAIDesktopDesignDelivery(env, identity, deliveryId));
+        if (request.method === "DELETE") return json(request, env, await deleteAIDesktopDesignDelivery(env, identity, deliveryId));
+        return json(request, env, await updateAIDesktopDesignDelivery(request, env, identity, deliveryId));
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        if (error instanceof AIDesktopDesignDeliveryError && error.code === "NOT_FOUND") return json(request, env, { error: "成果物が見つかりません" }, 404);
+        if (error instanceof AIDesktopDesignDeliveryError && error.code === "FORBIDDEN") return json(request, env, { error: "この成果物を編集する権限がありません" }, 403);
+        if (error instanceof AIDesktopDesignDeliveryError && error.code === "LOCKED") return json(request, env, { error: "提出処理を開始した成果物の設計書構成は変更できません" }, 409);
+        if (error instanceof AIDesktopDesignDeliveryError || error instanceof SyntaxError) return json(request, env, { error: "成果物の入力内容が正しくありません" }, 400);
+        console.error("Failed to process AI Desktop design delivery", { deliveryId: aiDesktopDesignDeliveryMatch[1], error });
+        return json(request, env, { error: "成果物を処理できませんでした" }, 500);
+      }
+    }
+
+    if (url.pathname === "/api/ai-desktop/design-master-templates" && request.method === "GET") {
+      try {
+        await verifyCognitoAccessToken(request, env);
+        return json(request, env, await listAIDesktopDesignMasterTemplates(env));
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        console.error("Failed to list AI Desktop design master templates", error);
+        return json(request, env, { error: "マスタテンプレートを取得できませんでした" }, 500);
+      }
+    }
+
+    if (url.pathname === "/api/ai-desktop/design-templates" && (request.method === "GET" || request.method === "POST")) {
+      try {
+        const identity = await verifyCognitoAccessToken(request, env);
+        if (request.method === "GET") return json(request, env, await listAIDesktopDesignTemplates(env, identity));
+        return json(request, env, await createAIDesktopDesignTemplate(request, env, identity), 201);
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        if (error instanceof AIDesktopDesignTemplateError && error.code === "FORBIDDEN") return json(request, env, { error: "このProjectのテンプレートを管理する権限がありません" }, 403);
+        if (error instanceof AIDesktopDesignTemplateError && error.code === "CONFLICT") return json(request, env, { error: "この分類のProjectテンプレートはすでに作成されています" }, 409);
+        if (error instanceof AIDesktopDesignTemplateError && error.code === "TOO_LARGE") return json(request, env, { error: "テンプレートが大きすぎます（1.5MBまで）。ページを分けてください。" }, 413);
+        if (error instanceof AIDesktopDesignTemplateError || error instanceof SyntaxError) return json(request, env, { error: "テンプレートの入力内容が正しくありません" }, 400);
+        console.error("Failed to process AI Desktop design template collection", error);
+        return json(request, env, { error: "テンプレートを処理できませんでした" }, 500);
+      }
+    }
+
+    const aiDesktopDesignTemplateMatch = url.pathname.match(/^\/api\/ai-desktop\/design-templates\/([0-9a-f-]+)$/iu);
+    if (aiDesktopDesignTemplateMatch && (request.method === "PUT" || request.method === "DELETE")) {
+      try {
+        const identity = await verifyCognitoAccessToken(request, env);
+        const templateId = aiDesktopDesignTemplateMatch[1];
+        if (request.method === "DELETE") return json(request, env, await deleteAIDesktopDesignTemplate(env, identity, templateId));
+        return json(request, env, await updateAIDesktopDesignTemplate(request, env, identity, templateId));
+      } catch (error) {
+        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
+        if (error instanceof AIDesktopDesignTemplateError && error.code === "NOT_FOUND") return json(request, env, { error: "テンプレートが見つかりません" }, 404);
+        if (error instanceof AIDesktopDesignTemplateError && error.code === "FORBIDDEN") return json(request, env, { error: "このテンプレートを編集する権限がありません" }, 403);
+        if (error instanceof AIDesktopDesignTemplateError && error.code === "CONFLICT") return json(request, env, { error: "この分類のProjectテンプレートはすでに作成されています" }, 409);
+        if (error instanceof AIDesktopDesignTemplateError && error.code === "TOO_LARGE") return json(request, env, { error: "テンプレートが大きすぎます（1.5MBまで）。ページを分けてください。" }, 413);
+        if (error instanceof AIDesktopDesignTemplateError || error instanceof SyntaxError) return json(request, env, { error: "テンプレートの入力内容が正しくありません" }, 400);
+        console.error("Failed to process AI Desktop design template", { templateId: aiDesktopDesignTemplateMatch[1], error });
+        return json(request, env, { error: "テンプレートを処理できませんでした" }, 500);
       }
     }
 

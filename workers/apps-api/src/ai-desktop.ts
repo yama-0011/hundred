@@ -439,13 +439,13 @@ export async function deleteAIDesktopImage(env: AIDesktopEnv, id: string) {
 }
 
 
-const desktopAppIds = ["my-documents", "documents", "projects", "explorer", "settings"] as const;
+const desktopAppIds = ["my-documents", "documents", "projects", "design-documents", "explorer", "settings"] as const;
 
 function validateDesktopState(value: unknown) {
   if (!isRecord(value) || typeof value.taskbarVisible !== "boolean" || !isRecord(value.iconPositions)) throw new AIDesktopContentError("INVALID_INPUT");
   if (value.theme !== "light" && value.theme !== "dark") throw new AIDesktopContentError("INVALID_INPUT");
   const iconPositions = Object.fromEntries(desktopAppIds.map((id) => {
-    const fallbackPositions = { "my-documents": { x: 18, y: 18 }, documents: { x: 18, y: 110 }, projects: { x: 18, y: 202 }, explorer: { x: 18, y: 294 }, settings: { x: 18, y: 386 } } as const;
+    const fallbackPositions = { "my-documents": { x: 18, y: 18 }, documents: { x: 18, y: 110 }, projects: { x: 18, y: 202 }, "design-documents": { x: 18, y: 294 }, explorer: { x: 18, y: 386 }, settings: { x: 18, y: 478 } } as const;
     const position = value.iconPositions[id] ?? fallbackPositions[id];
     if (!isRecord(position) || typeof position.x !== "number" || typeof position.y !== "number" || !Number.isFinite(position.x) || !Number.isFinite(position.y) || position.x < 0 || position.y < 0 || position.x > 10_000 || position.y > 10_000) throw new AIDesktopContentError("INVALID_INPUT");
     return [id, { x: Math.round(position.x), y: Math.round(position.y) }];
@@ -464,7 +464,9 @@ function validateDesktopState(value: unknown) {
   if (!isRecord(visibilityValue)) throw new AIDesktopContentError("INVALID_INPUT");
   const allowedAppIds = new Set([...desktopAppIds, ...customApps.map((app) => app.id)]);
   const desktopAppVisibility = Object.fromEntries(Object.entries(visibilityValue).filter(([id, visible]) => allowedAppIds.has(id) && typeof visible === "boolean"));
-  return { iconPositions, taskbarVisible: value.taskbarVisible, theme: value.theme, customApps, desktopAppVisibility };
+  // タスクバーの位置は後から追加した項目のため、未設定なら従来どおり下に置く。
+  const taskbarPosition = value.taskbarPosition === "left" || value.taskbarPosition === "right" ? value.taskbarPosition : "bottom";
+  return { iconPositions, taskbarVisible: value.taskbarVisible, taskbarPosition, theme: value.theme, customApps, desktopAppVisibility };
 }
 
 export async function getAIDesktopState(env: AIDesktopEnv) {

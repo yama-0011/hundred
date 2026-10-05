@@ -1,0 +1,243 @@
+{
+  "version": 2,
+  "allowedTypes": [
+    "heading",
+    "text",
+    "image",
+    "code",
+    "callout",
+    "divider",
+    "table",
+    "link",
+    "card",
+    "steps",
+    "diagram",
+    "columns"
+  ],
+  "nestedAllowedTypes": [
+    "heading",
+    "text",
+    "image",
+    "code",
+    "callout",
+    "divider",
+    "table",
+    "link",
+    "card",
+    "steps"
+  ],
+  "templates": [
+    {
+      "label": "見出し",
+      "description": "levelは1・2・3のいずれかです。",
+      "block": {
+        "id": "example-heading",
+        "type": "heading",
+        "data": {
+          "text": "見出し",
+          "level": 2
+        }
+      }
+    },
+    {
+      "label": "テキスト",
+      "description": "改行を含む本文を設定できます。",
+      "block": {
+        "id": "example-text",
+        "type": "text",
+        "data": {
+          "text": "本文を入力します。"
+        }
+      }
+    },
+    {
+      "label": "画像",
+      "description": "アップロード済み画像のIDとURL、代替テキスト、キャプションを設定します。",
+      "block": {
+        "id": "example-image",
+        "type": "image",
+        "data": {
+          "imageId": "",
+          "url": "",
+          "alt": "画像の説明",
+          "caption": "画像のキャプション"
+        }
+      }
+    },
+    {
+      "label": "コード",
+      "description": "コード、言語、任意のファイル名を設定します。",
+      "block": {
+        "id": "example-code",
+        "type": "code",
+        "data": {
+          "code": "const message = 'Hello'",
+          "language": "typescript",
+          "filename": "example.ts"
+        }
+      }
+    },
+    {
+      "label": "注意／補足",
+      "description": "toneはinfo・warning・tipのいずれかです。",
+      "block": {
+        "id": "example-callout",
+        "type": "callout",
+        "data": {
+          "tone": "info",
+          "title": "補足",
+          "text": "補足内容を入力します。"
+        }
+      }
+    },
+    {
+      "label": "区切り",
+      "description": "内容を持たない区切り線です。",
+      "block": {
+        "id": "example-divider",
+        "type": "divider",
+        "data": {}
+      }
+    },
+    {
+      "label": "表",
+      "description": "列のwidthは10〜100、rowHeightはcompact・standard・comfortableのいずれかです。",
+      "block": {
+        "id": "example-table",
+        "type": "table",
+        "data": {
+          "columns": [
+            {
+              "id": "example-column-1",
+              "label": "項目",
+              "width": 40
+            },
+            {
+              "id": "example-column-2",
+              "label": "内容",
+              "width": 60
+            }
+          ],
+          "rows": [
+            {
+              "id": "example-row-1",
+              "cells": [
+                "項目名",
+                "説明"
+              ]
+            }
+          ],
+          "rowHeight": "standard",
+          "tableWidth": 100
+        }
+      }
+    },
+    {
+      "label": "リンク",
+      "description": "表示名とリンク先URLを設定します。",
+      "block": {
+        "id": "example-link",
+        "type": "link",
+        "data": {
+          "label": "リンクを開く",
+          "url": "https://example.com"
+        }
+      }
+    },
+    {
+      "label": "カード",
+      "description": "重要情報や選択肢を1〜3列で表示します。badgesは任意で、toneはneutral・info・success・warning・dangerです。",
+      "block": {
+        "id": "example-card",
+        "type": "card",
+        "data": {
+          "columns": 2,
+          "items": [
+            {
+              "id": "example-card-item-1",
+              "title": "選択肢の見出し",
+              "description": "選択肢の説明を入力します。",
+              "badges": [
+                {
+                  "id": "example-card-badge-1",
+                  "label": "推奨",
+                  "tone": "success"
+                }
+              ],
+              "link": {
+                "label": "詳しく見る",
+                "url": "https://example.com"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "手順",
+      "description": "人が順番に実行する操作を表します。badgesは任意です。",
+      "block": {
+        "id": "example-steps",
+        "type": "steps",
+        "data": {
+          "items": [
+            {
+              "id": "example-step-1",
+              "title": "準備する",
+              "text": "必要な設定を確認します。",
+              "badges": [
+                {
+                  "id": "example-step-badge-1",
+                  "label": "ローカル",
+                  "tone": "info"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "技術図（Mermaid）",
+      "description": "kindはflowchart・sequence・architecture・er・stateです。sourceはkindに対応するMermaid構文を設定します。2カラム内には配置できません。",
+      "block": {
+        "id": "example-diagram",
+        "type": "diagram",
+        "data": {
+          "kind": "flowchart",
+          "title": "処理の流れ",
+          "source": "flowchart TD\n  A[開始] --> B[完了]",
+          "caption": "図の補足説明"
+        }
+      }
+    },
+    {
+      "label": "2カラム",
+      "description": "leftとrightへ、columns以外のブロックを配置できます。",
+      "block": {
+        "id": "example-columns",
+        "type": "columns",
+        "data": {
+          "left": [
+            {
+              "id": "example-columns-left",
+              "type": "text",
+              "data": {
+                "text": "左カラム"
+              }
+            }
+          ],
+          "right": [
+            {
+              "id": "example-columns-right",
+              "type": "text",
+              "data": {
+                "text": "右カラム"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

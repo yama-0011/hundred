@@ -61,6 +61,7 @@ type ProjectMember = {
   userId: string;
   displayName: string;
   role: 'owner' | 'member';
+  canEdit: boolean;
 };
 
 type ProjectInput = {
@@ -82,6 +83,7 @@ type ProjectInput = {
   developmentNotes: string;
   relatedDocuments: ProjectDocument[];
   memberUserIds: string[] | null;
+  editableMemberUserIds: string[] | null;
 };
 
 type ProjectRow = {
@@ -282,10 +284,11 @@ function validateProjectInput(value: unknown): ProjectInput {
     developmentNotes: String(value.developmentNotes),
     relatedDocuments: validateDocuments(value.relatedDocuments),
     memberUserIds: validateMemberUserIds(value.memberUserIds),
+    editableMemberUserIds: validateMemberUserIds(value.editableMemberUserIds),
   };
 }
 
-function projectFromRow(row: ProjectRow, members: ProjectMember[], canEdit: boolean) {
+function projectFromRow(row: ProjectRow, members: ProjectMember[], canEdit: boolean, canManageMembers: boolean) {
   let relatedDocuments: ProjectDocument[] = [];
   try { relatedDocuments = validateDocuments(JSON.parse(row.related_documents_json)); } catch { relatedDocuments = []; }
   return {
@@ -309,7 +312,9 @@ function projectFromRow(row: ProjectRow, members: ProjectMember[], canEdit: bool
     relatedDocuments,
     members,
     memberUserIds: members.filter((member) => member.role === 'member').map((member) => member.userId),
+    editableMemberUserIds: members.filter((member) => member.role === 'member' && member.canEdit).map((member) => member.userId),
     canEdit,
+    canManageMembers,
     createdBy: row.created_by,
     updatedBy: row.updated_by,
     createdAt: row.created_at,
@@ -327,8 +332,8 @@ async function syncProjectActor(env: AIDesktopProjectsEnv, actor: AIDesktopProje
 }
 
 async function listProjectMembers(env: AIDesktopProjectsEnv, projectId: string): Promise<ProjectMember[]> {
-  const result = await env.DB.prepare(`SELECT member.user_id, COALESCE(NULLIF(directory.display_name, ''), directory.username, member.user_id) AS display_name, member.role FROM ai_desktop_project_members member LEFT JOIN hundred_user_directory directory ON directory.user_id = member.user_id WHERE member.project_id = ? ORDER BY CASE member.role WHEN 'owner' THEN 0 ELSE 1 END, display_name COLLATE NOCASE`).bind(projectId).all<{ user_id: string; display_name: string; role: 'owner' | 'member' }>();
-  return result.results.map((member) => ({ userId: member.user_id, displayName: member.display_name, role: member.role }));
+  const result = await env.DB.prepare(`SELECT member.user_id, COALESCE(NULLIF(directory.display_name, ''), directory.username, member.user_id) AS display_name, member.role, member.can_edit FROM ai_desktop_project_members member LEFT JOIN hundred_user_directory directory ON directory.user_id = member.user_id WHERE member.project_id = ? ORDER BY CASE member.role WHEN 'owner' THEN 0 ELSE 1 END, display_name COLLATE NOCASE`).bind(projectId).all<{ user_id: string; display_name: string; role: 'owner' | 'member'; can_edit: number }>();
+  return result.results.map((member) => ({ userId: member.user_id, displayName: member.display_name, role: member.role, canEdit: member.role === 'owner' || Boolean(member.can_edit) }));
 }
 
 async function validateKnownMembers(env: AIDesktopProjectsEnv, memberUserIds: string[], ownerUserId: string) {
@@ -346,9 +351,10 @@ async function validatePublishedProjectDocuments(env: AIDesktopProjectsEnv, docu
   if (statuses.some((row) => row && row.status !== 'published')) throw new AIDesktopProjectError('INVALID_INPUT');
 }
 
-async function editableProject(env: AIDesktopProjectsEnv, actor: AIDesktopProjectActor, projectId: string) {
+async function editableProject(env: AIDesktopProjectsEnv, actor: AIDesktopProjectActor, projectId: string, level: 'edit' | 'manage' = 'edit') {
   await syncProjectActor(env, actor);
-  const row = await env.DB.prepare(`SELECT project_id FROM ai_desktop_projects project WHERE project_id = ? AND (created_by = ? OR EXISTS (SELECT 1 FROM ai_desktop_project_members member WHERE member.project_id = project.project_id AND member.user_id = ? AND member.role = 'owner'))`).bind(projectId, actor.username, actor.ownerUserId).first<{ project_id: string }>();
+  const permission = level === 'manage' ? "member.role = 'owner'" : "(member.role = 'owner' OR member.can_edit = 1)";
+  const row = await env.DB.prepare(`SELECT project_id FROM ai_desktop_projects project WHERE project_id = ? AND (created_by = ? OR EXISTS (SELECT 1 FROM ai_desktop_project_members member WHERE member.project_id = project.project_id AND member.user_id = ? AND ${permission}))`).bind(projectId, actor.username, actor.ownerUserId).first<{ project_id: string }>();
   if (!row) {
     const exists = await env.DB.prepare('SELECT project_id FROM ai_desktop_projects WHERE project_id = ?').bind(projectId).first();
     throw new AIDesktopProjectError(exists ? 'FORBIDDEN' : 'NOT_FOUND');
@@ -377,7 +383,7 @@ export async function saveAIDesktopUserProfile(request: Request, env: AIDesktopP
 
 export async function listAIDesktopProjects(env: AIDesktopProjectsEnv, actor: AIDesktopProjectActor) {
   await syncProjectActor(env, actor);
-  const result = await env.DB.prepare(`SELECT project_id, name, customer_name, summary, status, development_mode, updated_by, created_at, updated_at, CASE WHEN created_by = ? OR EXISTS (SELECT 1 FROM ai_desktop_project_members owner_member WHERE owner_member.project_id = project.project_id AND owner_member.user_id = ? AND owner_member.role = 'owner') THEN 1 ELSE 0 END AS can_edit FROM ai_desktop_projects project WHERE created_by = ? OR EXISTS (SELECT 1 FROM ai_desktop_project_members member WHERE member.project_id = project.project_id AND member.user_id = ?) ORDER BY updated_at DESC LIMIT 200`).bind(actor.username, actor.ownerUserId, actor.username, actor.ownerUserId).all<{ project_id: string; name: string; customer_name: string; summary: string; status: string; development_mode: string; updated_by: string; created_at: number; updated_at: number; can_edit: number }>();
+  const result = await env.DB.prepare(`SELECT project_id, name, customer_name, summary, status, development_mode, updated_by, created_at, updated_at, CASE WHEN created_by = ? OR EXISTS (SELECT 1 FROM ai_desktop_project_members owner_member WHERE owner_member.project_id = project.project_id AND owner_member.user_id = ? AND (owner_member.role = 'owner' OR owner_member.can_edit = 1)) THEN 1 ELSE 0 END AS can_edit FROM ai_desktop_projects project WHERE created_by = ? OR EXISTS (SELECT 1 FROM ai_desktop_project_members member WHERE member.project_id = project.project_id AND member.user_id = ?) ORDER BY updated_at DESC LIMIT 200`).bind(actor.username, actor.ownerUserId, actor.username, actor.ownerUserId).all<{ project_id: string; name: string; customer_name: string; summary: string; status: string; development_mode: string; updated_by: string; created_at: number; updated_at: number; can_edit: number }>();
   return { projects: result.results.map((row) => ({ id: row.project_id, name: row.name, customerName: row.customer_name, summary: row.summary, status: row.status, developmentMode: developmentModes.has(row.development_mode) ? row.development_mode : 'personal', canEdit: Boolean(row.can_edit), updatedBy: row.updated_by, createdAt: row.created_at, updatedAt: row.updated_at })) };
 }
 
@@ -386,8 +392,10 @@ export async function getAIDesktopProject(env: AIDesktopProjectsEnv, actor: AIDe
   const row = await env.DB.prepare(`SELECT * FROM ai_desktop_projects project WHERE project_id = ? AND (created_by = ? OR EXISTS (SELECT 1 FROM ai_desktop_project_members member WHERE member.project_id = project.project_id AND member.user_id = ?))`).bind(projectId, actor.username, actor.ownerUserId).first<ProjectRow>();
   if (!row) throw new AIDesktopProjectError('NOT_FOUND');
   const members = await listProjectMembers(env, projectId);
-  const canEdit = row.created_by === actor.username || members.some((member) => member.userId === actor.ownerUserId && member.role === 'owner');
-  return { project: projectFromRow(row, members, canEdit) };
+  // メンバーの追加・削除・権限変更とプロジェクトの削除は、作成者だけが行える。
+  const canManageMembers = row.created_by === actor.username || members.some((member) => member.userId === actor.ownerUserId && member.role === 'owner');
+  const canEdit = canManageMembers || members.some((member) => member.userId === actor.ownerUserId && member.canEdit);
+  return { project: projectFromRow(row, members, canEdit, canManageMembers) };
 }
 
 export async function createAIDesktopProject(request: Request, env: AIDesktopProjectsEnv, actor: AIDesktopProjectActor) {
@@ -400,9 +408,28 @@ export async function createAIDesktopProject(request: Request, env: AIDesktopPro
   await env.DB.batch([
     env.DB.prepare('INSERT INTO ai_desktop_projects (project_id, name, customer_name, summary, objective, status, development_mode, system_diagram_source, file_structure, technology_stack_json, database_info_json, environment_setup_json, tools_json, commands_json, links_json, project_rules_json, design_notes, development_notes, related_documents_json, created_by, updated_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, project.name, project.customerName, project.summary, project.objective, project.status, project.developmentMode, project.systemDiagramSource, project.fileStructure, JSON.stringify(project.technologyStack), JSON.stringify(project.databaseInfo), JSON.stringify(project.environmentSetup), '[]', JSON.stringify(project.commands), JSON.stringify(project.links), JSON.stringify(project.projectRules), project.designNotes, project.developmentNotes, JSON.stringify(project.relatedDocuments), actor.username, actor.username, now, now),
     env.DB.prepare(`INSERT INTO ai_desktop_project_members (project_id, user_id, role, added_by, added_at) VALUES (?, ?, 'owner', ?, ?)`).bind(id, actor.ownerUserId, actor.username, now),
-    ...memberUserIds.map((userId) => env.DB.prepare(`INSERT INTO ai_desktop_project_members (project_id, user_id, role, added_by, added_at) VALUES (?, ?, 'member', ?, ?)`).bind(id, userId, actor.username, now)),
+    ...memberInsertStatements(env, actor, id, { memberUserIds, editableMemberUserIds: new Set(project.editableMemberUserIds ?? []) }, now),
   ]);
   return getAIDesktopProject(env, actor, id);
+}
+
+type MemberChange = { memberUserIds: string[]; editableMemberUserIds: Set<string> };
+
+function memberInsertStatements(env: AIDesktopProjectsEnv, actor: AIDesktopProjectActor, projectId: string, change: MemberChange, now: number) {
+  return change.memberUserIds.map((userId) => env.DB.prepare(`INSERT INTO ai_desktop_project_members (project_id, user_id, role, can_edit, added_by, added_at) VALUES (?, ?, 'member', ?, ?, ?)`).bind(projectId, userId, change.editableMemberUserIds.has(userId) ? 1 : 0, actor.username, now));
+}
+
+// メンバー構成と権限の変更は作成者だけに許可する。編集権限のメンバーが同じ構成のまま保存した場合は、変更なしとして扱う。
+async function memberChangeForUpdate(env: AIDesktopProjectsEnv, actor: AIDesktopProjectActor, projectId: string, project: ProjectInput): Promise<MemberChange | null> {
+  if (project.memberUserIds === null) return null;
+  const requested = project.memberUserIds;
+  const requestedEditable = new Set((project.editableMemberUserIds ?? []).filter((userId) => requested.includes(userId)));
+  const current = (await listProjectMembers(env, projectId)).filter((member) => member.role === 'member');
+  const unchanged = current.length === requested.length && current.every((member) => requested.includes(member.userId) && member.canEdit === requestedEditable.has(member.userId));
+  if (unchanged) return null;
+  await editableProject(env, actor, projectId, 'manage');
+  const memberUserIds = await validateKnownMembers(env, requested, actor.ownerUserId);
+  return { memberUserIds, editableMemberUserIds: new Set([...requestedEditable].filter((userId) => memberUserIds.includes(userId))) };
 }
 
 export async function updateAIDesktopProject(request: Request, env: AIDesktopProjectsEnv, actor: AIDesktopProjectActor, projectId: string) {
@@ -413,12 +440,12 @@ export async function updateAIDesktopProject(request: Request, env: AIDesktopPro
   try { currentDocuments = validateDocuments(JSON.parse(current?.related_documents_json ?? '[]')); } catch { currentDocuments = []; }
   const currentDocumentKeys = new Set(currentDocuments.map((document) => `${document.serviceId}:${document.categoryId}:${document.contentId}`));
   await validatePublishedProjectDocuments(env, project.relatedDocuments.filter((document) => !currentDocumentKeys.has(`${document.serviceId}:${document.categoryId}:${document.contentId}`)));
-  const memberUserIds = project.memberUserIds === null ? null : await validateKnownMembers(env, project.memberUserIds, actor.ownerUserId);
+  const memberChange = await memberChangeForUpdate(env, actor, projectId, project);
   const now = Date.now();
   const statements = [env.DB.prepare('UPDATE ai_desktop_projects SET name = ?, customer_name = ?, summary = ?, objective = ?, status = ?, development_mode = ?, system_diagram_source = ?, file_structure = ?, technology_stack_json = ?, database_info_json = ?, environment_setup_json = ?, tools_json = ?, commands_json = ?, links_json = ?, project_rules_json = ?, design_notes = ?, development_notes = ?, related_documents_json = ?, updated_by = ?, updated_at = ? WHERE project_id = ?').bind(project.name, project.customerName, project.summary, project.objective, project.status, project.developmentMode, project.systemDiagramSource, project.fileStructure, JSON.stringify(project.technologyStack), JSON.stringify(project.databaseInfo), JSON.stringify(project.environmentSetup), '[]', JSON.stringify(project.commands), JSON.stringify(project.links), JSON.stringify(project.projectRules), project.designNotes, project.developmentNotes, JSON.stringify(project.relatedDocuments), actor.username, now, projectId)];
-  if (memberUserIds !== null) {
+  if (memberChange) {
     statements.push(env.DB.prepare(`DELETE FROM ai_desktop_project_members WHERE project_id = ? AND role = 'member'`).bind(projectId));
-    statements.push(...memberUserIds.map((userId) => env.DB.prepare(`INSERT INTO ai_desktop_project_members (project_id, user_id, role, added_by, added_at) VALUES (?, ?, 'member', ?, ?)`).bind(projectId, userId, actor.username, now)));
+    statements.push(...memberInsertStatements(env, actor, projectId, memberChange, now));
   }
   const [result] = await env.DB.batch(statements);
   if (!result.meta.changes) throw new AIDesktopProjectError('NOT_FOUND');
@@ -426,7 +453,7 @@ export async function updateAIDesktopProject(request: Request, env: AIDesktopPro
 }
 
 export async function deleteAIDesktopProject(env: AIDesktopProjectsEnv, actor: AIDesktopProjectActor, projectId: string) {
-  await editableProject(env, actor, projectId);
+  await editableProject(env, actor, projectId, 'manage');
   const result = await env.DB.prepare('DELETE FROM ai_desktop_projects WHERE project_id = ?').bind(projectId).run();
   if (!result.meta.changes) throw new AIDesktopProjectError('NOT_FOUND');
   return { deleted: true, projectId };
