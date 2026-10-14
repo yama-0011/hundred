@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { basename, dirname, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { basename, dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { JSDOM } from "jsdom";
@@ -20,9 +20,10 @@ const apiRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const workspaceRoot = resolve(apiRoot, "../..");
 const wrangler = resolve(apiRoot, "node_modules/.bin/wrangler");
 const database = "hundred-apps-prod";
+const mediaBucket = "hundred-creative-ia-media";
 const blockCatalogPath = resolve(workspaceRoot, "frontend/src/pages/AIDesktop/contentBlockCatalog.json");
 const blockCatalog = JSON.parse(readFileSync(blockCatalogPath, "utf8"));
-const supportedBlockTypes = new Set([...blockCatalog.allowedTypes, "checklist", "toc", "glossary"]);
+const supportedBlockTypes = new Set([...blockCatalog.allowedTypes, "checklist", "toc", "glossary", "screenMap"]);
 const badgeTones = new Set(["neutral", "info", "success", "warning", "danger"]);
 const diagramStarts = {
   flowchart: /^\s*(?:flowchart|graph)\b/iu,
@@ -118,6 +119,53 @@ function registerNestedIds(entries, ids) {
   }
 }
 
+// Screen Mapブロックの検証。frontend/src/pages/AIDesktop/screenMap.ts と src/ai-desktop.ts と揃える。
+// AIが直せるように、問題のある場所をメッセージに含める。
+const screenMapIdPattern = /^[a-z0-9][a-z0-9-]{0,99}$/u;
+const screenMapLimits = { groups: 50, screens: 300, transitions: 1_000, imagesPerScreen: 10 };
+const screenMapVerifications = new Set(["confirmed", "ai-inferred"]);
+const screenMapCoordinate = (value) => typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= 1_000_000;
+
+function screenMapIdSet(blockId, label, entries) {
+  const ids = new Set();
+  for (const entry of entries) {
+    if (!isRecord(entry) || typeof entry.id !== "string" || !screenMapIdPattern.test(entry.id)) throw new Error(`${blockId}: ${label}のidは英小文字・数字・ハイフンで設定してください: ${isRecord(entry) ? entry.id ?? "未設定" : "形式が不正"}`);
+    if (ids.has(entry.id)) throw new Error(`${blockId}: ${label}のidが重複しています: ${entry.id}`);
+    ids.add(entry.id);
+  }
+  return ids;
+}
+
+function validateScreenMap(blockId, data) {
+  const text = (value, max) => typeof value === "string" && value.length <= max;
+  if (data.schemaVersion !== 1 || !Array.isArray(data.groups) || !Array.isArray(data.screens) || !Array.isArray(data.transitions) || !isRecord(data.layout) || !isRecord(data.layout.screens) || !isRecord(data.layout.groups)) throw new Error(`${blockId}: Screen MapはschemaVersion 1と、groups・screens・transitions・layout（screens・groups）を持つ必要があります`);
+  if (data.groups.length > screenMapLimits.groups || data.screens.length > screenMapLimits.screens || data.transitions.length > screenMapLimits.transitions) throw new Error(`${blockId}: グループは${screenMapLimits.groups}件、画面は${screenMapLimits.screens}件、遷移は${screenMapLimits.transitions}件までです`);
+  const groupIds = screenMapIdSet(blockId, "グループ", data.groups);
+  const screenIds = screenMapIdSet(blockId, "画面", data.screens);
+  screenMapIdSet(blockId, "遷移", data.transitions);
+  for (const group of data.groups) {
+    if (!text(group.name, 100) || !text(group.description, 2_000)) throw new Error(`${blockId}: グループ ${group.id} のnameまたはdescriptionが正しくありません`);
+  }
+  for (const screen of data.screens) {
+    if (!text(screen.name, 100) || !text(screen.url, 2_000) || !text(screen.description, 5_000)) throw new Error(`${blockId}: 画面 ${screen.id} のname・url・descriptionが正しくありません`);
+    if (screen.groupId !== undefined && !groupIds.has(screen.groupId)) throw new Error(`${blockId}: 画面 ${screen.id} のgroupIdに存在しないグループが設定されています: ${screen.groupId}`);
+    if (screen.stateOf !== undefined && (screen.stateOf === screen.id || !screenIds.has(screen.stateOf))) throw new Error(`${blockId}: 画面 ${screen.id} のstateOfには、自分以外の存在する画面のidを設定してください: ${screen.stateOf}`);
+    if (!screenMapVerifications.has(screen.verification)) throw new Error(`${blockId}: 画面 ${screen.id} のverificationはconfirmedまたはai-inferredです`);
+    if (!Array.isArray(screen.images) || screen.images.length > screenMapLimits.imagesPerScreen || !screen.images.every((image) => isRecord(image) && text(image.imageId, 300) && text(image.url, 2_000) && (image.thumbnailImageId === undefined || text(image.thumbnailImageId, 300)) && (image.thumbnailUrl === undefined || text(image.thumbnailUrl, 2_000)) && [image.width, image.height].every((value) => value === undefined || (Number.isInteger(value) && value > 0 && value <= 100_000)) && typeof image.masked === "boolean" && (image.capturedAt === undefined || (Number.isInteger(image.capturedAt) && image.capturedAt > 0)))) throw new Error(`${blockId}: 画面 ${screen.id} のimagesが正しくありません（imageId・url・maskedが必要、${screenMapLimits.imagesPerScreen}枚まで）`);
+  }
+  for (const transition of data.transitions) {
+    if (!screenIds.has(transition.from) || !screenIds.has(transition.to)) throw new Error(`${blockId}: 遷移 ${transition.id} のfromまたはtoに存在しない画面が設定されています`);
+    if (!text(transition.action, 200) || !text(transition.condition, 1_000)) throw new Error(`${blockId}: 遷移 ${transition.id} のactionまたはconditionが正しくありません`);
+    if (!screenMapVerifications.has(transition.verification)) throw new Error(`${blockId}: 遷移 ${transition.id} のverificationはconfirmedまたはai-inferredです`);
+  }
+  for (const [id, position] of Object.entries(data.layout.screens)) {
+    if (!screenIds.has(id) || !isRecord(position) || !screenMapCoordinate(position.x) || !screenMapCoordinate(position.y) || (position.width !== undefined && !(typeof position.width === "number" && position.width >= 40 && position.width <= 4_000))) throw new Error(`${blockId}: layout.screens.${id} が正しくありません`);
+  }
+  for (const [id, frame] of Object.entries(data.layout.groups)) {
+    if (!groupIds.has(id) || !isRecord(frame) || !screenMapCoordinate(frame.x) || !screenMapCoordinate(frame.y) || !(frame.width > 0) || !(frame.height > 0) || !screenMapCoordinate(frame.width) || !screenMapCoordinate(frame.height)) throw new Error(`${blockId}: layout.groups.${id} が正しくありません`);
+  }
+}
+
 function validateBlocks(blocks, nested = false, ids = new Set()) {
   if (!Array.isArray(blocks) || blocks.length > 1_000) throw new Error("content.blocksの形式または件数が正しくありません");
   for (const block of blocks) {
@@ -178,6 +226,10 @@ function validateBlocks(blocks, nested = false, ids = new Set()) {
         for (const entry of [...columns, ...rows]) { if (ids.has(entry.id)) throw new Error(`IDが重複しています: ${entry.id}`); ids.add(entry.id); }
         break;
       }
+      case "screenMap":
+        if (nested || blocks.length !== 1) throw new Error(`${block.id}: Screen Mapブロックは、Screen Mapのカテゴリのページに1つだけ置けます`);
+        validateScreenMap(block.id, data);
+        break;
       case "columns":
         if (nested) throw new Error(`${block.id}: 2カラム内に2カラムは配置できません`);
         validateBlocks(data.left, true, ids);
@@ -198,6 +250,33 @@ async function validateMermaidBlocks(blocks) {
     if (block.type === "columns") await validateMermaidBlocks([...block.data.left, ...block.data.right]);
   }
 }
+
+// Screen Mapのページなら、スクリーンショットをJSONと同じ場所の「<コンテンツID>-images」へ保存する。
+// AIが質問に必要な画面の画像だけを開けるよう、画面IDごとのファイルにして、パスをscreenImagesに書く。
+const isScreenMapPage = (content) => Array.isArray(content?.blocks) && content.blocks.length === 1 && content.blocks[0]?.type === "screenMap";
+
+function saveScreenMapImages(args, content, outputPath) {
+  const block = isScreenMapPage(content) ? content.blocks[0] : null;
+  if (!block) return null;
+  const directory = outputPath.replace(/\.json$/u, "") + "-images";
+  rmSync(directory, { recursive: true, force: true });
+  mkdirSync(directory, { recursive: true });
+  const images = {};
+  for (const screen of block.data?.screens ?? []) {
+    const image = screen.images?.[0];
+    if (!image || typeof image.imageId !== "string" || !/^[0-9a-f-]+\.(?:jpg|png|webp|gif|avif)$/u.test(image.imageId)) continue;
+    const file = resolve(directory, `${safeName(screen.id)}.${image.imageId.split(".").pop()}`);
+    execFileSync(wrangler, ["r2", "object", "get", `${mediaBucket}/ai-desktop/${image.imageId}`, targetFlag(args), "--file", file], {
+      cwd: apiRoot,
+      env: { ...process.env, NO_COLOR: "1", WRANGLER_LOG_PATH: resolve(tmpdir(), "hundred-wrangler.log") },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    images[screen.id] = { name: screen.name, path: relative(dirname(outputPath), file), masked: image.masked === true };
+  }
+  return images;
+}
+
+const screenMapImageInstruction = "画面のスクリーンショットはscreenImagesのパスにあります。質問に答えるのに必要な画面の画像だけを開いてください。maskedがtrueの画像は、黒い四角の部分を意図的に隠しています。画像の追加・変更はしないでください。";
 
 function currentBlockCatalog() {
   return structuredClone(blockCatalog);
@@ -236,6 +315,8 @@ function pull(args) {
     const defaultPath = defaultWorkspacePath(args, serviceId, categoryId, contentId);
     const outputPath = resolve(process.cwd(), args.file ?? defaultPath);
     mkdirSync(dirname(outputPath), { recursive: true });
+    const draftImages = saveScreenMapImages(args, payload.content, outputPath);
+    if (draftImages) { payload.screenImages = draftImages; payload.instructions = [...(Array.isArray(payload.instructions) ? payload.instructions : []), screenMapImageInstruction]; }
     writeFileSync(outputPath, `${JSON.stringify(payload, null, 2)}\n`);
     console.log(`取得しました: ${outputPath}`);
     console.log(`対象: ${serviceId} / AI下書き 第${rows[0].revision}版`);
@@ -244,11 +325,19 @@ function pull(args) {
   const category = loadPublishedCategory(args, serviceId, categoryId);
   const content = category.items?.find((candidate) => candidate.id === contentId);
   if (!content) throw new Error(`コンテンツが見つかりません: ${contentId}`);
+  const screenMapInstructions = [
+    "このページはScreen Mapです。contentのScreen Mapブロック1つのdataだけを編集し、ブロックの追加・削除はしないでください。",
+    "dataの形と各項目の意味はblockCatalog.screenMapを参照してください。",
+    "グループ・画面・遷移のidは英小文字・数字・ハイフンで重複しない値にし、groupId・stateOf・from・toには存在するidを設定してください。",
+    "AIが追加・変更した画面と遷移のverificationはai-inferredにしてください。",
+    "カテゴリ名、説明、所属グループ、アイコン、カテゴリの種類などのカテゴリ設定は変更対象外です。",
+    "編集後は ai-desktop:push で下書きDBと履歴へ登録してください。",
+  ];
   const payload = {
     format: "hundred-ai-desktop-content",
     version: 1,
     target: { serviceId, categoryId, contentId, source: "published", databaseTarget: databaseTarget(args), pulledAt: Date.now() },
-    instructions: [
+    instructions: isScreenMapPage(content) ? screenMapInstructions : [
       "content内の文章とブロックを編集し、id・type・data構造を維持してください。",
       "glossaryはカテゴリ共通の用語一覧です。必要な用語の追加・編集・削除ができます。",
       "カテゴリ名、説明、所属グループ、アイコンなどのカテゴリ設定は変更対象外です。",
@@ -265,9 +354,12 @@ function pull(args) {
   const defaultPath = defaultWorkspacePath(args, serviceId, categoryId, contentId);
   const outputPath = resolve(process.cwd(), args.file ?? defaultPath);
   mkdirSync(dirname(outputPath), { recursive: true });
+  const images = saveScreenMapImages(args, payload.content, outputPath);
+  if (images) { payload.screenImages = images; payload.instructions.push(screenMapImageInstruction); }
   writeFileSync(outputPath, `${JSON.stringify(payload, null, 2)}\n`);
   console.log(`取得しました: ${outputPath}`);
   console.log(`対象: ${serviceId} / ${category.title} / ${content.navTitle}`);
+  if (images) console.log(`画像: ${Object.keys(images).length}件を ${dirname(outputPath)} に保存しました`);
 }
 
 async function push(args) {
@@ -291,6 +383,7 @@ async function push(args) {
   payload.target = { serviceId, categoryId, contentId, source: payload.target?.source ?? "published", databaseTarget: databaseTarget(args), pulledAt: payload.target?.pulledAt ?? null };
   const storedPayload = structuredClone(payload);
   delete storedPayload.blockCatalog;
+  delete storedPayload.screenImages;
   storedPayload.content = automaticLayoutContent(storedPayload.content);
   const payloadJson = JSON.stringify(storedPayload);
   if (payloadJson.length > 2_000_000) throw new Error("JSONが2MBを超えています");

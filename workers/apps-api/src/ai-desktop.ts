@@ -54,6 +54,58 @@ function validateBlocks(value: unknown, nested = false): boolean {
   });
 }
 
+// Screen Mapブロックの検証。frontend/src/pages/AIDesktop/screenMap.ts と scripts/ai-desktop-content.mjs と揃える。
+const screenMapIdPattern = /^[a-z0-9][a-z0-9-]{0,99}$/u;
+const screenMapLimits = { groups: 50, screens: 300, transitions: 1_000, imagesPerScreen: 10 };
+const screenMapCoordinateLimit = 1_000_000;
+
+function screenMapIds(entries: unknown[]) {
+  const ids = new Set<string>();
+  for (const entry of entries) {
+    if (!isRecord(entry) || typeof entry.id !== "string" || !screenMapIdPattern.test(entry.id) || ids.has(entry.id)) return null;
+    ids.add(entry.id);
+  }
+  return ids;
+}
+
+function validScreenMap(value: Record<string, unknown>) {
+  const { groups, screens, transitions, layout } = value;
+  if (value.schemaVersion !== 1 || !Array.isArray(groups) || !Array.isArray(screens) || !Array.isArray(transitions) || !isRecord(layout) || !isRecord(layout.screens) || !isRecord(layout.groups)) return false;
+  if (groups.length > screenMapLimits.groups || screens.length > screenMapLimits.screens || transitions.length > screenMapLimits.transitions) return false;
+  const groupIds = screenMapIds(groups);
+  const screenIds = screenMapIds(screens);
+  if (!groupIds || !screenIds || !screenMapIds(transitions)) return false;
+  const verification = (candidate: unknown) => candidate === "confirmed" || candidate === "ai-inferred";
+  const coordinate = (candidate: unknown) => typeof candidate === "number" && Number.isFinite(candidate) && Math.abs(candidate) <= screenMapCoordinateLimit;
+  const size = (candidate: unknown) => typeof candidate === "number" && Number.isFinite(candidate) && candidate > 0 && candidate <= screenMapCoordinateLimit;
+  const pixels = (candidate: unknown) => candidate === undefined || (typeof candidate === "number" && Number.isInteger(candidate) && candidate > 0 && candidate <= 100_000);
+  const cardWidth = (candidate: unknown) => candidate === undefined || (typeof candidate === "number" && Number.isFinite(candidate) && candidate >= 40 && candidate <= 4_000);
+  return groups.every((group) => isRecord(group) && validText(group.name, 100) && validText(group.description, 2_000))
+    && screens.every((screen) => isRecord(screen) && validText(screen.name, 100)
+      && (screen.groupId === undefined || (typeof screen.groupId === "string" && groupIds.has(screen.groupId)))
+      && (screen.stateOf === undefined || (typeof screen.stateOf === "string" && screen.stateOf !== screen.id && screenIds.has(screen.stateOf)))
+      && validText(screen.url, 2_000) && validText(screen.description, 5_000) && verification(screen.verification)
+      && Array.isArray(screen.images) && screen.images.length <= screenMapLimits.imagesPerScreen
+      && screen.images.every((image) => isRecord(image) && validText(image.imageId, 300) && validText(image.url, 2_000) && validText(image.thumbnailImageId, 300, true) && validText(image.thumbnailUrl, 2_000, true) && pixels(image.width) && pixels(image.height) && typeof image.masked === "boolean" && (image.capturedAt === undefined || (typeof image.capturedAt === "number" && Number.isInteger(image.capturedAt) && image.capturedAt > 0))))
+    && transitions.every((transition) => isRecord(transition) && typeof transition.from === "string" && screenIds.has(transition.from) && typeof transition.to === "string" && screenIds.has(transition.to)
+      && validText(transition.action, 200) && validText(transition.condition, 1_000) && verification(transition.verification))
+    && Object.entries(layout.screens).every(([id, position]) => screenIds.has(id) && isRecord(position) && coordinate(position.x) && coordinate(position.y) && cardWidth(position.width))
+    && Object.entries(layout.groups).every(([id, frame]) => groupIds.has(id) && isRecord(frame) && coordinate(frame.x) && coordinate(frame.y) && size(frame.width) && size(frame.height));
+}
+
+// kindが"screen-map"のカテゴリは、先頭にScreen Mapのページ（Screen Mapブロック1つだけ）を1つ持ち、ほかに通常のページを持てる。
+// 通常のページにはScreen Mapブロックを置かせない。
+function validCategoryItems(category: Record<string, unknown>) {
+  const items = category.items;
+  if (!Array.isArray(items) || items.length > 500) return false;
+  const validItem = (item: unknown): item is Record<string, unknown> => isRecord(item) && validText(item.id, 300) && validText(item.navTitle, 200) && (item.pageWidth === undefined || item.pageWidth === "standard" || item.pageWidth === "wide" || item.pageWidth === "compact");
+  const validPages = (pages: unknown[]) => pages.every((item) => validItem(item) && validateBlocks(item.blocks));
+  if (category.kind === undefined) return validPages(items);
+  if (category.kind !== "screen-map" || items.length === 0 || !validItem(items[0])) return false;
+  const blocks = items[0].blocks;
+  return Array.isArray(blocks) && blocks.length === 1 && isRecord(blocks[0]) && typeof blocks[0].id === "string" && blocks[0].type === "screenMap" && isRecord(blocks[0].data) && validScreenMap(blocks[0].data) && validPages(items.slice(1));
+}
+
 function validateCatalog(value: unknown): Record<string, unknown> {
   if (!isRecord(value)) {
     throw new AIDesktopContentError("INVALID_INPUT");
@@ -66,7 +118,7 @@ function validateCatalog(value: unknown): Record<string, unknown> {
     catalog.schemaVersion !== 3 ||
     !Array.isArray(catalog.categoryGroups) ||
     catalog.categoryGroups.length > 100 ||
-    !catalog.categoryGroups.every((group) => isRecord(group) && validText(group.id, 300) && validText(group.title, 100) && validText(group.description, 500) && Array.isArray(group.categories) && group.categories.length <= 100 && group.categories.every((category) => isRecord(category) && validText(category.id, 300) && validText(category.title, 100) && validText(category.description, 500) && validText(category.icon, 20) && (category.glossary === undefined || (Array.isArray(category.glossary) && category.glossary.length <= 500 && category.glossary.every((entry) => isRecord(entry) && validText(entry.id, 300) && validText(entry.term, 500) && validText(entry.description, 20_000)))) && Array.isArray(category.items) && category.items.length <= 500 && category.items.every((item) => isRecord(item) && validText(item.id, 300) && validText(item.navTitle, 200) && (item.pageWidth === undefined || item.pageWidth === "standard" || item.pageWidth === "wide" || item.pageWidth === "compact") && validateBlocks(item.blocks))))
+    !catalog.categoryGroups.every((group) => isRecord(group) && validText(group.id, 300) && validText(group.title, 100) && validText(group.description, 500) && Array.isArray(group.categories) && group.categories.length <= 100 && group.categories.every((category) => isRecord(category) && validText(category.id, 300) && validText(category.title, 100) && validText(category.description, 500) && validText(category.icon, 20) && (category.glossary === undefined || (Array.isArray(category.glossary) && category.glossary.length <= 500 && category.glossary.every((entry) => isRecord(entry) && validText(entry.id, 300) && validText(entry.term, 500) && validText(entry.description, 20_000)))) && validCategoryItems(category)))
   ) {
     throw new AIDesktopContentError("INVALID_INPUT");
   }
@@ -226,6 +278,18 @@ function collectImageReferences(value: unknown, path: string, references: Map<st
   if (!isRecord(value)) return;
   if (value.type === "image" && isRecord(value.data) && typeof value.data.imageId === "string" && value.data.imageId) {
     references.set(value.data.imageId, [...(references.get(value.data.imageId) ?? []), path]);
+  }
+  // Screen Mapのスクリーンショットも、画像一覧で「使われている画像」として数える。
+  if (value.type === "screenMap" && isRecord(value.data) && Array.isArray(value.data.screens)) {
+    for (const screen of value.data.screens) {
+      if (!isRecord(screen) || !Array.isArray(screen.images)) continue;
+      for (const image of screen.images) {
+        if (!isRecord(image)) continue;
+        for (const imageId of [image.imageId, image.thumbnailImageId]) {
+          if (typeof imageId === "string" && imageId) references.set(imageId, [...(references.get(imageId) ?? []), path]);
+        }
+      }
+    }
   }
   Object.values(value).forEach((child) => collectImageReferences(child, path, references));
 }

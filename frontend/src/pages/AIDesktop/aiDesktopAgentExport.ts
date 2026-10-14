@@ -12,7 +12,7 @@
  */
 import type { AIDesktopDesignCategory, AIDesktopDesignDocument, AIDesktopProject } from '../../services/AIDesktop/aiDesktopApi'
 import type { ContentBlock, LeafBlock } from './contentBlocks'
-import { createContentBlockCatalog } from './contentBlockCatalog'
+import { createContentBlockCatalog, type ContentBlockCatalog } from './contentBlockCatalog'
 import type { DesignDocumentContent } from './designDocumentStandardTemplates'
 
 /** 書き出しの形式。AIへの説明と合わせて、形式を変えたときに増やす。 */
@@ -67,6 +67,8 @@ function leafToMarkdown(block: LeafBlock): string {
 
 function blockToMarkdown(block: ContentBlock): string {
   if (block.type === 'columns') return [...block.data.left, ...block.data.right].map(leafToMarkdown).filter(Boolean).join('\n\n')
+  // Screen Mapブロックは資料（マイ資料）専用で、設計書には現れない。
+  if (block.type === 'screenMap') return ''
   return leafToMarkdown(block)
 }
 
@@ -176,7 +178,10 @@ export function buildAgentExport(project: AIDesktopProject, categories: AIDeskto
   files.push({ path: 'docs/design/README.md', content: `${lines('# 設計書の一覧', '', '作業に関係する設計書だけを開いて読んでください。', '', indexSections.join('\n\n'))}\n` })
 
   files.push({ path: 'docs/ai-desktop/README.md', content: `${aiDesktopGuide()}\n` })
-  files.push({ path: 'docs/ai-desktop/block-reference.json', content: `${JSON.stringify(createContentBlockCatalog(), null, 2)}\n` })
+  // 設計書ではScreen Mapブロックを使わないため、設計書向けのブロック一覧には含めない。
+  const blockReference: Partial<ContentBlockCatalog> = createContentBlockCatalog()
+  delete blockReference.screenMap
+  files.push({ path: 'docs/ai-desktop/block-reference.json', content: `${JSON.stringify(blockReference, null, 2)}\n` })
 
   // 毎回読まれるため、概要・必須のルール・固定したコマンド・置き場所の案内だけにする。
   const requiredRules = project.projectRules.filter((rule) => rule.importance !== 'recommended')

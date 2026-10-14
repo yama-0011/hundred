@@ -9,6 +9,9 @@ import { BlockRenderer, ContentCanvas, ContentTableOfContents, createContent, no
 import { createContentBlockCatalog } from './contentBlockCatalog'
 import { copyArticleImage } from './copyArticleImage'
 import { diagramKindMatchesSource, validateMermaidSource, type DiagramKind } from './mermaidDiagramValidation'
+import { categoryKindOf, containsScreenMapBlock, createScreenMapContent, isScreenMapData, screenMapBlockOf } from './screenMap'
+import ScreenMapEditor from './ScreenMapEditor'
+import ScreenMapOverview from './ScreenMapOverview'
 import ImageExplorer from './ImageExplorer'
 import ProjectsApp from './ProjectsApp'
 import DesignDocumentsApp, { type DesignDocumentsProjectRequest } from './DesignDocumentsApp'
@@ -17,7 +20,8 @@ import AIDesktopNotifications from './AIDesktopNotifications'
 import AIDesktopConfirmDialog from './AIDesktopConfirmDialog'
 import { AppContent, AppHeader, AppShell } from './AppLayout'
 import { showAIDesktopNotification } from './aiDesktopNotificationBus'
-import { isWorkspaceJsonFileCancelled, readWorkspaceJsonFile, selectWorkspaceJsonFile, supportsWorkspaceJsonFile, writeWorkspaceJsonFile } from './workspaceJsonFile'
+import { contentWorkspacePath, readContentWorkspace, selectContentWorkspaceFolder, supportsContentWorkspaceFolder, writeContentWorkspace, type ContentWorkspaceTarget, type ScreenMapImageEntry } from './contentWorkspaceFolder'
+import { isWorkspaceJsonFileCancelled } from './workspaceJsonFile'
 import '../../styles/AIDesktop/ai-desktop.css'
 import '../../styles/AIDesktop/ai-desktop-projects.css'
 import '../../styles/AIDesktop/ai-desktop-app-layout.css'
@@ -114,6 +118,7 @@ const validImportedBlocks = (value: unknown, nested = false): value is ContentBl
     case 'steps': return Array.isArray(data.items) && data.items.length <= 20 && data.items.every((item) => isRecord(item) && typeof item.id === 'string' && typeof item.title === 'string' && typeof item.text === 'string' && validBadges(item.badges, 3))
     case 'diagram': return !nested && diagramKinds.has(String(data.kind)) && typeof data.title === 'string' && typeof data.source === 'string' && diagramKindMatchesSource(String(data.kind) as DiagramKind, data.source) && (data.caption === undefined || typeof data.caption === 'string')
     case 'table': { const columns = data.columns; const rows = data.rows; return Array.isArray(columns) && columns.length > 0 && columns.every((column) => isRecord(column) && typeof column.id === 'string' && typeof column.label === 'string' && typeof column.width === 'number' && Number.isFinite(column.width) && column.width > 0) && Array.isArray(rows) && rows.every((row) => isRecord(row) && typeof row.id === 'string' && Array.isArray(row.cells) && row.cells.length === columns.length && row.cells.every((cell) => typeof cell === 'string')) && (data.rowHeight === 'compact' || data.rowHeight === 'standard' || data.rowHeight === 'comfortable') && (data.tableWidth === undefined || (typeof data.tableWidth === 'number' && data.tableWidth >= 100 && data.tableWidth <= 300)) }
+    case 'screenMap': return !nested && isScreenMapData(data)
     case 'columns': return !nested && validImportedBlocks(data.left, true) && validImportedBlocks(data.right, true)
     default: return false
   }
@@ -122,6 +127,8 @@ const importedContent = (value: unknown): ContentItem | null => {
   if (!isRecord(value) || typeof value.id !== 'string' || typeof value.navTitle !== 'string' || (value.pageWidth !== undefined && value.pageWidth !== 'standard' && value.pageWidth !== 'wide' && value.pageWidth !== 'compact') || !validImportedBlocks(value.blocks)) return null
   return value as unknown as ContentItem
 }
+// Screen MapのページはScreen Mapブロック1つだけを持ち、通常のページにはScreen Mapブロックを置かない。
+const contentMatchesPage = (item: ContentItem, isScreenMapPage: boolean) => isScreenMapPage ? Boolean(screenMapBlockOf(item)) : !containsScreenMapBlock(item.blocks)
 const validateContentDiagrams = async (blocks: ContentBlock[]): Promise<boolean> => {
   for (const block of blocks) {
     if (block.type === 'diagram' && !await validateMermaidSource(block.data.kind as DiagramKind, block.data.source)) return false
@@ -160,6 +167,33 @@ const contentTemplateExample = {
   },
 }
 
+// ワークスペースへ書き出すScreen MapのJSONに入れる、AIへの指示。ai-desktop:pull の指示と揃える。
+const screenMapWorkspaceInstructions = [
+  'このページはScreen Mapです。contentのScreen Mapブロック1つのdataだけを編集し、ブロックの追加・削除はしないでください。',
+  'dataの形と各項目の意味はblockCatalog.screenMapを参照してください。',
+  'グループ・画面・遷移のidは英小文字・数字・ハイフンで重複しない値にし、groupId・stateOf・from・toには存在するidを設定してください。',
+  'AIが追加・変更した画面と遷移のverificationはai-inferredにしてください。',
+  'カテゴリ名、説明、所属グループ、アイコン、カテゴリの種類などのカテゴリ設定は変更対象外です。',
+  '画面のスクリーンショットはscreenImagesのパスにあります。質問に答えるのに必要な画面の画像だけを開いてください。maskedがtrueの画像は、黒い四角の部分を意図的に隠しています。画像の追加・変更はしないでください。',
+  '編集後は ai-desktop:push で下書きDBと履歴へ登録するか、Hundredの編集画面で「JSONから読み込む」を実行してください。',
+]
+// ai-desktop:pull のファイル名と同じ規則にする。
+const safeContentFileName = (value: string) => value.replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, '-')
+
+const screenMapTemplateGuide = {
+  purpose: 'HundredのScreen Map（画面と画面遷移の図）を作成・編集するためのJSONテンプレートです。実際に反映されるのはdata.contentです。guideとreferenceは説明用です。',
+  steps: [
+    'data.content.blocksにあるScreen Mapブロック1つのdataを編集します。ブロックを追加・削除しないでください。',
+    'reference.screenMapTemplateとreference.fieldDefinitionsを参考に、groups・screens・transitionsを追加・編集します。',
+    'AIが追加・変更した画面と遷移のverificationはai-inferredにします。',
+    '画面のスクリーンショットは、screenImagesのパスにあります。質問に答えるのに必要な画面の画像だけを開いてください。画像の追加・変更はしないでください。',
+    'Hundredの編集画面で「JSONから読み込む」または「JSONをインポート」を実行し、内容を確認してから「DBへ保存」を押します。',
+  ],
+  requiredFields: ['data.content.id', 'data.content.navTitle', 'data.content.blocks（Screen Mapブロック1つ）'],
+  screenOnlyFields: ['資料名', 'カテゴリ名', '所属グループ', 'アイコン', 'カテゴリの種類', '公開・非公開設定'],
+  cautions: ['グループ・画面・遷移のidは英小文字・数字・ハイフンで、それぞれ重複しない値にしてください。', 'groupId・stateOf・from・toには、存在するidを設定してください。', '画像はAI Desktopにアップロードしたものだけを設定できます。', 'targetのserviceIdとcategoryIdは変更しないでください。'],
+}
+
 function ServiceHome({ service, mode, canEdit, publicationStatus, publicationBusy, onMaterialList, onPublication, onMode, onCategory, onAddCategory, onUpdateService }: { service: ServiceConfig; mode: ServiceMode; canEdit: boolean; publicationStatus?: 'draft' | 'published' | 'unpublished'; publicationBusy?: boolean; onMaterialList: () => void; onPublication?: () => void; onMode: (mode: ServiceMode) => void; onCategory: (id: string) => void; onAddCategory: (groupId: string) => void; onUpdateService: (service: ServiceConfig) => void }) {
   const [draggedCategoryId, setDraggedCategoryId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<{ groupId: string; categoryId: string | null } | null>(null)
@@ -191,6 +225,8 @@ function CategoryEditor({ serviceId, service, category, groupId, initialSelected
   const [categorySettingsOpen, setCategorySettingsOpen] = useState(false)
   const [glossaryOpen, setGlossaryOpen] = useState(false)
   const [pageEditorOpen, setPageEditorOpen] = useState(true)
+  // Screen Mapは広い場所で編集できるよう、ページ編集とは別の画面（ウィンドウ全体）で開く。
+  const [screenMapPageOpen, setScreenMapPageOpen] = useState(false)
   const [glossary, setGlossary] = useState<GlossaryEntry[]>(initialGlossary)
   const [items, setItems] = useState(initialItems)
   const itemsRef = useRef(initialItems)
@@ -207,6 +243,10 @@ function CategoryEditor({ serviceId, service, category, groupId, initialSelected
   const selectedItem = items.find((candidate) => candidate.id === selectedItemId) ?? null
   const canSave = title.trim().length > 0
   const currentSnapshot = JSON.stringify({ title, description, icon, targetGroupId, glossary, items })
+  // カテゴリはScreen Mapのページを1つまで（先頭）持てる。JSON連携やAI下書きは、選んでいるページがScreen Mapかどうかで扱いを変える。
+  const usesScreenMap = items.some((item) => screenMapBlockOf(item))
+  const screenMapBlock = screenMapBlockOf(selectedItem ?? undefined)
+  const selectedIsScreenMap = Boolean(screenMapBlock)
   const hasUnsavedChanges = currentSnapshot !== savedSnapshot
   const confirmLeave = async () => !hasUnsavedChanges || await confirmAIDesktop({ title: '変更内容が保存されていません', message: '保存せずに移動すると、変更内容は破棄されます。', confirmLabel: '破棄して移動', tone: 'danger' })
   const backToCategories = async () => { if (await confirmLeave()) onBack() }
@@ -222,6 +262,21 @@ function CategoryEditor({ serviceId, service, category, groupId, initialSelected
   const updateItem = (nextItem: ContentItem) => commitItems(itemsRef.current.map((candidate) => candidate.id === nextItem.id ? nextItem : candidate))
   const deleteItem = async () => { if (!selectedItemId || !(await confirmAIDesktop({ title: 'このコンテンツを削除しますか？', confirmLabel: '削除', tone: 'danger' }))) return; const currentItems = itemsRef.current; const index = currentItems.findIndex((candidate) => candidate.id === selectedItemId); const nextItems = currentItems.filter((candidate) => candidate.id !== selectedItemId); commitItems(nextItems); setSelectedItemId(nextItems[Math.min(index, nextItems.length - 1)]?.id ?? null) }
   const updateGlossary = (index: number, changes: Partial<GlossaryEntry>) => setGlossary((current) => current.map((entry, candidateIndex) => candidateIndex === index ? { ...entry, ...changes } : entry))
+  const toggleScreenMap = async (enabled: boolean) => {
+    if (enabled === usesScreenMap) return
+    if (enabled) {
+      const page = createScreenMapContent('Screen Map')
+      commitItems([page, ...itemsRef.current])
+      setSelectedItemId(page.id)
+      setScreenMapPageOpen(true)
+      return
+    }
+    if (!(await confirmAIDesktop({ title: 'Screen Mapを使わない設定にしますか？', message: 'Screen Mapのページ（画面と遷移）を削除します。ほかのページは残ります。「DBへ保存」を押すまでは保存されません。', confirmLabel: '削除する', tone: 'danger' }))) return
+    const rest = itemsRef.current.filter((item) => !screenMapBlockOf(item))
+    const nextItems = rest.length ? rest : [createContent(`item-${Date.now()}`, '新しいコンテンツ')]
+    commitItems(nextItems)
+    setSelectedItemId(nextItems[0].id)
+  }
   const addGlossaryEntry = () => { setGlossary((current) => [...current, { id: `term-${Date.now()}`, term: '', description: '' }]); setGlossaryOpen(true) }
   const currentContentPayload = () => selectedItem ? { format: 'hundred-ai-desktop-content', version: 1, target: { serviceId, categoryId: category.id, contentId: selectedItem.id, source: 'published', databaseTarget: import.meta.env.DEV ? 'local' : 'remote' }, instructions: ['content内の文章とブロックを編集し、id・type・data構造を維持してください。', 'glossaryはカテゴリ共通の用語一覧です。必要な用語の追加・編集・削除ができます。各用語は重複しないid、term、descriptionを維持してください。', 'カテゴリ名、説明、所属グループ、アイコンなどのカテゴリ設定は変更しないでください。', 'ページ幅はウィンドウに合わせて自動調整されます。pageWidthは設定しないでください。', 'calloutのtoneはinfo・warning・tip、表の列widthは10〜100です。'], glossary, content: withAutomaticPageLayout({ ...selectedItem, blocks: normalizeTableWidths(withoutPageGlossary(selectedItem.blocks)) }) } : null
   const contentJsonData = () => selectedItem ? { glossary, content: withAutomaticPageLayout({ ...selectedItem, blocks: normalizeTableWidths(withoutPageGlossary(selectedItem.blocks)) }) } : null
@@ -234,7 +289,7 @@ function CategoryEditor({ serviceId, service, category, groupId, initialSelected
   const saveContentDraft = async () => { const payload = currentContentPayload(); if (!selectedItem || !payload || !(await confirmAIDesktop({ title: `「${selectedItem.navTitle || '名称未設定'}」を下書きとして保存しますか？`, message: '正式な資料にはまだ反映されません。', confirmLabel: '下書きに保存' }))) return; setDraftBusy(true); try { if (!await validateContentDiagrams(selectedItem.blocks)) throw new Error('Mermaid構文が正しくない技術図があります。構文プレビューを確認してください。'); const { draft } = await saveAIDesktopContentDraft('content', serviceId, category.id, payload, selectedItem.id, contentDraftRevisions[selectedItem.id] || undefined); setContentDraftRevisions((current) => ({ ...current, [selectedItem.id]: draft.revision })); await refreshDraftHistory(); showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.draft.saved(draft.revision)) } catch (error) { showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.draft.saveFailed)) } finally { setDraftBusy(false) } }
   const readDraftHistory = async (entry: AIDesktopDraftHistoryEntry) => { const { history } = await getAIDesktopContentDraftHistory<unknown>(serviceId, category.id, entry.id); if (!isRecord(history.payload) || history.payload.format !== 'hundred-ai-desktop-content' || history.payload.version !== 1) throw new Error('FORMAT'); const item = importedContent(history.payload.content); if (!item) throw new Error('CONTENT'); const previewGlossary = history.payload.glossary === undefined ? null : importedGlossary(history.payload.glossary); if (history.payload.glossary !== undefined && !previewGlossary) throw new Error('GLOSSARY'); return { item: { ...item, blocks: normalizeTableWidths(withoutPageGlossary(item.blocks)) }, glossary: previewGlossary, contentId: history.contentId, revision: history.revision, savedAt: history.savedAt } }
   const previewDraftHistory = async (entry: AIDesktopDraftHistoryEntry) => { if (!entry.hasPreview) return; setSelectedDraftHistoryId(entry.id); setDraftBusy(true); try { setDraftPreview(await readDraftHistory(entry)) } catch (error) { showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.draft.previewFailed)) } finally { setDraftBusy(false) } }
-  const applyDraft = (draft: { item: ContentItem; glossary: GlossaryEntry[] | null; contentId: string; revision: number; savedAt: number }) => { updateItem({ ...draft.item, id: draft.contentId }); if (draft.glossary) setGlossary(draft.glossary); setSelectedItemId(draft.contentId); setContentDraftRevisions((current) => ({ ...current, [draft.contentId]: draft.revision })); setDraftPreview(null); setDraftDialogOpen(false); setPageEditorOpen(true); setSaveState('idle'); showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.draft.applied(Boolean(draft.glossary))) }
+  const applyDraft = (draft: { item: ContentItem; glossary: GlossaryEntry[] | null; contentId: string; revision: number; savedAt: number }) => { if (!contentMatchesPage(draft.item, Boolean(screenMapBlockOf(itemsRef.current.find((item) => item.id === draft.contentId))))) { showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.content.kindMismatch); return } updateItem({ ...draft.item, id: draft.contentId }); if (draft.glossary) setGlossary(draft.glossary); setSelectedItemId(draft.contentId); setContentDraftRevisions((current) => ({ ...current, [draft.contentId]: draft.revision })); setDraftPreview(null); setDraftDialogOpen(false); setPageEditorOpen(true); setSaveState('idle'); showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.draft.applied(Boolean(draft.glossary))) }
   const applyDraftPreview = () => { if (draftPreview) applyDraft(draftPreview) }
   const applySelectedDraftHistory = async () => { const entry = draftHistory.find((candidate) => candidate.id === selectedDraftHistoryId && candidate.hasPreview); if (!entry) return; setDraftBusy(true); try { applyDraft(await readDraftHistory(entry)) } catch (error) { showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.draft.loadFailed)) } finally { setDraftBusy(false) } }
   const deleteDraftHistory = async () => { if (!selectedItem || !draftHistory.length || !(await confirmAIDesktop({ title: `「${selectedItem.navTitle || '名称未設定'}」の下書き履歴をすべて削除しますか？`, message: '現在の下書きは残り、次回の保存は第1版になります。', confirmLabel: '削除', tone: 'danger' }))) return; const contentId = selectedItem.id; setDraftBusy(true); try { await deleteAIDesktopContentDraftHistory(serviceId, category.id, contentId); setDraftHistory([]); setSelectedDraftHistoryId(null); setContentDraftRevisions((current) => ({ ...current, [contentId]: 0 })); showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.draft.historyDeleted) } catch (error) { showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.draft.historyDeleteFailed)) } finally { setDraftBusy(false) } }
@@ -242,6 +297,15 @@ function CategoryEditor({ serviceId, service, category, groupId, initialSelected
     const payload = contentExportPayload()
     if (!payload) return null
     const catalog = createContentBlockCatalog()
+    if (selectedIsScreenMap) return {
+      ...payload,
+      guide: screenMapTemplateGuide,
+      reference: {
+        description: catalog.screenMap.description,
+        fieldDefinitions: { content: 'Screen Mapのページです。id、navTitleと、Screen Mapブロック1つだけのblocksを維持してください。', ...catalog.screenMap.fieldDefinitions },
+        screenMapTemplate: catalog.screenMap.block,
+      },
+    }
     return {
       ...payload,
       guide: contentTemplateGuide,
@@ -275,7 +339,22 @@ function CategoryEditor({ serviceId, service, category, groupId, initialSelected
   const copyContentTarget = async () => {
     if (!selectedItem) return
     const targetJson = JSON.stringify({ target: { serviceId, categoryId: category.id, contentId: selectedItem.id, source: 'published', databaseTarget: import.meta.env.DEV ? 'local' : 'remote' } }, null, 2)
-    const value = includeAiPrompt
+    const value = includeAiPrompt && selectedIsScreenMap
+      ? `HundredのAI DesktopのScreen Mapを編集してください。
+
+次の資料情報を使って、選択中のScreen MapをDBから取得し、私の依頼に沿って編集してください。
+取得したJSONのblockCatalog.screenMapを参照し、contentのScreen Mapブロック1つのdata（groups・screens・transitions）だけを編集してください。ブロックの追加・削除はしないでください。
+グループ・画面・遷移のidは英小文字・数字・ハイフンで重複しない値にし、groupId・stateOf・from・toには存在するidを設定してください。
+AIが追加・変更した画面と遷移のverificationはai-inferredにしてください。
+カテゴリ名、説明、所属グループ、アイコン、カテゴリの種類などのカテゴリ設定は変更しないでください。
+編集後はJSONの構造を検証し、正式公開データを直接変更せず、AI下書き履歴へ保存してください。
+保存が完了したら、追加・変更した画面と遷移、保存した版数を報告してください。
+
+${targetJson}
+
+依頼内容:
+（ここに作成・修正内容を記入してください）`
+      : includeAiPrompt
       ? `HundredのAI Desktop資料を編集してください。
 
 次の資料情報を使って、選択中コンテンツとカテゴリ共通の用語一覧（glossary）をDBから取得し、私の依頼に沿って編集してください。
@@ -304,7 +383,7 @@ ${targetJson}
       showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.content.differentTarget(actual, `${serviceId}/${category.id}`))
       return
     }
-    showAIDesktopNotification('error', error instanceof Error && error.message === 'RESOURCE_TYPE' ? AI_DESKTOP_MESSAGES.content.wrongResourceType : error instanceof Error && error.message === 'TARGET_FORMAT' ? AI_DESKTOP_MESSAGES.content.invalidTarget : error instanceof Error && error.message === 'MERMAID' ? AI_DESKTOP_MESSAGES.content.mermaidImportInvalid : AI_DESKTOP_MESSAGES.content.invalidTemplate)
+    showAIDesktopNotification('error', error instanceof Error && error.message === 'RESOURCE_TYPE' ? AI_DESKTOP_MESSAGES.content.wrongResourceType : error instanceof Error && error.message === 'TARGET_FORMAT' ? AI_DESKTOP_MESSAGES.content.invalidTarget : error instanceof Error && error.message === 'MERMAID' ? AI_DESKTOP_MESSAGES.content.mermaidImportInvalid : error instanceof Error && error.message === 'KIND' ? AI_DESKTOP_MESSAGES.content.kindMismatch : error instanceof Error && error.message === 'SCREEN_MAP' ? AI_DESKTOP_MESSAGES.content.screenMapImportInvalid : AI_DESKTOP_MESSAGES.content.invalidTemplate)
   }
   const applyContentJson = async (text: string) => {
     if (!selectedItem) return false
@@ -324,7 +403,8 @@ ${targetJson}
     if (target !== undefined && (!isRecord(target) || typeof target.serviceId !== 'string' || typeof target.categoryId !== 'string' || typeof target.contentId !== 'string')) throw new Error('TARGET_FORMAT')
     if (isRecord(target) && (target.serviceId !== serviceId || target.categoryId !== category.id)) throw new Error(`TARGET_SCOPE:${target.serviceId}/${target.categoryId}`)
     const imported = importedContent(data.content)
-    if (!imported) throw new Error('CONTENT')
+    if (!imported) throw new Error(selectedIsScreenMap ? 'SCREEN_MAP' : 'CONTENT')
+    if (!contentMatchesPage(imported, selectedIsScreenMap)) throw new Error('KIND')
     if (!await validateContentDiagrams(imported.blocks)) throw new Error('MERMAID')
     const targetId = selectedItem.id
     const nextGlossary = data.glossary === undefined ? null : importedGlossary(data.glossary)
@@ -349,40 +429,52 @@ ${targetJson}
     }
     picker.click()
   }
+  // ワークスペースへの書き出しは ai-desktop:pull と同じ場所・同じ形にし、AIがそのまま読み、ai-desktop:push できるようにする。
+  // Screen Mapのページは、画面ごとの画像も一緒に書き出す。
+  const workspaceTarget = (): ContentWorkspaceTarget | null => selectedItem ? { databaseTarget: import.meta.env.DEV ? 'local' : 'remote', serviceId, categoryId: category.id, contentId: selectedItem.id } : null
+  const workspacePayload = (screenImages: Record<string, ScreenMapImageEntry> | null) => {
+    const payload = currentContentPayload()
+    if (!payload || !selectedItem) return null
+    return { ...payload, labels: { service: service.name, category: title, content: selectedItem.navTitle }, ...(selectedIsScreenMap ? { instructions: screenMapWorkspaceInstructions } : {}), blockCatalog: createContentBlockCatalog(), ...(screenImages ? { screenImages } : {}) }
+  }
   const writeContentWorkspaceJson = async () => {
-    const payload = contentEditingTemplate()
-    if (!selectedItem || !payload || !(await confirmAIDesktop({ title: '現在のコンテンツをJSONへ書き出しますか？', message: '選択中のJSONは上書きされます。', confirmLabel: '書き出す' }))) return
+    const target = workspaceTarget()
+    const payload = workspacePayload(null)
+    if (!selectedItem || !target || !payload || !(await confirmAIDesktop({ title: '現在のページをワークスペースへ書き出しますか？', message: `${contentWorkspacePath(target)} を上書きします。${selectedIsScreenMap ? '画面の画像も書き出します。' : ''}`, confirmLabel: '書き出す' }))) return
+    if (!supportsContentWorkspaceFolder()) {
+      downloadContentJson(payload, `${safeContentFileName(selectedItem.id)}.json`)
+      showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.content.workspaceUnsupported)
+      return
+    }
     try {
-      const name = await writeWorkspaceJsonFile(`${JSON.stringify(payload, null, 2)}\n`)
-      showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.project.workspaceWritten(name))
+      const result = await writeContentWorkspace(target, screenMapBlock?.data ?? null, (screenImages) => workspacePayload(screenImages))
+      if (result.failedScreens.length) showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.content.screenMapImagesFailed(result.failedScreens))
+      else showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.content.workspaceWritten(result.path, selectedIsScreenMap ? result.imageCount : null))
     } catch (error) {
       if (isWorkspaceJsonFileCancelled(error)) return
-      if (!supportsWorkspaceJsonFile()) {
-        downloadContentJson(payload, `${selectedItem.navTitle.trim().replace(/[/:*?"<>|]/g, '-') || 'content'}-template.json`)
-        showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.project.workspaceUnsupported)
-        return
-      }
       showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.project.workspaceWriteFailed)
     }
   }
   const readContentWorkspaceJson = async () => {
-    if (!selectedItem || !(await confirmAIDesktop({ title: 'JSONのコンテンツ情報を読み込みますか？', message: '現在の未保存の編集内容は置き換えられます。', confirmLabel: '読み込む' }))) return
-    if (!supportsWorkspaceJsonFile()) { importContentJson(); return }
+    const target = workspaceTarget()
+    if (!selectedItem || !target || !(await confirmAIDesktop({ title: 'ワークスペースのJSONを読み込みますか？', message: `${contentWorkspacePath(target)} を読み込みます。現在の未保存の編集内容は置き換えられます。`, confirmLabel: '読み込む' }))) return
+    if (!supportsContentWorkspaceFolder()) { importContentJson(); return }
     try {
-      const file = await readWorkspaceJsonFile()
+      const file = await readContentWorkspace(target)
       await applyContentJson(file.content)
       showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.project.workspaceRead(file.name))
     } catch (error) {
       if (isWorkspaceJsonFileCancelled(error)) return
-      if (error instanceof Error && (error.message.startsWith('TARGET_SCOPE:') || ['RESOURCE_TYPE', 'TARGET_FORMAT', 'MERMAID', 'FORMAT', 'CONTENT', 'GLOSSARY'].includes(error.message))) { showContentImportError(error); return }
+      if (error instanceof Error && error.message === 'WORKSPACE_FILE_NOT_FOUND') { showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.content.workspaceFileNotFound(contentWorkspacePath(target))); return }
+      if (error instanceof Error && (error.message.startsWith('TARGET_SCOPE:') || ['RESOURCE_TYPE', 'TARGET_FORMAT', 'MERMAID', 'FORMAT', 'CONTENT', 'GLOSSARY', 'KIND', 'SCREEN_MAP'].includes(error.message))) { showContentImportError(error); return }
       showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.project.workspaceReadFailed)
     }
   }
   const changeContentWorkspaceJson = async () => {
-    if (!supportsWorkspaceJsonFile()) { showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.project.workspaceUnsupported); return }
+    if (!supportsContentWorkspaceFolder()) { showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.content.workspaceUnsupported); return }
     try {
-      const name = await selectWorkspaceJsonFile()
-      showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.project.workspaceSelected(name))
+      const name = await selectContentWorkspaceFolder()
+      showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.content.workspaceFolderSelected(name))
     } catch (error) {
       if (isWorkspaceJsonFileCancelled(error)) return
       showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.project.workspaceSelectFailed)
@@ -394,7 +486,11 @@ ${targetJson}
       for (const item of itemsRef.current) if (!await validateContentDiagrams(item.blocks)) throw new Error('MERMAID')
       const nextGlossary = glossary.filter((entry) => entry.term.trim() || entry.description.trim())
       const nextItems = itemsRef.current.map((item) => withAutomaticPageLayout({ ...item, navTitle: item.navTitle.trim() || '名称未設定', blocks: normalizeTableWidths(withoutPageGlossary(item.blocks)) }))
-      const nextCategory = { ...category, title: title.trim(), description: description.trim(), icon: icon.trim() || '◫', glossary: nextGlossary, items: nextItems }
+      const nextCategory: Category = { ...category, title: title.trim(), description: description.trim(), icon: icon.trim() || '◫', glossary: nextGlossary, items: nextItems }
+      // kindは「Screen Mapのページを持つ」ことを表す。Screen Mapのページは常に先頭に置く。
+      nextCategory.items = [...nextItems.filter((item) => screenMapBlockOf(item)), ...nextItems.filter((item) => !screenMapBlockOf(item))]
+      if (nextCategory.items.some((item) => screenMapBlockOf(item))) nextCategory.kind = 'screen-map'
+      else delete nextCategory.kind
       await onSave(nextCategory, targetGroupId, selectedItemId)
       setTitle(nextCategory.title)
       setDescription(nextCategory.description)
@@ -409,29 +505,30 @@ ${targetJson}
       setSaveState('idle')
     }
   }
-  return <div className="ad-category-editor"><header className="ad-content-head ad-category-editor-head"><div><p className="ad-eyebrow">{service.name.toUpperCase()} / PAGE EDITOR</p><h1>カテゴリを編集</h1></div><div className="ad-home-controls"><div className="ad-mode-switch" aria-label="詳細カテゴリの表示モード"><button type="button" onClick={switchToView}>閲覧</button><button type="button" className="active" aria-current="page">編集</button></div><button type="button" className="ad-editor-header-back" onClick={backToCategories}>一覧へ戻る</button><button type="button" className="ad-editor-header-delete" onClick={onDelete}>カテゴリを削除</button><button type="button" className="ad-editor-header-save" disabled={!canSave || saveState === 'saving'} onClick={() => void save()}>{saveState === 'saving' ? '保存中…' : 'DBへ保存'}</button></div></header><section className={`ad-category-settings ${categorySettingsOpen ? 'open' : ''}`}><button type="button" className="ad-category-settings-toggle" aria-expanded={categorySettingsOpen} onClick={() => setCategorySettingsOpen((current) => !current)}><span><strong>カテゴリ設定</strong><small>{title.trim() || 'カテゴリ名未設定'} ・ {service.categoryGroups.find((group) => group.id === targetGroupId)?.title ?? '所属グループ未設定'}</small></span><i>{categorySettingsOpen ? '−' : '＋'}</i></button>{categorySettingsOpen && <div className="ad-editor-grid"><section className="ad-editor-form"><label><span>カテゴリ名</span><input value={title} maxLength={32} onChange={(event) => setTitle(event.target.value)} /></label><label><span>短い説明</span><input value={description} maxLength={60} onChange={(event) => setDescription(event.target.value)} /></label><label><span>所属グループ</span><select value={targetGroupId} onChange={(event) => setTargetGroupId(event.target.value)}>{service.categoryGroups.map((group) => <option value={group.id} key={group.id}>{group.title}</option>)}</select></label><label><span>アイコン</span><input value={icon} maxLength={3} onChange={(event) => setIcon(event.target.value)} /></label></section><aside className="ad-editor-preview"><span>カテゴリプレビュー</span><div className="ad-category"><i className="ad-category-icon">{icon || '◫'}</i><div><strong>{title || 'カテゴリ名'}</strong><small>{description || 'カテゴリの説明'}</small></div><b className="ad-arrow">✎</b></div><p>詳細画面には {items.length} 件のコンテンツが表示されます。</p></aside></div>}</section><section className={`ad-category-settings ad-category-glossary-settings ${glossaryOpen ? 'open' : ''}`}><button type="button" className="ad-category-settings-toggle" aria-expanded={glossaryOpen} onClick={() => setGlossaryOpen((current) => !current)}><span><strong>用語編集</strong><small>{glossary.length ? `${glossary.length}件の用語` : '用語は登録されていません'}</small></span><i>{glossaryOpen ? '−' : '＋'}</i></button>{glossaryOpen && <div className="ad-category-glossary-editor"><p>カテゴリ内の全ページで用語を自動リンクします。</p>{glossary.map((entry, index) => <div className="ad-category-glossary-row" key={entry.id}><label><span>用語</span><input value={entry.term} placeholder="例: SDK" onChange={(event) => updateGlossary(index, { term: event.target.value })} /></label><label><span>説明</span><textarea value={entry.description} placeholder="用語の説明を入力してください。" onChange={(event) => updateGlossary(index, { description: event.target.value })} /></label><button type="button" aria-label={`${entry.term || '用語'}を削除`} onClick={() => setGlossary((current) => current.filter((_, candidateIndex) => candidateIndex !== index))}>×</button></div>)}<button type="button" className="ad-glossary-add" onClick={addGlossaryEntry}>＋ 用語を追加</button></div>}</section><section className={`ad-item-editor ${pageEditorOpen ? 'open' : ''}`}><header><button type="button" className="ad-item-editor-toggle" aria-expanded={pageEditorOpen} onClick={() => setPageEditorOpen((current) => !current)}><span><h2>ページ編集</h2><p>{pageEditorOpen ? 'ブロックの追加、編集、削除、並び替えができます。' : `${items.length}件のコンテンツ`}</p></span><i>{pageEditorOpen ? '−' : '＋'}</i></button>{pageEditorOpen && selectedItem && <div className="ad-content-exchange ad-content-exchange--header">
+  // 下書きとJSON連携のボタン。ページ編集と、Screen Mapの編集画面の両方で使う。
+  const contentExchange = selectedItem ? <div className="ad-content-exchange ad-content-exchange--header">
   <div className="ad-content-draft-actions" role="group" aria-label="AI下書き">
     <button type="button" className="draft-save" disabled={draftBusy} onClick={() => void saveContentDraft()}>下書き保存</button>
     <button type="button" className="draft-history" disabled={draftBusy} onClick={() => void openDraftDialog()}>下書き履歴</button>
   </div>
-  <div className={`ad-copy-content-control ${includeAiPrompt ? 'with-prompt' : ''}`} role="group" aria-label="コンテキストのコピー">
-    <label><input type="checkbox" checked={includeAiPrompt} onChange={(event) => setIncludeAiPrompt(event.target.checked)} /><span>AI用指示付き</span></label>
-    <button type="button" onClick={() => void copyContentTarget()}>コンテキストをコピー<span aria-hidden="true">⧉</span></button>
-  </div>
   <details className="ad-project-json-menu ad-project-json-menu--labeled">
     <summary>JSON連携 <span aria-hidden="true">⌄</span></summary>
     <div>
-      <section><strong>連携ファイル</strong><button type="button" onClick={() => void writeContentWorkspaceJson()}>JSONへ書き出す</button><button type="button" onClick={() => void readContentWorkspaceJson()}>JSONから読み込む</button><button type="button" onClick={() => void changeContentWorkspaceJson()}>連携ファイルを変更</button></section>
+      <section><strong>ワークスペース</strong><button type="button" onClick={() => void writeContentWorkspaceJson()}>JSONへ書き出す</button><button type="button" onClick={() => void readContentWorkspaceJson()}>JSONから読み込む</button><button type="button" onClick={() => void changeContentWorkspaceJson()}>ワークスペースのフォルダを変更</button></section>
       <section><strong>ファイル操作</strong><button type="button" onClick={downloadCurrentContentJson}>JSONをダウンロード</button><button type="button" onClick={importContentJson}>JSONをインポート</button><button type="button" onClick={downloadContentTemplate}>テンプレートをダウンロード</button></section>
+      <section className="ad-json-menu-copy"><strong>AIへの依頼</strong><label><input type="checkbox" checked={includeAiPrompt} onChange={(event) => setIncludeAiPrompt(event.target.checked)} /><span>AI用指示付き</span></label><button type="button" onClick={() => void copyContentTarget()}>コンテキストをコピー</button></section>
     </div>
   </details>
-</div>}{pageEditorOpen && <button type="button" className="ad-add-content" onClick={addItem}>＋ コンテンツを追加</button>}</header>{pageEditorOpen && <div className="ad-item-editor-grid"><div className="ad-item-list">{items.length === 0 ? <p>コンテンツがありません。</p> : items.map((candidate, index) => <button key={candidate.id} className={candidate.id === selectedItemId ? 'active' : ''} onClick={() => setSelectedItemId(candidate.id)}><span>{String(index + 1).padStart(2, '0')}</span><strong>{candidate.navTitle || '名称未設定'}</strong><i>›</i></button>)}</div><div className="ad-item-fields">{selectedItem ? <><ContentCanvas item={selectedItem} onChange={updateItem} /><div className="ad-item-meta"><span>識別子</span><code>{selectedItem.id}</code></div><button className="danger" onClick={deleteItem}>このコンテンツを削除</button></> : <div className="ad-item-empty"><span>＋</span><p>コンテンツを追加すると、ここでページを編集できます。</p></div>}</div></div>}</section>{draftDialogOpen && <div className="ad-draft-dialog-overlay" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget && !draftBusy) setDraftDialogOpen(false) }}><section className="ad-draft-dialog" role="dialog" aria-modal="true" aria-labelledby="ad-draft-dialog-title"><header><div><span>AI DRAFT</span><h2 id="ad-draft-dialog-title">AI下書き</h2><p>対象: {selectedItem?.navTitle || 'コンテンツ未選択'}</p></div><button type="button" aria-label="閉じる" disabled={draftBusy} onClick={() => setDraftDialogOpen(false)}>×</button></header><div className="ad-draft-history"><div className="ad-draft-history-heading"><strong>直近の保存履歴</strong><button type="button" disabled={draftBusy || draftHistory.length === 0} onClick={() => void deleteDraftHistory()}>履歴をすべて削除</button></div>{draftBusy && draftHistory.length === 0 ? <p>読み込み中…</p> : draftHistory.length === 0 ? <p>下書き保存の履歴はありません。</p> : <ol>{draftHistory.map((entry) => <li className={entry.id === selectedDraftHistoryId ? 'selected' : ''} key={entry.id}><button type="button" className="ad-draft-history-preview" aria-pressed={entry.id === selectedDraftHistoryId} disabled={draftBusy || !entry.hasPreview} onClick={() => void previewDraftHistory(entry)}><time>{new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short' }).format(entry.savedAt)}</time><span>{entry.contentTitle}</span><small>{entry.hasPreview ? entry.id === selectedDraftHistoryId ? `選択中・第${entry.revision}版` : `第${entry.revision}版をプレビュー ›` : 'プレビュー情報なし'}</small></button></li>)}</ol>}</div><footer><button type="button" className="load" disabled={draftBusy || !selectedDraftHistoryId} onClick={() => void applySelectedDraftHistory()}>編集画面に反映</button></footer></section></div>}{draftPreview && <div className="ad-content-preview-overlay ad-draft-preview-overlay" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget) setDraftPreview(null) }}><section className="ad-content-preview-dialog ad-draft-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="ad-draft-preview-title"><header><div><span>DRAFT HISTORY · 第{draftPreview.revision}版 · {new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short' }).format(draftPreview.savedAt)}</span><h2 id="ad-draft-preview-title">{draftPreview.item.navTitle || '名称未設定'}</h2></div><button type="button" aria-label="履歴プレビューを閉じる" onClick={() => setDraftPreview(null)}>×</button></header><div className="ad-draft-preview-body"><div className="ad-article-stage"><article className="ad-article"><p className="ad-breadcrumb">{service.name} / {title.trim() || 'カテゴリ名'} / 保存履歴</p>{draftPreview.item.blocks.length ? draftPreview.item.blocks.map((block) => <BlockRenderer block={block} pageBlocks={withCategoryGlossary(draftPreview.item.blocks, draftPreview.glossary ?? glossary)} key={block.id} />) : <div className="ad-empty-page"><p>この履歴にはブロックがありません。</p></div>}</article><ContentTableOfContents blocks={withCategoryGlossary(draftPreview.item.blocks, draftPreview.glossary ?? glossary)} /></div></div><footer className="ad-draft-preview-actions"><p>コンテンツと用語を反映した後、編集画面の「DBへ保存」で資料に反映できます。</p><button type="button" onClick={() => setDraftPreview(null)}>閉じる</button><button type="button" className="apply" onClick={applyDraftPreview}>編集画面へ反映</button></footer></section></div>}</div>
+</div> : null
+  return <div className="ad-category-editor">{screenMapPageOpen && screenMapBlock && selectedItem ? <div className="ad-sm-fullpage"><header className="ad-content-head ad-category-editor-head"><div><p className="ad-eyebrow">{service.name.toUpperCase()} / SCREEN MAP</p><h1>{title.trim() || 'カテゴリ'}のScreen Map</h1></div><div className="ad-home-controls"><button type="button" className="ad-editor-header-back" onClick={() => setScreenMapPageOpen(false)}>← ページ編集へ戻る</button>{contentExchange}<button type="button" className="ad-editor-header-save" disabled={!canSave || saveState === 'saving'} onClick={() => void save()}>{saveState === 'saving' ? '保存中…' : 'DBへ保存'}</button></div></header><ScreenMapEditor fill data={screenMapBlock.data} imageFolder={serviceId} onChange={(nextData) => updateItem({ ...selectedItem, blocks: [{ ...screenMapBlock, data: nextData }] })} /></div> : <><header className="ad-content-head ad-category-editor-head"><div><p className="ad-eyebrow">{service.name.toUpperCase()} / PAGE EDITOR</p><h1>カテゴリを編集</h1></div><div className="ad-home-controls"><div className="ad-mode-switch" aria-label="詳細カテゴリの表示モード"><button type="button" onClick={switchToView}>閲覧</button><button type="button" className="active" aria-current="page">編集</button></div><button type="button" className="ad-editor-header-back" onClick={backToCategories}>一覧へ戻る</button><button type="button" className="ad-editor-header-delete" onClick={onDelete}>カテゴリを削除</button><button type="button" className="ad-editor-header-save" disabled={!canSave || saveState === 'saving'} onClick={() => void save()}>{saveState === 'saving' ? '保存中…' : 'DBへ保存'}</button></div></header><section className={`ad-category-settings ${categorySettingsOpen ? 'open' : ''}`}><button type="button" className="ad-category-settings-toggle" aria-expanded={categorySettingsOpen} onClick={() => setCategorySettingsOpen((current) => !current)}><span><strong>カテゴリ設定</strong><small>{title.trim() || 'カテゴリ名未設定'} ・ {service.categoryGroups.find((group) => group.id === targetGroupId)?.title ?? '所属グループ未設定'}</small></span><i>{categorySettingsOpen ? '−' : '＋'}</i></button>{categorySettingsOpen && <div className="ad-editor-grid"><section className="ad-editor-form"><label><span>カテゴリ名</span><input value={title} maxLength={32} onChange={(event) => setTitle(event.target.value)} /></label><label><span>短い説明</span><input value={description} maxLength={60} onChange={(event) => setDescription(event.target.value)} /></label><label><span>所属グループ</span><select value={targetGroupId} onChange={(event) => setTargetGroupId(event.target.value)}>{service.categoryGroups.map((group) => <option value={group.id} key={group.id}>{group.title}</option>)}</select></label><label className="ad-editor-check"><input type="checkbox" checked={usesScreenMap} onChange={(event) => void toggleScreenMap(event.target.checked)} /><span>Screen Mapを使う（画面遷移図のページを先頭に追加します）</span></label><label><span>アイコン</span><input value={icon} maxLength={3} onChange={(event) => setIcon(event.target.value)} /></label></section><aside className="ad-editor-preview"><span>カテゴリプレビュー</span><div className="ad-category"><i className="ad-category-icon">{icon || '◫'}</i><div><strong>{title || 'カテゴリ名'}</strong><small>{description || 'カテゴリの説明'}</small></div><b className="ad-arrow">✎</b></div><p>{usesScreenMap ? `詳細画面にはScreen Mapと ${items.length - 1} 件のコンテンツが表示されます。` : `詳細画面には ${items.length} 件のコンテンツが表示されます。`}</p></aside></div>}</section><section className={`ad-category-settings ad-category-glossary-settings ${glossaryOpen ? 'open' : ''}`}><button type="button" className="ad-category-settings-toggle" aria-expanded={glossaryOpen} onClick={() => setGlossaryOpen((current) => !current)}><span><strong>用語編集</strong><small>{glossary.length ? `${glossary.length}件の用語` : '用語は登録されていません'}</small></span><i>{glossaryOpen ? '−' : '＋'}</i></button>{glossaryOpen && <div className="ad-category-glossary-editor"><p>カテゴリ内の全ページで用語を自動リンクします。</p>{glossary.map((entry, index) => <div className="ad-category-glossary-row" key={entry.id}><label><span>用語</span><input value={entry.term} placeholder="例: SDK" onChange={(event) => updateGlossary(index, { term: event.target.value })} /></label><label><span>説明</span><textarea value={entry.description} placeholder="用語の説明を入力してください。" onChange={(event) => updateGlossary(index, { description: event.target.value })} /></label><button type="button" aria-label={`${entry.term || '用語'}を削除`} onClick={() => setGlossary((current) => current.filter((_, candidateIndex) => candidateIndex !== index))}>×</button></div>)}<button type="button" className="ad-glossary-add" onClick={addGlossaryEntry}>＋ 用語を追加</button></div>}</section><section className={`ad-item-editor ${pageEditorOpen ? 'open' : ''}`}><header><button type="button" className="ad-item-editor-toggle" aria-expanded={pageEditorOpen} onClick={() => setPageEditorOpen((current) => !current)}><span><h2>ページ編集</h2><p>{pageEditorOpen ? selectedIsScreenMap ? '画面を配置し、矢印でつないで画面遷移を整理します。' : 'ブロックの追加、編集、削除、並び替えができます。' : `${items.length}件のページ`}</p></span><i>{pageEditorOpen ? '−' : '＋'}</i></button>{pageEditorOpen && contentExchange}{pageEditorOpen && <button type="button" className="ad-add-content" onClick={addItem}>＋ コンテンツを追加</button>}</header>{pageEditorOpen && <div className="ad-item-editor-grid"><div className="ad-item-list">{items.length === 0 ? <p>コンテンツがありません。</p> : items.map((candidate, index) => <button key={candidate.id} className={candidate.id === selectedItemId ? 'active' : ''} onClick={() => { setSelectedItemId(candidate.id); if (screenMapBlockOf(candidate)) setScreenMapPageOpen(true) }}><span>{screenMapBlockOf(candidate) ? '◇' : String(index + (usesScreenMap ? 0 : 1)).padStart(2, '0')}</span><strong>{screenMapBlockOf(candidate) ? 'Screen Map' : candidate.navTitle || '名称未設定'}</strong><i>›</i></button>)}</div><div className="ad-item-fields">{selectedItem && screenMapBlock ? <div className="ad-sm-open-panel"><span aria-hidden="true">◇</span><h3>Screen Map</h3><p>画面 {screenMapBlock.data.screens.length}・遷移 {screenMapBlock.data.transitions.length}・グループ {screenMapBlock.data.groups.length}</p><button type="button" onClick={() => setScreenMapPageOpen(true)}>Screen Mapを編集</button></div> : selectedItem ? <><ContentCanvas item={selectedItem} onChange={updateItem} /><div className="ad-item-meta"><span>識別子</span><code>{selectedItem.id}</code></div><button className="danger" onClick={deleteItem}>このコンテンツを削除</button></> : <div className="ad-item-empty"><span>＋</span><p>コンテンツを追加すると、ここでページを編集できます。</p></div>}</div></div>}</section></>}{draftDialogOpen && <div className="ad-draft-dialog-overlay" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget && !draftBusy) setDraftDialogOpen(false) }}><section className="ad-draft-dialog" role="dialog" aria-modal="true" aria-labelledby="ad-draft-dialog-title"><header><div><span>AI DRAFT</span><h2 id="ad-draft-dialog-title">AI下書き</h2><p>対象: {selectedItem?.navTitle || 'コンテンツ未選択'}</p></div><button type="button" aria-label="閉じる" disabled={draftBusy} onClick={() => setDraftDialogOpen(false)}>×</button></header><div className="ad-draft-history"><div className="ad-draft-history-heading"><strong>直近の保存履歴</strong><button type="button" disabled={draftBusy || draftHistory.length === 0} onClick={() => void deleteDraftHistory()}>履歴をすべて削除</button></div>{draftBusy && draftHistory.length === 0 ? <p>読み込み中…</p> : draftHistory.length === 0 ? <p>下書き保存の履歴はありません。</p> : <ol>{draftHistory.map((entry) => <li className={entry.id === selectedDraftHistoryId ? 'selected' : ''} key={entry.id}><button type="button" className="ad-draft-history-preview" aria-pressed={entry.id === selectedDraftHistoryId} disabled={draftBusy || !entry.hasPreview} onClick={() => void previewDraftHistory(entry)}><time>{new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short' }).format(entry.savedAt)}</time><span>{entry.contentTitle}</span><small>{entry.hasPreview ? entry.id === selectedDraftHistoryId ? `選択中・第${entry.revision}版` : `第${entry.revision}版をプレビュー ›` : 'プレビュー情報なし'}</small></button></li>)}</ol>}</div><footer><button type="button" className="load" disabled={draftBusy || !selectedDraftHistoryId} onClick={() => void applySelectedDraftHistory()}>編集画面に反映</button></footer></section></div>}{draftPreview && <div className="ad-content-preview-overlay ad-draft-preview-overlay" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget) setDraftPreview(null) }}><section className="ad-content-preview-dialog ad-draft-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="ad-draft-preview-title"><header><div><span>DRAFT HISTORY · 第{draftPreview.revision}版 · {new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short' }).format(draftPreview.savedAt)}</span><h2 id="ad-draft-preview-title">{draftPreview.item.navTitle || '名称未設定'}</h2></div><button type="button" aria-label="履歴プレビューを閉じる" onClick={() => setDraftPreview(null)}>×</button></header><div className="ad-draft-preview-body"><div className="ad-article-stage"><article className="ad-article"><p className="ad-breadcrumb">{service.name} / {title.trim() || 'カテゴリ名'} / 保存履歴</p>{draftPreview.item.blocks.length ? draftPreview.item.blocks.map((block) => <BlockRenderer block={block} pageBlocks={withCategoryGlossary(draftPreview.item.blocks, draftPreview.glossary ?? glossary)} key={block.id} />) : <div className="ad-empty-page"><p>この履歴にはブロックがありません。</p></div>}</article><ContentTableOfContents blocks={withCategoryGlossary(draftPreview.item.blocks, draftPreview.glossary ?? glossary)} /></div></div><footer className="ad-draft-preview-actions"><p>コンテンツと用語を反映した後、編集画面の「DBへ保存」で資料に反映できます。</p><button type="button" onClick={() => setDraftPreview(null)}>閉じる</button><button type="button" className="apply" onClick={applyDraftPreview}>編集画面へ反映</button></footer></section></div>}</div>
 }
 
 function CategoryDetail({ serviceId, service, category, selectedId, canEdit, onBack, onSelect, onMode }: { serviceId: ServiceId; service: ServiceConfig; category: Category; selectedId: string; canEdit: boolean; onBack: () => void; onSelect: (id: string) => void; onMode: (mode: ServiceMode) => void }) {
   const selected = category.items.find((candidate) => candidate.id === selectedId) ?? category.items[0]
   const articleStageRef = useRef<HTMLDivElement>(null)
   const [imageCopyState, setImageCopyState] = useState<'idle' | 'copying'>('idle')
+  // Screen Mapのミニマップは、キャンバスを広く使えるよう左ペインに表示する。
+  const [screenMapMinimapSlot, setScreenMapMinimapSlot] = useState<HTMLDivElement | null>(null)
   const copyPageImage = async () => {
     if (!selected || !articleStageRef.current || imageCopyState === 'copying') return
     setImageCopyState('copying')
@@ -457,8 +554,12 @@ function CategoryDetail({ serviceId, service, category, selectedId, canEdit, onB
       showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.content.shareUrlCopyFailed)
     }
   }
+  const screenMapBlock = screenMapBlockOf(selected)
+  // Screen Mapのページは、名前ではなく「Screen Map」として一覧に出す。
+  const pageNav = selected ? <nav>{category.items.map((candidate) => <button key={candidate.id} className={candidate.id === selected.id ? 'active' : ''} aria-current={candidate.id === selected.id ? 'page' : undefined} onClick={() => onSelect(candidate.id)}>{screenMapBlockOf(candidate) ? 'Screen Map' : candidate.navTitle}{candidate.id === selected.id && <span>●</span>}</button>)}</nav> : null
+  if (screenMapBlock) return <div className="ad-article-layout ad-screen-map-layout"><aside className="ai-desktop-sidebar"><button className="ad-back" onClick={onBack}>← カテゴリ一覧へ戻る</button>{canEdit && <div className="ad-mode-switch ad-detail-view-switch" aria-label="詳細カテゴリの表示モード"><button type="button" className="active" aria-current="page">閲覧</button><button type="button" onClick={() => onMode('edit')}>編集</button></div>}<p className="ai-desktop-sidebar-service">{service.name}</p><h2>{category.title}</h2>{category.items.length > 1 && pageNav}<div ref={setScreenMapMinimapSlot} className="ad-sm-minimap-slot" /></aside><div className="ad-screen-map-stage"><p className="ad-breadcrumb">{service.name} / {category.title}</p><ScreenMapOverview data={screenMapBlock.data} title={category.title} minimapTarget={screenMapMinimapSlot} /></div></div>
   if (!selected) return <div className="ad-article-layout"><aside className="ai-desktop-sidebar"><button className="ad-back" onClick={onBack}>← カテゴリ一覧へ戻る</button>{canEdit && <div className="ad-mode-switch ad-detail-view-switch" aria-label="詳細カテゴリの表示モード"><button type="button" className="active" aria-current="page">閲覧</button><button type="button" onClick={() => onMode('edit')}>編集</button></div>}<p className="ai-desktop-sidebar-service">{service.name}</p><h2>{category.title}</h2></aside><section className="ad-content-empty"><span>□</span><h1>コンテンツがありません</h1><p>編集モードでコンテンツを追加してください。</p><button onClick={onBack}>カテゴリ一覧へ</button></section></div>
-  return <div className="ad-article-layout"><aside className="ai-desktop-sidebar"><button className="ad-back" onClick={onBack}>← カテゴリ一覧へ戻る</button>{canEdit && <div className="ad-mode-switch ad-detail-view-switch" aria-label="詳細カテゴリの表示モード"><button type="button" className="active" aria-current="page">閲覧</button><button type="button" onClick={() => onMode('edit')}>編集</button></div>}<button type="button" className="ad-copy-page-image" disabled={imageCopyState === 'copying'} onClick={() => void copyPageImage()}>{imageCopyState === 'copying' ? '画像を作成中…' : 'ページを画像コピー'}<span aria-hidden="true">⧉</span></button><button type="button" className="ad-copy-page-image ad-copy-page-url" onClick={() => void copyPageUrl()}>ページURLをコピー<span aria-hidden="true">↗</span></button><p className="ai-desktop-sidebar-service">{service.name}</p><h2>{category.title}</h2><nav>{category.items.map((candidate) => <button key={candidate.id} className={candidate.id === selected.id ? 'active' : ''} aria-current={candidate.id === selected.id ? 'page' : undefined} onClick={() => onSelect(candidate.id)}>{candidate.navTitle}{candidate.id === selected.id && <span>●</span>}</button>)}</nav></aside><div ref={articleStageRef} className="ad-article-stage" key={selected.id}><article className="ad-article"><p className="ad-breadcrumb">{service.name} / {category.title}</p>{selected.blocks.length ? selected.blocks.map((block) => <BlockRenderer block={block} pageBlocks={withCategoryGlossary(selected.blocks, category.glossary)} key={block.id} />) : <div className="ad-empty-page"><p>このページにはまだブロックがありません。</p></div>}<div className="ad-learning-nav"><button onClick={onBack}>カテゴリ一覧へ</button><span>{category.items.findIndex((candidate) => candidate.id === selected.id) + 1} / {category.items.length}</span></div></article><ContentTableOfContents blocks={withCategoryGlossary(selected.blocks, category.glossary)} /></div></div>
+  return <div className="ad-article-layout"><aside className="ai-desktop-sidebar"><button className="ad-back" onClick={onBack}>← カテゴリ一覧へ戻る</button>{canEdit && <div className="ad-mode-switch ad-detail-view-switch" aria-label="詳細カテゴリの表示モード"><button type="button" className="active" aria-current="page">閲覧</button><button type="button" onClick={() => onMode('edit')}>編集</button></div>}<button type="button" className="ad-copy-page-image" disabled={imageCopyState === 'copying'} onClick={() => void copyPageImage()}>{imageCopyState === 'copying' ? '画像を作成中…' : 'ページを画像コピー'}<span aria-hidden="true">⧉</span></button><button type="button" className="ad-copy-page-image ad-copy-page-url" onClick={() => void copyPageUrl()}>ページURLをコピー<span aria-hidden="true">↗</span></button><p className="ai-desktop-sidebar-service">{service.name}</p><h2>{category.title}</h2>{pageNav}</aside><div ref={articleStageRef} className="ad-article-stage" key={selected.id}><article className="ad-article"><p className="ad-breadcrumb">{service.name} / {category.title}</p>{selected.blocks.length ? selected.blocks.map((block) => <BlockRenderer block={block} pageBlocks={withCategoryGlossary(selected.blocks, category.glossary)} key={block.id} />) : <div className="ad-empty-page"><p>このページにはまだブロックがありません。</p></div>}<div className="ad-learning-nav"><button onClick={onBack}>カテゴリ一覧へ</button><span>{category.items.findIndex((candidate) => candidate.id === selected.id) + 1} / {category.items.length}</span></div></article><ContentTableOfContents blocks={withCategoryGlossary(selected.blocks, category.glossary)} /></div></div>
 }
 
 function ServiceContent({ serviceId, service, mode, canEdit, navigation, publicationStatus, publicationBusy, onMaterialList, onPublication, onMode, onChange, onAddCategory, onUpdateService, onSaveCategory, onDelete }: { serviceId: ServiceId; service: ServiceConfig; mode: ServiceMode; canEdit: boolean; navigation: ServiceNavigation; publicationStatus?: 'draft' | 'published' | 'unpublished'; publicationBusy?: boolean; onMaterialList: () => void; onPublication?: () => void; onMode: (mode: ServiceMode) => void; onChange: (next: ServiceNavigation) => void; onAddCategory: (groupId: string) => void; onUpdateService: (service: ServiceConfig) => void; onSaveCategory: (category: Category, sourceGroupId: string, targetGroupId: string, contentId: string | null) => Promise<void>; onDelete: (categoryId: string) => void }) {
@@ -564,6 +665,8 @@ function AIDesktopPage() {
   const hiddenTaskbarRef = useRef<HTMLDivElement>(null)
   const sharedTargetRef = useRef<SharedContentTarget | null>(sharedContentTarget(window.location.search))
   const sharedTargetAppliedRef = useRef(false)
+  // 公開済みの一覧と、自分の資料（非公開を含む）の一覧は別々に届く。自分の資料を反映したあとに公開済みの一覧で上書きすると、非公開の資料が消えるため、後から届いた公開済みの一覧は使わない。
+  const manageableCatalogsAppliedRef = useRef(false)
   const applyCatalogs = (catalogs: Partial<Record<string, unknown>>) => setCatalog((current) => Object.fromEntries(Object.entries(catalogs).map(([serviceId, value]) => [serviceId, normalizeServiceConfig(value, current[serviceId] ?? { schemaVersion: 3, name: serviceId, eyebrow: 'KNOWLEDGE BASE', introduction: '', categoryGroups: [] })])))
   const refreshDocuments = (manage = canEdit) => listAIDesktopDocuments(manage).then((result) => setDocuments(result.documents)).catch(() => undefined)
 
@@ -606,9 +709,9 @@ function AIDesktopPage() {
     window.addEventListener('keydown', closeOnEscape)
     return () => { document.removeEventListener('pointerdown', closePeek, true); window.removeEventListener('keydown', closeOnEscape) }
   }, [taskbarPeekOpen])
-  useEffect(() => { let active = true; void getAIDesktopCatalogs<unknown>().then(({ catalogs, publications }) => { if (!active) return; applyCatalogs(catalogs); setCatalogPublications(publications) }).catch(() => { /* Local API未起動時は初期データを表示する。 */ }).finally(() => { if (active) setCatalogReady(true) }); return () => { active = false } }, [])
+  useEffect(() => { let active = true; void getAIDesktopCatalogs<unknown>().then(({ catalogs, publications }) => { if (!active || manageableCatalogsAppliedRef.current) return; applyCatalogs(catalogs); setCatalogPublications(publications) }).catch(() => { /* Local API未起動時は初期データを表示する。 */ }).finally(() => { if (active) setCatalogReady(true) }); return () => { active = false } }, [])
   useEffect(() => { void listAIDesktopDocuments().then((result) => setDocuments(result.documents)).catch(() => undefined) }, [])
-  useEffect(() => { if (!canEdit) return; let active = true; void Promise.all([getManageableAIDesktopCatalogs<unknown>(), listAIDesktopDocuments(true)]).then(([catalogResult, documentResult]) => { if (!active) return; applyCatalogs(catalogResult.catalogs); setCatalogPublications(catalogResult.publications); setDocuments(documentResult.documents) }).catch(() => undefined); return () => { active = false } }, [canEdit])
+  useEffect(() => { if (!canEdit) return; let active = true; void Promise.all([getManageableAIDesktopCatalogs<unknown>(), listAIDesktopDocuments(true)]).then(([catalogResult, documentResult]) => { if (!active) return; manageableCatalogsAppliedRef.current = true; applyCatalogs(catalogResult.catalogs); setCatalogPublications(catalogResult.publications); setDocuments(documentResult.documents) }).catch((error: unknown) => { if (active) showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.document.manageableLoadFailed)) }); return () => { active = false } }, [canEdit])
   useEffect(() => {
     const target = sharedTargetRef.current
     if (!catalogReady || sharedTargetAppliedRef.current || !target) return
@@ -671,6 +774,8 @@ function AIDesktopPage() {
     return result.serviceId
   }
   const updateCatalogPublication = async (serviceId: ServiceId, published: boolean) => {
+    const includesScreenMap = Boolean(catalog[serviceId]?.categoryGroups.some((group) => group.categories.some((category) => categoryKindOf(category) === 'screen-map')))
+    if (published && includesScreenMap && !(await confirmAIDesktop({ title: AI_DESKTOP_MESSAGES.document.screenMapPublicationTitle, message: AI_DESKTOP_MESSAGES.document.screenMapPublicationMessage, confirmLabel: '公開する', tone: 'danger' }))) return
     try {
       const result = await setAIDesktopCatalogPublication(serviceId, published)
       setCatalogPublications((current) => ({ ...current, [serviceId]: { ...(current[serviceId] ?? { ownerId: accountName, createdBy: accountName, updatedBy: accountName, publishedBy: null, createdAt: Date.now(), updatedAt: Date.now(), publishedAt: null }), ...result.publication } as AIDesktopCatalogPublication }))

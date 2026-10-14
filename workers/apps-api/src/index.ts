@@ -1024,7 +1024,10 @@ export default {
       /^\/api\/ai-desktop\/images\/([0-9a-f-]+\.(?:jpg|png|webp|gif|avif))$/u,
     );
     if (aiDesktopImageMatch && request.method === "GET") {
-      return serveAIDesktopImage(env, aiDesktopImageMatch[1]);
+      // AI Desktopの画面が画像を取得してワークスペースへ書き出せるよう、許可済みの画面のアドレスにだけCORSを付ける。
+      const response = await serveAIDesktopImage(env, aiDesktopImageMatch[1]);
+      for (const [name, value] of Object.entries(getCorsHeaders(request, env))) response.headers.set(name, value);
+      return response;
     }
     if (aiDesktopImageMatch && request.method === "DELETE") {
       try {

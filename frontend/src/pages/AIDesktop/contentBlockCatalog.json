@@ -149,5 +149,36 @@
         }
       }
     }
-  ]
+  ],
+  "screenMap": {
+    "label": "Screen Map",
+    "description": "Screen Mapのページ専用のブロックです。通常のページには追加できません。Screen Mapのページは、このブロック1つだけを持ちます（1つのカテゴリにつき1ページまで）。",
+    "fieldDefinitions": {
+      "groups": "画面のまとまり（例：友だち管理）です。idは英小文字・数字・ハイフンで、重複しない値にします。",
+      "screens": "画面です。groupIdは所属するグループのid、stateOfは同じ画面の別の状態（空・エラー・モーダルなど）のときに元の画面のidを設定します。どちらも任意です。",
+      "screens.images": "画面のスクリーンショットです。AI Desktopにアップロードした画像のimageIdとurlを設定します。thumbnailImageIdとthumbnailUrlは一覧表示用の縮小画像、widthとheightは元の画像のピクセル数（どちらも任意）、maskedはマスキング済みかどうかです。AIは画像を追加・変更しないでください。",
+      "transitions": "画面遷移です。fromとtoには画面のidを設定します。actionは操作名（例：友だち名をタップ）、conditionは遷移する条件です。",
+      "verification": "confirmedは画面で確認した情報、ai-inferredはAIが推測した情報です。AIが追加・変更した画面と遷移はai-inferredにします。",
+      "layout": "キャンバス上の配置です。screensの各画面はx・yと、任意でカードの幅widthを持ちます。座標がない画面は自動で配置されるため、AIは設定しなくてかまいません。"
+    },
+    "block": {
+      "id": "example-screen-map",
+      "type": "screenMap",
+      "data": {
+        "schemaVersion": 1,
+        "groups": [
+          {"id": "friends", "name": "友だち管理", "description": "友だちの一覧と詳細"}
+        ],
+        "screens": [
+          {"id": "friend-list", "name": "友だち一覧", "groupId": "friends", "url": "/friends", "description": "友だちを検索・絞り込みする", "images": [], "verification": "confirmed"},
+          {"id": "friend-list-empty", "name": "友だち一覧（0件）", "groupId": "friends", "stateOf": "friend-list", "url": "/friends", "description": "友だちがいないときの表示", "images": [], "verification": "ai-inferred"},
+          {"id": "friend-detail", "name": "友だち詳細", "groupId": "friends", "url": "/friends/:id", "description": "友だちの情報とメッセージ履歴", "images": [], "verification": "confirmed"}
+        ],
+        "transitions": [
+          {"id": "friend-list-to-detail", "from": "friend-list", "to": "friend-detail", "action": "友だち名をタップ", "condition": "", "verification": "confirmed"}
+        ],
+        "layout": { "screens": {}, "groups": {} }
+      }
+    }
+  }
 }

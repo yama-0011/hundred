@@ -1,5 +1,10 @@
 local/**/*.json
 remote/**/*.json
 Workspace JSON.json
+# Screen Mapと一緒に保存するスクリーンショット（編集画面からの書き出しと ai-desktop:pull）
+# 以前の書き出し先。残っている場合は削除してかまわない
+Workspace JSON-images/
+local/**/*-images/
+remote/**/*-images/
 !local/.gitkeep
 !remote/.gitkeep

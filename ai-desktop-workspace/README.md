@@ -36,6 +36,14 @@ npm run ai-desktop:pull -- \
 
 本番D1から取得する場合は`--remote`を指定します。出力先は自動で`local`または`remote`へ分かれます。
 
+### マイ資料の編集画面から書き出す
+
+マイ資料の編集画面の「JSON連携 → JSONへ書き出す」は、このフォルダを選ぶと、`pull`と同じ場所（`local/<serviceId>/<categoryId>/<contentId>.json`）へ、同じ形のJSONを書き出します。同じページは同じ名前で上書きします。版の履歴はAI Desktopの下書き履歴で残してください。
+
+### Screen Mapの画像
+
+Screen Mapのページは、画面ごとのスクリーンショットをJSONと同じ場所の`<contentId>-images/`へ保存し、JSONの`screenImages`に画面IDとパスを書きます（画面からの書き出しと`pull`のどちらも同じです）。AIは質問に必要な画面の画像だけを開いてください。画像はGitの管理対象から除外しています。
+
 ## AI下書きへ保存する
 
 ```bash

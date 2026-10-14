@@ -5,12 +5,13 @@ import { showAIDesktopNotification } from './aiDesktopNotificationBus'
 import { contentBlockCatalog } from './contentBlockCatalog'
 import { MermaidDiagram } from './MermaidDiagram'
 import type { DiagramKind } from './mermaidDiagramValidation'
+import { createScreenMapData, type ScreenMapData } from './screenMap'
 
 export type ContentLayout = 'standard' | 'wide' | 'compact'
 export type BadgeTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
 export type BadgeValue = { id: string; label: string; tone: BadgeTone }
 export type LeafBlockType = 'heading' | 'text' | 'image' | 'code' | 'checklist' | 'callout' | 'divider' | 'table' | 'link' | 'toc' | 'glossary' | 'card' | 'steps' | 'diagram'
-export type BlockType = LeafBlockType | 'columns'
+export type BlockType = LeafBlockType | 'columns' | 'screenMap'
 type BlockBase<T extends BlockType, D> = { id: string; type: T; data: D }
 export type HeadingBlock = BlockBase<'heading', { text: string; level: 1 | 2 | 3 }>
 export type TextBlock = BlockBase<'text', { text: string }>
@@ -29,9 +30,13 @@ export type StepsBlock = BlockBase<'steps', { items: Array<{ id: string; title: 
 export type DiagramBlock = BlockBase<'diagram', { kind: DiagramKind; title: string; source: string; caption?: string }>
 export type LeafBlock = HeadingBlock | TextBlock | ImageBlock | CodeBlock | ChecklistBlock | CalloutBlock | DividerBlock | TableBlock | LinkBlock | TocBlock | GlossaryBlock | CardBlock | StepsBlock | DiagramBlock
 export type ColumnsBlock = BlockBase<'columns', { left: LeafBlock[]; right: LeafBlock[] }>
-export type ContentBlock = LeafBlock | ColumnsBlock
+// Screen Mapブロックは、種類が「Screen Map」のカテゴリにだけ置く。通常のページのブロック追加には出さない。
+export type ScreenMapBlock = BlockBase<'screenMap', ScreenMapData>
+export type ContentBlock = LeafBlock | ColumnsBlock | ScreenMapBlock
 export type ContentItem = { id: string; navTitle: string; parentId?: string; pageWidth?: ContentLayout; blocks: ContentBlock[] }
-export type Category = { id: string; title: string; description: string; icon: string; glossary?: GlossaryEntry[]; items: ContentItem[] }
+// kindを持たないカテゴリは通常の資料。Screen Mapのカテゴリは、Screen Mapブロック1つだけのページを1つ持つ。
+export type CategoryKind = 'document' | 'screen-map'
+export type Category = { id: string; title: string; description: string; icon: string; kind?: 'screen-map'; glossary?: GlossaryEntry[]; items: ContentItem[] }
 export type CategoryGroup = { id: string; title: string; description: string; categories: Category[] }
 export type ServiceConfig = { schemaVersion: 3; name: string; eyebrow: string; introduction: string; categoryGroups: CategoryGroup[] }
 
@@ -55,6 +60,7 @@ export function createBlock(type: BlockType): ContentBlock {
     case 'steps': return { id, type, data: { items: [{ id: uid('step'), title: '最初の手順', text: '行う作業を説明してください。', badges: [] }] } }
     case 'diagram': return { id, type, data: { kind: 'flowchart', title: '処理の流れ', source: 'flowchart TD\n  A[開始] --> B[完了]', caption: '' } }
     case 'columns': return { id, type, data: { left: [], right: [] } }
+    case 'screenMap': return { id, type, data: createScreenMapData() }
   }
 }
 
@@ -107,7 +113,7 @@ export function normalizeServiceConfig(value: unknown, fallback: ServiceConfig):
   const migrateCategory = (rawCategory: unknown, categoryIndex: number): Category => {
     const category = rawCategory && typeof rawCategory === 'object' ? rawCategory as Record<string, unknown> : {}
     const glossary = Array.isArray(category.glossary) ? category.glossary.flatMap((entry, entryIndex): GlossaryEntry[] => entry && typeof entry === 'object' ? [{ id: string((entry as Record<string, unknown>).id, `term-${categoryIndex}-${entryIndex}`), term: string((entry as Record<string, unknown>).term), description: string((entry as Record<string, unknown>).description) }] : []) : []
-    return { id: string(category.id, `category-${categoryIndex}`), title: string(category.title, '名称未設定'), description: string(category.description), icon: string(category.icon, '◫'), glossary, items: Array.isArray(category.items) ? category.items.map(migrateItem) : [] }
+    return { id: string(category.id, `category-${categoryIndex}`), title: string(category.title, '名称未設定'), description: string(category.description), icon: string(category.icon, '◫'), ...(category.kind === 'screen-map' ? { kind: 'screen-map' as const } : {}), glossary, items: Array.isArray(category.items) ? category.items.map(migrateItem) : [] }
   }
   return {
     schemaVersion: 3,
@@ -189,12 +195,13 @@ export function BlockRenderer({ block, pageBlocks }: { block: ContentBlock; page
     case 'card': return <div className={`ad-card-grid columns-${block.data.columns}`}>{block.data.items.map((item) => <article className="ad-info-card" key={item.id}><BadgeList badges={item.badges} /><h3>{item.title}</h3><p>{glossaryText(item.description, pageBlocks)}</p>{item.link?.url && <a href={item.link.url} target="_blank" rel="noreferrer">{item.link.label || '詳しく見る'}<span>↗</span></a>}</article>)}</div>
     case 'steps': return <ol className="ad-steps">{block.data.items.map((item, index) => <li key={item.id}><span className="ad-step-number">{String(index + 1).padStart(2, '0')}</span><div><BadgeList badges={item.badges} /><h3>{item.title}</h3><p>{glossaryText(item.text, pageBlocks)}</p></div></li>)}</ol>
     case 'diagram': return <MermaidDiagram id={block.id} {...block.data} />
+    case 'screenMap': return null
     case 'columns': return <div className="ad-block-columns"><div>{block.data.left.map((child) => <BlockRenderer block={child} pageBlocks={pageBlocks} key={child.id} />)}</div><div>{block.data.right.map((child) => <BlockRenderer block={child} pageBlocks={pageBlocks} key={child.id} />)}</div></div>
   }
 }
 
 const catalogLabels = Object.fromEntries(contentBlockCatalog.templates.map((template) => [template.block.type, template.label])) as Partial<Record<BlockType, string>>
-const labels: Record<BlockType, string> = { heading: catalogLabels.heading ?? '見出し', text: catalogLabels.text ?? 'テキスト', image: catalogLabels.image ?? '画像', code: catalogLabels.code ?? 'コード', checklist: 'チェックリスト', callout: catalogLabels.callout ?? '注意／補足', divider: catalogLabels.divider ?? '区切り', table: catalogLabels.table ?? '表', link: catalogLabels.link ?? 'リンク', toc: '目次', glossary: '用語', card: catalogLabels.card ?? 'カード', steps: catalogLabels.steps ?? '手順', diagram: catalogLabels.diagram ?? '図', columns: catalogLabels.columns ?? '2カラム' }
+const labels: Record<BlockType, string> = { heading: catalogLabels.heading ?? '見出し', text: catalogLabels.text ?? 'テキスト', image: catalogLabels.image ?? '画像', code: catalogLabels.code ?? 'コード', checklist: 'チェックリスト', callout: catalogLabels.callout ?? '注意／補足', divider: catalogLabels.divider ?? '区切り', table: catalogLabels.table ?? '表', link: catalogLabels.link ?? 'リンク', toc: '目次', glossary: '用語', card: catalogLabels.card ?? 'カード', steps: catalogLabels.steps ?? '手順', diagram: catalogLabels.diagram ?? '図', columns: catalogLabels.columns ?? '2カラム', screenMap: contentBlockCatalog.screenMap.label }
 const leafTypes = contentBlockCatalog.nestedAllowedTypes
 const blockTypes = contentBlockCatalog.allowedTypes
 
@@ -314,7 +321,7 @@ function BlocksEditor<T extends ContentBlock>({ blocks, nested = false, selected
   const update = (index: number, block: T) => onChange(blocks.map((candidate, candidateIndex) => candidateIndex === index ? block : candidate))
   const move = (index: number, direction: -1 | 1) => { const destination = index + direction; if (destination < 0 || destination >= blocks.length) return; const next = [...blocks]; [next[index], next[destination]] = [next[destination], next[index]]; onChange(next) }
   const remove = (index: number, blockId: string) => { if (selectedBlockId === blockId) onSelectBlock(null); onChange(blocks.filter((_, candidateIndex) => candidateIndex !== index)) }
-  return <div className="ad-block-list">{blocks.map((block, index) => <section className={`ad-block-card ${selectedBlockId === block.id ? 'selected' : ''}`} key={block.id} onPointerDown={(event) => { event.stopPropagation(); onSelectBlock(block.id) }} onFocusCapture={() => onSelectBlock(block.id)}><header><strong>{labels[block.type]}</strong>{selectedBlockId === block.id && <span className="ad-block-selected-label">選択中</span>}<div><button type="button" disabled={index === 0} aria-label="上へ移動" onClick={() => move(index, -1)}>↑</button><button type="button" disabled={index === blocks.length - 1} aria-label="下へ移動" onClick={() => move(index, 1)}>↓</button><button type="button" className="danger" onClick={() => remove(index, block.id)}>削除</button></div></header><div className="ad-block-fields">{block.type === 'columns' ? <div className="ad-columns-editor"><div><strong>Left</strong><BlocksEditor blocks={block.data.left} nested selectedBlockId={selectedBlockId} onSelectBlock={onSelectBlock} onChange={(left) => update(index, { ...block, data: { ...block.data, left } } as T)} /></div><div><strong>Right</strong><BlocksEditor blocks={block.data.right} nested selectedBlockId={selectedBlockId} onSelectBlock={onSelectBlock} onChange={(right) => update(index, { ...block, data: { ...block.data, right } } as T)} /></div></div> : <LeafBlockFields block={block} onChange={(next) => update(index, next as T)} />}</div></section>)}<BlockPicker nested={nested} onPick={(type) => { const block = createBlock(type) as T; onChange([...blocks, block]); onSelectBlock(block.id) }} /></div>
+  return <div className="ad-block-list">{blocks.map((block, index) => <section className={`ad-block-card ${selectedBlockId === block.id ? 'selected' : ''}`} key={block.id} onPointerDown={(event) => { event.stopPropagation(); onSelectBlock(block.id) }} onFocusCapture={() => onSelectBlock(block.id)}><header><strong>{labels[block.type]}</strong>{selectedBlockId === block.id && <span className="ad-block-selected-label">選択中</span>}<div><button type="button" disabled={index === 0} aria-label="上へ移動" onClick={() => move(index, -1)}>↑</button><button type="button" disabled={index === blocks.length - 1} aria-label="下へ移動" onClick={() => move(index, 1)}>↓</button><button type="button" className="danger" onClick={() => remove(index, block.id)}>削除</button></div></header><div className="ad-block-fields">{block.type === 'screenMap' ? <p className="ad-divider-help">Screen Mapは、カテゴリ設定の「Screen Mapを使う」で追加します。</p> : block.type === 'columns' ? <div className="ad-columns-editor"><div><strong>Left</strong><BlocksEditor blocks={block.data.left} nested selectedBlockId={selectedBlockId} onSelectBlock={onSelectBlock} onChange={(left) => update(index, { ...block, data: { ...block.data, left } } as T)} /></div><div><strong>Right</strong><BlocksEditor blocks={block.data.right} nested selectedBlockId={selectedBlockId} onSelectBlock={onSelectBlock} onChange={(right) => update(index, { ...block, data: { ...block.data, right } } as T)} /></div></div> : <LeafBlockFields block={block} onChange={(next) => update(index, next as T)} />}</div></section>)}<BlockPicker nested={nested} onPick={(type) => { const block = createBlock(type) as T; onChange([...blocks, block]); onSelectBlock(block.id) }} /></div>
 }
 
 export function ContentCanvas({ item, onChange, nameLabel = 'コンテンツ名（左ペイン）' }: { item: ContentItem; onChange: (item: ContentItem) => void; nameLabel?: string }) {
