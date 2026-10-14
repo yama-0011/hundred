@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Hundred スクリーンショット取り込み",
+  "version": "0.1.0",
+  "description": "表示中の画面を撮影し、URLと画面名の候補と一緒にAI DesktopのScreen Mapの取り込み待ちへ送ります。",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": [
+    "https://yamahit.com/*",
+    "http://localhost:5173/*",
+    "http://127.0.0.1:5173/*"
+  ],
+  "background": { "service_worker": "hundredScreenCapture.js" },
+  "action": { "default_title": "表示中の画面をAI Desktopへ取り込む（⌥⇧S）" },
+  "commands": {
+    "capture-screen": {
+      "suggested_key": { "default": "Alt+Shift+S" },
+      "description": "表示中の画面をAI Desktopへ取り込む"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://yamahit.com/ai-desktop*",
+        "http://localhost:5173/ai-desktop*",
+        "http://127.0.0.1:5173/ai-desktop*"
+      ],
+      "js": ["hundredAiDesktopBridge.js"]
+    }
+  ]
+}

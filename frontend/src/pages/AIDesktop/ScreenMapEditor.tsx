@@ -5,7 +5,8 @@ import { showAIDesktopNotification } from './aiDesktopNotificationBus'
 import ScreenMapAddDialog, { type ScreenMapScreenFields } from './ScreenMapAddDialog'
 import ScreenMapImageLightbox from './ScreenMapImageLightbox'
 import ScreenMapViewSettings from './ScreenMapViewSettings'
-import { imageFileFrom, newScreenMapId, readScreenMapLabelMode, saveScreenMapLabelMode, SCREEN_MAP_LIMITS, SCREEN_MAP_NODE_SCALE, screenMapGroupColor, type ScreenMapData, type ScreenMapGroup, type ScreenMapImage, type ScreenMapPosition, type ScreenMapScreen, type ScreenMapSelection, type ScreenMapTransition } from './screenMap'
+import { removeScreenCapture, useObjectUrl, useScreenCaptures, type ScreenCapture } from './screenCaptureQueue'
+import { imageFileFrom, isMaskUnchecked, newScreenMapId, readScreenMapLabelMode, saveScreenMapLabelMode, SCREEN_MAP_LIMITS, SCREEN_MAP_NODE_SCALE, screenMapGroupColor, type ScreenMapData, type ScreenMapGroup, type ScreenMapImage, type ScreenMapPosition, type ScreenMapScreen, type ScreenMapSelection, type ScreenMapTransition } from './screenMap'
 import { positionForNewScreen, resolvedPositions } from './screenMapLayout'
 
 const ScreenMapCanvas = lazy(() => import('./ScreenMapCanvas'))
@@ -21,7 +22,13 @@ const ScreenMapCanvas = lazy(() => import('./ScreenMapCanvas'))
  * 文字の入力は、同じ項目への続けての入力を1回分にまとめる。
  */
 
-type DialogState = { mode: 'create'; file: File | null } | { mode: 'replace'; screenId: string } | null
+type DialogState = { mode: 'create'; file: File | null; capture?: ScreenCapture } | { mode: 'replace'; screenId: string } | { mode: 'remask'; screenId: string; file: File } | null
+
+// 取り込み待ちの1件。サムネイルのURLは表示している間だけ作る。
+function CaptureThumbnail({ blob }: { blob: Blob }) {
+  const url = useObjectUrl(blob)
+  return url ? <img src={url} alt="" /> : null
+}
 type History = { past: ScreenMapData[]; future: ScreenMapData[]; current: ScreenMapData | null; key: string | null; at: number }
 const historyLimit = 50
 const typingMergeMilliseconds = 1_000
@@ -31,6 +38,9 @@ const isTextInput = (target: EventTarget | null) => target instanceof HTMLElemen
 function ScreenMapEditor({ data, imageFolder, fill = false, onChange }: { data: ScreenMapData; imageFolder: string; fill?: boolean; onChange: (data: ScreenMapData) => void }) {
   const [selection, setSelection] = useState<ScreenMapSelection | null>(null)
   const [dialog, setDialog] = useState<DialogState>(null)
+  const captures = useScreenCaptures()
+  const [captureListOpen, setCaptureListOpen] = useState(false)
+  const [remaskBusy, setRemaskBusy] = useState(false)
   const [lightboxScreenId, setLightboxScreenId] = useState<string | null>(null)
   const [labelMode, setLabelMode] = useState(readScreenMapLabelMode)
   // ミニマップは、キャンバスを広く使えるよう左のグループ一覧の下に表示する。
@@ -66,6 +76,31 @@ function ScreenMapEditor({ data, imageFolder, fill = false, onChange }: { data: 
     if (data.screens.length >= SCREEN_MAP_LIMITS.screens) { showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.content.screenMapLimit('画面', SCREEN_MAP_LIMITS.screens)); return }
     setDialog({ mode: 'create', file })
   }
+  // 取り込み待ちの画像から画面を追加する。拡張が拾った画面名とURLの候補を入れた状態で開く。
+  const openCapture = (capture: ScreenCapture) => {
+    if (data.screens.length >= SCREEN_MAP_LIMITS.screens) { showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.content.screenMapLimit('画面', SCREEN_MAP_LIMITS.screens)); return }
+    setCaptureListOpen(false)
+    setDialog({ mode: 'create', file: new File([capture.blob], `${capture.name || 'screen'}.png`, { type: capture.blob.type || 'image/png' }), capture })
+  }
+  const discardCapture = async (capture: ScreenCapture) => {
+    if (await confirmAIDesktop({ title: 'この取り込み待ちを破棄しますか？', message: '撮影した画像は削除され、元に戻せません。', confirmLabel: '破棄', tone: 'danger' })) await removeScreenCapture(capture.id).catch(() => undefined)
+  }
+  // 登録済みの画像を読み込み、マスキングし直す。画像の配信にCORSが付いている必要がある。
+  const openRemask = async (screen: ScreenMapScreen) => {
+    const image = screen.images[0]
+    if (!image) return
+    setRemaskBusy(true)
+    try {
+      const response = await fetch(image.url, { cache: 'reload' })
+      if (!response.ok) throw new Error('IMAGE')
+      const blob = await response.blob()
+      setDialog({ mode: 'remask', screenId: screen.id, file: new File([blob], `${screen.name || 'screen'}.${image.imageId.split('.').pop() || 'png'}`, { type: blob.type || 'image/png' }) })
+    } catch {
+      showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.content.remaskLoadFailed)
+    } finally {
+      setRemaskBusy(false)
+    }
+  }
   // スクリーンショットを貼り付けると、そのまま画面の追加を始める。⌘Z・⇧⌘Z（Ctrl+Z・Ctrl+Y）で元に戻す・やり直す。
   // 入力欄での貼り付けと元に戻すは、入力欄そのものの動きを優先する。
   useEffect(() => {
@@ -99,10 +134,13 @@ function ScreenMapEditor({ data, imageFolder, fill = false, onChange }: { data: 
   const updateGroup = (id: string, patch: Partial<ScreenMapGroup>) => commit({ ...data, groups: data.groups.map((group) => group.id === id ? { ...group, ...patch } : group) }, `group:${id}:${Object.keys(patch).join(',')}`)
 
   const addScreen = (image: ScreenMapImage, fields: ScreenMapScreenFields) => {
-    const screen: ScreenMapScreen = { id: newScreenMapId('screen'), name: fields.name, url: fields.url, description: fields.description, images: [image], verification: 'confirmed', ...(fields.groupId ? { groupId: fields.groupId } : {}), ...(fields.stateOf ? { stateOf: fields.stateOf } : {}) }
+    // 登録画面で新しいグループを作ったときは、グループの作成と画面の追加を1回の変更にする（元に戻すも1回で戻る）。
+    const newGroup: ScreenMapGroup | null = fields.newGroupName && data.groups.length < SCREEN_MAP_LIMITS.groups ? { id: newScreenMapId('group'), name: fields.newGroupName, description: '' } : null
+    const groupId = newGroup?.id ?? fields.groupId
+    const screen: ScreenMapScreen = { id: newScreenMapId('screen'), name: fields.name, url: fields.url, description: fields.description, images: [image], verification: 'confirmed', ...(groupId ? { groupId } : {}), ...(fields.stateOf ? { stateOf: fields.stateOf } : {}) }
     // 新しい画面は、選んでいる画面の右隣（なければ全体のいちばん右）に置く。座標のなかった画面も、今の位置で固定する。
     const position = positionForNewScreen(data, screen, selectedScreen?.id ?? null)
-    commit({ ...data, screens: [...data.screens, screen], layout: { ...data.layout, screens: { ...layoutWith(resolvedPositions(data)), [screen.id]: position } } })
+    commit({ ...data, groups: newGroup ? [...data.groups, newGroup] : data.groups, screens: [...data.screens, screen], layout: { ...data.layout, screens: { ...layoutWith(resolvedPositions(data)), [screen.id]: position } } })
     setSelection({ kind: 'screen', id: screen.id })
   }
   const removeElements = (screenIds: string[], transitionIds: string[]) => {
@@ -158,6 +196,17 @@ function ScreenMapEditor({ data, imageFolder, fill = false, onChange }: { data: 
   return <div className={`ad-sm-editor${fill ? ' ad-sm-editor--fill' : ''}`}>
     <div className="ad-sm-editor-toolbar">
       <button type="button" className="accent" onClick={() => openCreate(null)}>＋ 画面を追加</button>
+      {captures.length > 0 && <div className="ad-sm-capture-menu">
+        <button type="button" className="capture" aria-expanded={captureListOpen} onClick={() => setCaptureListOpen((current) => !current)}>取り込み待ち <b>{captures.length}</b></button>
+        {captureListOpen && <div className="ad-sm-capture-list" role="dialog" aria-label="取り込み待ち">
+          <p>Chrome拡張で撮ったスクリーンショットです。マスキングして登録してください。</p>
+          <ul>{captures.map((capture) => <li key={capture.id}>
+            <span className="ad-sm-capture-thumb"><CaptureThumbnail blob={capture.blob} /></span>
+            <span className="ad-sm-capture-text"><strong>{capture.name || capture.title || '画面名なし'}</strong><small>{capture.url}</small><small>{new Intl.DateTimeFormat('ja-JP', { dateStyle: 'short', timeStyle: 'short' }).format(capture.capturedAt)}</small></span>
+            <span className="ad-sm-capture-actions"><button type="button" className="primary" onClick={() => openCapture(capture)}>登録</button><button type="button" onClick={() => void discardCapture(capture)}>破棄</button></span>
+          </li>)}</ul>
+        </div>}
+      </div>}
       <div className="ad-sm-editor-history" role="group" aria-label="変更の取り消し">
         <button type="button" disabled={!canUndo} aria-keyshortcuts="Meta+Z Control+Z" title="元に戻す（⌘Z）" onClick={undo}>↶ 元に戻す</button>
         <button type="button" disabled={!canRedo} aria-keyshortcuts="Meta+Shift+Z Control+Y" title="やり直す（⇧⌘Z）" onClick={redo}>↷ やり直す</button>
@@ -193,7 +242,8 @@ function ScreenMapEditor({ data, imageFolder, fill = false, onChange }: { data: 
         {selectedScreen ? <>
           <h2>画面の詳細</h2>
           <button type="button" className="ad-sm-panel-image" aria-label="画像を拡大" onClick={() => setLightboxScreenId(selectedScreen.id)}>{selectedScreen.images[0] ? <img src={selectedScreen.images[0].thumbnailUrl ?? selectedScreen.images[0].url} alt="" /> : <span>画像なし</span>}</button>
-          <div className="ad-sm-panel-row"><button type="button" onClick={() => setDialog({ mode: 'replace', screenId: selectedScreen.id })}>{selectedScreen.images.length ? '画像を差し替え' : '画像を追加'}</button>{selectedScreen.images[0] && <span className="ad-sm-panel-note">{selectedScreen.images[0].masked ? 'マスキング済み' : 'マスキングなし'}</span>}</div>
+          <div className="ad-sm-panel-row"><button type="button" onClick={() => setDialog({ mode: 'replace', screenId: selectedScreen.id })}>{selectedScreen.images.length ? '画像を差し替え' : '画像を追加'}</button>{selectedScreen.images[0] && <button type="button" disabled={remaskBusy} onClick={() => void openRemask(selectedScreen)}>{remaskBusy ? '読み込み中…' : 'マスキングし直す'}</button>}</div>
+          {selectedScreen.images[0] && <p className={`ad-sm-panel-note${isMaskUnchecked(selectedScreen.images[0]) ? ' warning' : ''}`}>{selectedScreen.images[0].masked ? 'マスキング済み' : selectedScreen.images[0].maskChecked ? '隠す情報なし（確認済み）' : 'マスキングを確認していません。個人情報が写っていないか確認してください。'}</p>}
           <label><span>画面名</span><input value={selectedScreen.name} maxLength={100} onChange={(event) => updateScreen(selectedScreen.id, { name: event.target.value })} /></label>
           <label><span>URL</span><input value={selectedScreen.url} maxLength={2000} onChange={(event) => updateScreen(selectedScreen.id, { url: event.target.value })} /></label>
           <div className="ad-sm-panel-pair">
@@ -234,17 +284,29 @@ function ScreenMapEditor({ data, imageFolder, fill = false, onChange }: { data: 
       </aside>
     </div>
     {dialog && <ScreenMapAddDialog
+      // 取り込み待ちを続けて登録するとき、前の画像やマスクが残らないよう、1件ごとに作り直す。
+      key={dialog.mode === 'create' ? dialog.capture?.id ?? 'new' : `${dialog.mode}-${dialog.screenId}`}
       mode={dialog.mode}
       data={data}
-      initialFile={dialog.mode === 'create' ? dialog.file : null}
+      initialFile={dialog.mode === 'replace' ? null : dialog.file}
+      // 画面名の候補が拾えなかったときは、ページのタイトルを入れておく。
+      initialFields={dialog.mode === 'create' && dialog.capture ? { name: dialog.capture.name || dialog.capture.title, url: dialog.capture.url } : undefined}
       defaultGroupId={selection?.kind === 'group' ? selection.id : selectedScreen?.groupId}
-      targetName={dialog.mode === 'replace' ? names.get(dialog.screenId) : undefined}
+      targetName={dialog.mode === 'create' ? undefined : names.get(dialog.screenId)}
+      targetUrl={dialog.mode === 'create' ? undefined : data.screens.find((screen) => screen.id === dialog.screenId)?.url}
+      previousMasked={dialog.mode === 'remask' ? data.screens.find((screen) => screen.id === dialog.screenId)?.images[0]?.masked : undefined}
       imageFolder={imageFolder}
       onCancel={() => setDialog(null)}
       onSubmit={(image, fields) => {
-        if (dialog.mode === 'replace') updateScreen(dialog.screenId, { images: [image] })
-        else if (fields) addScreen(image, fields)
-        setDialog(null)
+        if (dialog.mode !== 'create') { updateScreen(dialog.screenId, { images: [image] }); setDialog(null); return }
+        if (fields) addScreen(image, fields)
+        // 取り込み待ちから登録したときは、取り込み待ちから外し、次の1件を続けて開く。
+        const capture = dialog.capture
+        if (!capture) { setDialog(null); return }
+        void removeScreenCapture(capture.id).catch(() => undefined)
+        const next = captures.find((candidate) => candidate.id !== capture.id)
+        if (next) openCapture(next)
+        else setDialog(null)
       }}
     />}
     {lightboxScreenId && <ScreenMapImageLightbox data={data} screenId={lightboxScreenId} onNavigate={(screenId) => { setLightboxScreenId(screenId); setSelection({ kind: 'screen', id: screenId }) }} onClose={() => setLightboxScreenId(null)} />}

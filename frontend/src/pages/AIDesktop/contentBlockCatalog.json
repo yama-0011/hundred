@@ -156,7 +156,7 @@
     "fieldDefinitions": {
       "groups": "画面のまとまり（例：友だち管理）です。idは英小文字・数字・ハイフンで、重複しない値にします。",
       "screens": "画面です。groupIdは所属するグループのid、stateOfは同じ画面の別の状態（空・エラー・モーダルなど）のときに元の画面のidを設定します。どちらも任意です。",
-      "screens.images": "画面のスクリーンショットです。AI Desktopにアップロードした画像のimageIdとurlを設定します。thumbnailImageIdとthumbnailUrlは一覧表示用の縮小画像、widthとheightは元の画像のピクセル数（どちらも任意）、maskedはマスキング済みかどうかです。AIは画像を追加・変更しないでください。",
+      "screens.images": "画面のスクリーンショットです。AI Desktopにアップロードした画像のimageIdとurlを設定します。thumbnailImageIdとthumbnailUrlは一覧表示用の縮小画像、widthとheightは元の画像のピクセル数（どちらも任意）、maskedはマスキング済みかどうか、maskCheckedはマスキングの要否を利用者が確認したかどうかです。AIは画像を追加・変更しないでください。",
       "transitions": "画面遷移です。fromとtoには画面のidを設定します。actionは操作名（例：友だち名をタップ）、conditionは遷移する条件です。",
       "verification": "confirmedは画面で確認した情報、ai-inferredはAIが推測した情報です。AIが追加・変更した画面と遷移はai-inferredにします。",
       "layout": "キャンバス上の配置です。screensの各画面はx・yと、任意でカードの幅widthを持ちます。座標がない画面は自動で配置されるため、AIは設定しなくてかまいません。"

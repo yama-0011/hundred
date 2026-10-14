@@ -90,7 +90,7 @@
 .ad-sm-panel h2{margin:0;font-size:15px}
 .ad-sm-panel h3{margin:4px 0 0;font-size:13px}
 .ad-sm-panel label,.ad-sm-panel-field{display:flex;flex-direction:column;gap:5px;color:var(--muted);font-size:12px}
-.ad-sm-panel input,.ad-sm-panel select,.ad-sm-panel textarea,.ad-sm-dialog input,.ad-sm-dialog select,.ad-sm-dialog textarea{box-sizing:border-box;width:100%;min-height:40px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--sm-canvas-bg);color:var(--text);font:inherit;font-size:14px;user-select:text}
+.ad-sm-panel input:not([type=checkbox]),.ad-sm-panel select,.ad-sm-panel textarea,.ad-sm-dialog input:not([type=checkbox]),.ad-sm-dialog select,.ad-sm-dialog textarea{box-sizing:border-box;width:100%;min-height:40px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--sm-canvas-bg);color:var(--text);font:inherit;font-size:14px;user-select:text}
 .ad-sm-panel textarea,.ad-sm-dialog textarea{min-height:72px;padding:8px 10px;resize:vertical}
 .ad-sm-panel-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .ad-sm-panel-image{height:170px;padding:0;border:1px solid var(--line);border-radius:10px;background:var(--sm-thumb-bg);overflow:hidden;cursor:zoom-in;display:grid;place-items:center;color:var(--muted);font-size:12px}
@@ -120,7 +120,7 @@
 
 /* 画像の取り込み */
 .ad-sm-dialog-overlay{position:fixed;z-index:22000;inset:0;padding:16px;display:grid;place-items:center;background:rgba(4,9,16,.66);backdrop-filter:blur(6px)}
-.ad-sm-dialog{width:min(1100px,100%);max-height:100%;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--text);box-shadow:0 30px 90px rgba(0,0,0,.45);overflow:hidden;user-select:none}
+.ad-sm-dialog{width:min(1800px,100%);height:100%;max-height:100%;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--text);box-shadow:0 30px 90px rgba(0,0,0,.45);overflow:hidden;user-select:none}
 .ad-sm-dialog>header{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
 .ad-sm-dialog>header small{color:var(--sm-accent-text);font-size:11px;font-weight:700;letter-spacing:.08em}
 .ad-sm-dialog>header h2{margin:2px 0 0;font-size:19px}
@@ -132,17 +132,20 @@
 .ad-sm-steps li.done span{border-color:transparent;background:rgba(47,179,154,.18)}
 .ad-sm-steps li.current{color:var(--text);font-weight:600}
 .ad-sm-steps li.current span{border-color:transparent;background:#3975cf;color:#fff}
-.ad-sm-dialog-body{display:flex;flex-wrap:wrap;min-height:0;overflow:auto}
-.ad-sm-dialog-image{flex:999 1 520px;min-width:0;padding:18px 20px;box-sizing:border-box;display:flex;flex-direction:column;gap:12px}
-.ad-sm-dialog-fields{flex:1 1 280px;max-width:380px;padding:18px 20px;box-sizing:border-box;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
+.ad-sm-dialog-body{flex:1;display:flex;flex-wrap:wrap;min-height:0;overflow:auto}
+.ad-sm-dialog-image{flex:999 1 520px;min-width:0;min-height:0;max-height:100%;padding:14px 18px;box-sizing:border-box;display:flex;flex-direction:column;gap:10px}
+.ad-sm-dialog-fields{flex:1 1 260px;max-width:320px;padding:18px 20px;box-sizing:border-box;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
 .ad-sm-dialog-fields h3{margin:0;font-size:14px}
 .ad-sm-dialog-fields label{display:flex;flex-direction:column;gap:5px;color:var(--muted);font-size:12px}
 .ad-sm-mask-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.ad-sm-mask-toolbar span{margin-right:auto;color:var(--muted);font-size:12px}
+.ad-sm-mask-toolbar>span:first-child{margin-right:auto;color:var(--muted);font-size:12px}
+.ad-sm-mask-zoom{display:inline-flex;padding:2px;border:1px solid var(--line);border-radius:9px}
+.ad-sm-mask-zoom button{min-height:34px!important;padding:0 10px!important;border:0!important;border-radius:7px!important;background:transparent!important;color:var(--muted)!important}
+.ad-sm-mask-zoom button.active{background:#3975cf!important;color:#fff!important;font-weight:600}
 .ad-sm-mask-toolbar button{min-height:40px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);font-size:13px;cursor:pointer}
 .ad-sm-mask-toolbar button:disabled{opacity:.5;cursor:default}
-.ad-sm-mask-stage{max-height:min(56vh,560px);overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--sm-thumb-bg)}
-.ad-sm-mask-area{position:relative}
+.ad-sm-mask-stage{flex:1;min-height:240px;overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--sm-thumb-bg)}
+.ad-sm-mask-area{position:relative;min-width:100%}
 .ad-sm-mask-area img{display:block;width:100%;height:auto;pointer-events:none}
 .ad-sm-mask-overlay{position:absolute;inset:0;cursor:crosshair;touch-action:none}
 .ad-sm-mask-overlay span{position:absolute;box-sizing:border-box;background:#000;outline:2px solid #4f8ff0;color:#d4e5ff;font-size:11px;padding:4px 6px;overflow:hidden}
@@ -207,3 +210,31 @@
 .ad-sm-open-panel h3{margin:0;font-size:17px}
 .ad-sm-open-panel p{margin:0;color:var(--muted);font-size:13px}
 .ad-sm-open-panel button{margin-top:6px;min-height:44px;padding:0 18px;border:0;border-radius:10px;background:#3975cf;color:#fff;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+/* Chrome拡張の取り込み待ち */
+.ad-sm-capture-menu{position:relative}
+.ad-sm-capture-menu>button.capture{min-height:40px;padding:0 14px;border:1px solid #2fb39a;border-radius:9px;background:rgba(47,179,154,.12);color:var(--sm-confirmed-text);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.ad-sm-capture-menu>button.capture b{margin-left:4px;padding:1px 7px;border-radius:999px;background:#2fb39a;color:#fff;font-size:12px}
+.ad-sm-capture-list{position:absolute;z-index:20;top:calc(100% + 6px);left:0;width:min(480px,80vw);max-height:420px;overflow:auto;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:0 16px 40px rgba(0,0,0,.3);display:grid;gap:8px}
+.ad-sm-capture-list>p{margin:0;color:var(--muted);font-size:12px}
+.ad-sm-capture-list ul{margin:0;padding:0;list-style:none;display:grid;gap:6px}
+.ad-sm-capture-list li{display:flex;align-items:center;gap:10px;padding:6px;border:1px solid var(--line);border-radius:9px}
+.ad-sm-capture-thumb{flex:none;width:88px;height:56px;border-radius:6px;background:var(--sm-thumb-bg);overflow:hidden}
+.ad-sm-capture-thumb img{width:100%;height:100%;object-fit:contain}
+.ad-sm-capture-text{flex:1;min-width:0;display:grid;gap:1px;font-size:12px}
+.ad-sm-capture-text strong{font-size:13px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.ad-sm-capture-text small{color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.ad-sm-capture-actions{display:flex;gap:6px}
+.ad-sm-capture-actions button{min-height:36px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);font:inherit;font-size:12px;cursor:pointer}
+.ad-sm-capture-actions button.primary{border:0;background:#3975cf;color:#fff;font-weight:600}
+/* マスキングの確認 */
+.ad-sm-mask-preset{margin:0;padding:9px 12px;border-radius:8px;background:rgba(79,143,240,.12);color:var(--sm-accent-text);font-size:12px}
+.ad-sm-mask-confirm{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px dashed #d99a2b;border-radius:8px;color:var(--text);font-size:13px;cursor:pointer}
+.ad-sm-mask-confirm.checked{border-style:solid;border-color:var(--line);color:var(--muted)}
+.ad-sm-mask-badge{position:absolute;top:8px;left:8px;padding:2px 8px;border-radius:999px;background:rgba(196,43,28,.88);color:#fff;font-style:normal;font-size:11px;font-weight:600}
+.ad-sm-panel-note.warning{padding:8px 10px;border-radius:8px;background:rgba(196,43,28,.1);color:#c42b1c}
+.ai-desktop.dark .ad-sm-panel-note.warning{color:#ff9b9b}
+@media(pointer:coarse){.ad-sm-capture-actions button{min-height:44px}}
+/* チェックボックスは入力欄の見た目（幅いっぱい）を受けないようにし、文字の左に小さく置く。 */
+.ad-sm-mask-confirm input,.ad-editor-form label.ad-editor-check input{flex:none;width:18px;height:18px;min-height:0;margin:0;padding:0;accent-color:#3975cf;cursor:pointer}
+.ad-sm-mask-confirm span,.ad-editor-form label.ad-editor-check>span{flex:1;text-align:left}
+.ad-editor-form label.ad-editor-check{justify-content:flex-start}

@@ -15,7 +15,8 @@ import type { Category, CategoryKind, ContentBlock, ContentItem, ScreenMapBlock 
 export type ScreenMapVerification = 'confirmed' | 'ai-inferred'
 // サムネイルは、画面が多いときにキャンバスやiPadで重くならないよう、一覧の表示に使う縮小画像。
 // widthとheightは元の画像のピクセル数。カードの縦横比を画像に合わせ、画像を切り取らずに表示するために使う。
-export type ScreenMapImage = { imageId: string; url: string; thumbnailImageId?: string; thumbnailUrl?: string; width?: number; height?: number; masked: boolean; capturedAt?: number }
+// maskCheckedは、利用者がマスキングの要否を確認したかどうか（隠したか、「隠す情報はない」を選んだ）。
+export type ScreenMapImage = { imageId: string; url: string; thumbnailImageId?: string; thumbnailUrl?: string; width?: number; height?: number; masked: boolean; maskChecked?: boolean; capturedAt?: number }
 export type ScreenMapGroup = { id: string; name: string; description: string }
 export type ScreenMapScreen = { id: string; name: string; groupId?: string; stateOf?: string; url: string; description: string; images: ScreenMapImage[]; verification: ScreenMapVerification }
 export type ScreenMapTransition = { id: string; from: string; to: string; action: string; condition: string; verification: ScreenMapVerification }
@@ -46,6 +47,45 @@ const readSetting = (key: string) => { try { return window.localStorage.getItem(
 const writeSetting = (key: string, value: string) => { try { window.localStorage.setItem(key, value) } catch { /* 覚えられない端末でも表示は切り替える。 */ } }
 export const readScreenMapLabelMode = (): ScreenMapLabelMode => readSetting(viewSettingKeys.labels) === 'all' ? 'all' : 'icon'
 export const saveScreenMapLabelMode = (value: ScreenMapLabelMode) => writeSetting(viewSettingKeys.labels, value)
+/** 画像のマスキングを確認していない（隠しておらず、「隠す情報はない」も選んでいない）かどうか。 */
+export const isMaskUnchecked = (image: ScreenMapImage | undefined) => Boolean(image && !image.masked && !image.maskChecked)
+
+// マスキングの四角。画像の幅・高さに対する比率で持つ。
+export type ScreenMapMask = { x: number; y: number; width: number; height: number }
+/**
+ * 同じ形のURLかを判断するための形。数字やIDらしい部分を「:id」に置き換える（/friends/123 と /friends/456 は同じ形）。
+ * クエリとハッシュは見ない。
+ */
+export function screenUrlPattern(value: string) {
+  const normalize = (path: string) => path.split('/').map((segment) => /^\d+$/u.test(segment) || /^[0-9a-f-]{8,}$/iu.test(segment) || (segment.length >= 8 && /\d/u.test(segment)) ? ':id' : segment).join('/')
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  try {
+    const url = new URL(trimmed)
+    return `${url.host}${normalize(url.pathname)}`
+  } catch {
+    return normalize(trimmed.split(/[?#]/u)[0])
+  }
+}
+// 前回のマスクの位置は、Screen Map（資料）ごとにこの端末へ覚えておく。最後に使った位置と、URLの形ごとの位置を持つ。
+type MaskPresets = { last: ScreenMapMask[]; patterns: Record<string, ScreenMapMask[]> }
+const maskPresetKey = (scope: string) => `ai-desktop:screen-map-mask-presets:${scope}`
+export function readMaskPresets(scope: string): MaskPresets {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(maskPresetKey(scope)) ?? 'null') as MaskPresets | null
+    return value && Array.isArray(value.last) && value.patterns && typeof value.patterns === 'object' ? value : { last: [], patterns: {} }
+  } catch {
+    return { last: [], patterns: {} }
+  }
+}
+export function saveMaskPreset(scope: string, url: string, masks: ScreenMapMask[]) {
+  if (!masks.length) return
+  const presets = readMaskPresets(scope)
+  const pattern = screenUrlPattern(url)
+  const next: MaskPresets = { last: masks, patterns: pattern ? { ...presets.patterns, [pattern]: masks } : presets.patterns }
+  try { window.localStorage.setItem(maskPresetKey(scope), JSON.stringify(next)) } catch { /* 覚えられない端末でも登録は続ける。 */ }
+}
+
 export type ScreenMapSelection = { kind: 'screen' | 'transition' | 'group'; id: string }
 
 export const SCREEN_MAP_LIMITS = { groups: 50, screens: 300, transitions: 1_000, imagesPerScreen: 10 }
@@ -91,7 +131,7 @@ export function isScreenMapData(value: unknown): value is ScreenMapData {
     && (screen.stateOf === undefined || (typeof screen.stateOf === 'string' && screen.stateOf !== screen.id && screenIds.has(screen.stateOf)))
     && validText(screen.url, 2_000) && validText(screen.description, 5_000) && validVerification(screen.verification)
     && Array.isArray(screen.images) && screen.images.length <= SCREEN_MAP_LIMITS.imagesPerScreen
-    && screen.images.every((image) => isRecord(image) && validText(image.imageId, 300) && validText(image.url, 2_000) && validOptionalText(image.thumbnailImageId, 300) && validOptionalText(image.thumbnailUrl, 2_000) && validPixels(image.width) && validPixels(image.height) && typeof image.masked === 'boolean' && validTimestamp(image.capturedAt)))
+    && screen.images.every((image) => isRecord(image) && validText(image.imageId, 300) && validText(image.url, 2_000) && validOptionalText(image.thumbnailImageId, 300) && validOptionalText(image.thumbnailUrl, 2_000) && validPixels(image.width) && validPixels(image.height) && typeof image.masked === 'boolean' && (image.maskChecked === undefined || typeof image.maskChecked === 'boolean') && validTimestamp(image.capturedAt)))
   const validTransitions = transitions.every((transition) => typeof transition.from === 'string' && screenIds.has(transition.from) && typeof transition.to === 'string' && screenIds.has(transition.to)
     && validText(transition.action, 200) && validText(transition.condition, 1_000) && validVerification(transition.verification))
   if (!validGroups || !validScreens || !validTransitions) return false

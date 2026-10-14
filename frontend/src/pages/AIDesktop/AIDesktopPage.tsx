@@ -9,7 +9,8 @@ import { BlockRenderer, ContentCanvas, ContentTableOfContents, createContent, no
 import { createContentBlockCatalog } from './contentBlockCatalog'
 import { copyArticleImage } from './copyArticleImage'
 import { diagramKindMatchesSource, validateMermaidSource, type DiagramKind } from './mermaidDiagramValidation'
-import { categoryKindOf, containsScreenMapBlock, createScreenMapContent, isScreenMapData, screenMapBlockOf } from './screenMap'
+import { categoryKindOf, containsScreenMapBlock, createScreenMapContent, isMaskUnchecked, isScreenMapData, screenMapBlockOf } from './screenMap'
+import { listenScreenCaptures } from './screenCaptureQueue'
 import ScreenMapEditor from './ScreenMapEditor'
 import ScreenMapOverview from './ScreenMapOverview'
 import ImageExplorer from './ImageExplorer'
@@ -250,6 +251,7 @@ function CategoryEditor({ serviceId, service, category, groupId, initialSelected
   const usesScreenMap = items.some((item) => screenMapBlockOf(item))
   const screenMapBlock = screenMapBlockOf(selectedItem ?? undefined)
   const selectedIsScreenMap = Boolean(screenMapBlock)
+  const uncheckedScreenCount = screenMapBlock ? screenMapBlock.data.screens.filter((screen) => isMaskUnchecked(screen.images[0])).length : 0
   const hasUnsavedChanges = currentSnapshot !== savedSnapshot
   const confirmLeave = async () => !hasUnsavedChanges || await confirmAIDesktop({ title: '変更内容が保存されていません', message: '保存せずに移動すると、変更内容は破棄されます。', confirmLabel: '破棄して移動', tone: 'danger' })
   const backToCategories = async () => { if (await confirmLeave()) onBack() }
@@ -443,7 +445,7 @@ ${targetJson}
   const writeContentWorkspaceJson = async () => {
     const target = workspaceTarget()
     const payload = workspacePayload(null)
-    if (!selectedItem || !target || !payload || !(await confirmAIDesktop({ title: '現在のページをワークスペースへ書き出しますか？', message: `${contentWorkspacePath(target)} を上書きします。${selectedIsScreenMap ? '画面の画像も書き出します。' : ''}`, confirmLabel: '書き出す' }))) return
+    if (!selectedItem || !target || !payload || !(await confirmAIDesktop({ title: '現在のページをワークスペースへ書き出しますか？', message: `${contentWorkspacePath(target)} を上書きします。${selectedIsScreenMap ? '画面の画像も書き出します。' : ''}${uncheckedScreenCount ? AI_DESKTOP_MESSAGES.content.unmaskedScreens(uncheckedScreenCount) : ''}`, confirmLabel: '書き出す' }))) return
     if (!supportsContentWorkspaceFolder()) {
       downloadContentJson(payload, `${safeContentFileName(selectedItem.id)}.json`)
       showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.content.workspaceUnsupported)
@@ -714,6 +716,8 @@ function AIDesktopPage() {
   }, [taskbarPeekOpen])
   useEffect(() => { let active = true; void getAIDesktopCatalogs<unknown>().then(({ catalogs, publications }) => { if (!active || manageableCatalogsAppliedRef.current) return; applyCatalogs(catalogs); setCatalogPublications(publications) }).catch(() => { /* Local API未起動時は初期データを表示する。 */ }).finally(() => { if (active) setCatalogReady(true) }); return () => { active = false } }, [])
   useEffect(() => { void listAIDesktopDocuments().then((result) => setDocuments(result.documents)).catch(() => undefined) }, [])
+  // Chrome拡張で撮ったスクリーンショットを、AI Desktopを開いている間ずっと受け取り、取り込み待ちに入れる。
+  useEffect(() => listenScreenCaptures((count) => showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.content.captureQueued(count)), () => showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.content.captureQueueFailed)), [])
   useEffect(() => { if (!canEdit) return; let active = true; void Promise.all([getManageableAIDesktopCatalogs<unknown>(), listAIDesktopDocuments(true)]).then(([catalogResult, documentResult]) => { if (!active) return; manageableCatalogsAppliedRef.current = true; applyCatalogs(catalogResult.catalogs); setCatalogPublications(catalogResult.publications); setDocuments(documentResult.documents) }).catch((error: unknown) => { if (active) showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.document.manageableLoadFailed)) }); return () => { active = false } }, [canEdit])
   useEffect(() => {
     const target = sharedTargetRef.current
@@ -778,7 +782,8 @@ function AIDesktopPage() {
   }
   const updateCatalogPublication = async (serviceId: ServiceId, published: boolean) => {
     const includesScreenMap = Boolean(catalog[serviceId]?.categoryGroups.some((group) => group.categories.some((category) => categoryKindOf(category) === 'screen-map')))
-    if (published && includesScreenMap && !(await confirmAIDesktop({ title: AI_DESKTOP_MESSAGES.document.screenMapPublicationTitle, message: AI_DESKTOP_MESSAGES.document.screenMapPublicationMessage, confirmLabel: '公開する', tone: 'danger' }))) return
+    const uncheckedCount = (catalog[serviceId]?.categoryGroups ?? []).flatMap((group) => group.categories).flatMap((category) => category.items).flatMap((item) => screenMapBlockOf(item)?.data.screens ?? []).filter((screen) => isMaskUnchecked(screen.images[0])).length
+    if (published && includesScreenMap && !(await confirmAIDesktop({ title: AI_DESKTOP_MESSAGES.document.screenMapPublicationTitle, message: `${AI_DESKTOP_MESSAGES.document.screenMapPublicationMessage}${uncheckedCount ? `\n${AI_DESKTOP_MESSAGES.content.unmaskedScreens(uncheckedCount)}` : ''}`, confirmLabel: '公開する', tone: 'danger' }))) return
     try {
       const result = await setAIDesktopCatalogPublication(serviceId, published)
       setCatalogPublications((current) => ({ ...current, [serviceId]: { ...(current[serviceId] ?? { ownerId: accountName, createdBy: accountName, updatedBy: accountName, publishedBy: null, createdAt: Date.now(), updatedAt: Date.now(), publishedAt: null }), ...result.publication } as AIDesktopCatalogPublication }))

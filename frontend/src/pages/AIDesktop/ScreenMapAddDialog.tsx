@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { uploadAIDesktopImage } from '../../services/AIDesktop/aiDesktopApi'
 import { AI_DESKTOP_MESSAGES, localizedErrorMessage } from './aiDesktopMessages'
 import { showAIDesktopNotification } from './aiDesktopNotificationBus'
-import { imageFileFrom, type ScreenMapData, type ScreenMapImage } from './screenMap'
+import { useObjectUrl } from './screenCaptureQueue'
+import { imageFileFrom, readMaskPresets, SCREEN_MAP_LIMITS, saveMaskPreset, screenUrlPattern, type ScreenMapData, type ScreenMapImage, type ScreenMapMask } from './screenMap'
 
 /**
  * 概要:
@@ -10,10 +11,16 @@ import { imageFileFrom, type ScreenMapData, type ScreenMapImage } from './screen
  *
  * 隠した部分は、アップロードの前にブラウザで画像へ焼き込む。元の画像はサーバーへ送らない。
  * 一覧の表示に使う縮小画像も、ここで作ってアップロードする。
+ *
+ * マスキングの忘れを防ぐため、四角が1つもないときは「隠す情報はない」を選ばないと登録できない。
+ * 同じ形のURLの画面では、前回隠した位置で隠した状態から始める（位置は資料ごとにこの端末へ覚えておく）。
  */
 
-export type ScreenMapScreenFields = { name: string; url: string; groupId?: string; stateOf?: string; description: string }
-type Mask = { x: number; y: number; width: number; height: number }
+// newGroupNameは、登録と同時に新しいグループを作るときのグループ名。groupIdとは同時に持たない。
+export type ScreenMapScreenFields = { name: string; url: string; groupId?: string; newGroupName?: string; stateOf?: string; description: string }
+// グループの選択肢で「新しいグループを作る」を表す値。グループのIDは英小文字・数字・ハイフンだけなので重ならない。
+const NEW_GROUP = '__new-group__'
+type Mask = ScreenMapMask
 
 const maxUploadBytes = 10 * 1024 * 1024
 // キャンバスで大きく表示しても読めるよう、縮小画像は高解像度の画面でも足りる幅にする。
@@ -48,29 +55,45 @@ async function maskedImages(source: string, sourceType: string, masks: Mask[]) {
 }
 
 type ScreenMapAddDialogProps = {
-  mode: 'create' | 'replace'
+  // create：画面を追加、replace：画像を差し替え、remask：登録済みの画像をマスキングし直す
+  mode: 'create' | 'replace' | 'remask'
   data: ScreenMapData
   initialFile: File | null
+  // 拡張から取り込んだ画面では、画面名とURLの候補が入る
+  initialFields?: Partial<Pick<ScreenMapScreenFields, 'name' | 'url'>>
   defaultGroupId?: string
   targetName?: string
+  // 差し替え・マスキングし直す画面のURL。前回のマスクの位置を探すのに使う
+  targetUrl?: string
+  // マスキングし直す画像が、すでにマスキング済みかどうか
+  previousMasked?: boolean
   imageFolder: string
   onCancel: () => void
   onSubmit: (image: ScreenMapImage, fields: ScreenMapScreenFields | null) => void
 }
 
-function ScreenMapAddDialog({ mode, data, initialFile, defaultGroupId, targetName, imageFolder, onCancel, onSubmit }: ScreenMapAddDialogProps) {
+function ScreenMapAddDialog({ mode, data, initialFile, initialFields, defaultGroupId, targetName, targetUrl, previousMasked = false, imageFolder, onCancel, onSubmit }: ScreenMapAddDialogProps) {
+  const [presets] = useState(() => readMaskPresets(imageFolder))
+  const sourceUrl = initialFields?.url ?? targetUrl ?? ''
+  const [presetPattern] = useState(() => initialFile && presets.patterns[screenUrlPattern(sourceUrl)]?.length ? screenUrlPattern(sourceUrl) : null)
   const [file, setFile] = useState<File | null>(initialFile)
-  const [masks, setMasks] = useState<Mask[]>([])
+  const [masks, setMasks] = useState<Mask[]>(() => presetPattern ? presets.patterns[presetPattern] : [])
+  const [noMaskNeeded, setNoMaskNeeded] = useState(false)
+  // 細かいところを隠しやすいよう、画像を拡大して表示できる。四角の位置は画像に対する比率なので、倍率を変えてもずれない。
+  const [zoom, setZoom] = useState(1)
+  const [creatingGroup, setCreatingGroup] = useState(false)
   const [draft, setDraft] = useState<{ startX: number; startY: number; x: number; y: number } | null>(null)
   const [busy, setBusy] = useState(false)
-  const [fields, setFields] = useState<ScreenMapScreenFields>({ name: '', url: '', groupId: defaultGroupId, description: '' })
-  const previewUrl = useMemo(() => file ? URL.createObjectURL(file) : null, [file])
-  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl) }, [previewUrl])
+  const [fields, setFields] = useState<ScreenMapScreenFields>({ name: initialFields?.name ?? '', url: initialFields?.url ?? '', groupId: defaultGroupId, description: '' })
+  const maskDecided = masks.length > 0 || noMaskNeeded
+  const newGroupMissing = creatingGroup && !fields.newGroupName?.trim()
+  const previewUrl = useObjectUrl(file)
 
   const chooseFile = (next: File | null) => {
     if (!next) { showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.content.screenMapImageInvalid); return }
     setFile(next)
     setMasks([])
+    setNoMaskNeeded(false)
   }
   useEffect(() => {
     const paste = (event: ClipboardEvent) => {
@@ -79,6 +102,7 @@ function ScreenMapAddDialog({ mode, data, initialFile, defaultGroupId, targetNam
       event.preventDefault()
       setFile(pasted)
       setMasks([])
+      setNoMaskNeeded(false)
     }
     const close = (event: KeyboardEvent) => { if (event.key === 'Escape' && !busy) onCancel() }
     window.addEventListener('paste', paste)
@@ -109,6 +133,8 @@ function ScreenMapAddDialog({ mode, data, initialFile, defaultGroupId, targetNam
   const submit = async () => {
     if (!file || !previewUrl) return
     if (mode === 'create' && !fields.name.trim()) { showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.content.screenMapNameRequired); return }
+    if (mode === 'create' && newGroupMissing) { showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.content.screenMapGroupNameRequired); return }
+    if (!maskDecided) { showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.content.screenMapMaskRequired); return }
     setBusy(true)
     try {
       const { full, thumbnail, width, height } = await maskedImages(previewUrl, file.type, masks)
@@ -118,8 +144,9 @@ function ScreenMapAddDialog({ mode, data, initialFile, defaultGroupId, targetNam
         uploadAIDesktopImage(new File([full], `${baseName}.${full.type === 'image/jpeg' ? 'jpg' : 'png'}`, { type: full.type }), imageFolder),
         uploadAIDesktopImage(new File([thumbnail], `${baseName}-thumbnail.jpg`, { type: 'image/jpeg' }), imageFolder),
       ])
-      const image: ScreenMapImage = { imageId: uploaded.id, url: uploaded.url, thumbnailImageId: uploadedThumbnail.id, thumbnailUrl: uploadedThumbnail.url, width, height, masked: masks.length > 0, capturedAt: Date.now() }
-      onSubmit(image, mode === 'create' ? { ...fields, name: fields.name.trim(), url: fields.url.trim(), description: fields.description.trim() } : null)
+      const image: ScreenMapImage = { imageId: uploaded.id, url: uploaded.url, thumbnailImageId: uploadedThumbnail.id, thumbnailUrl: uploadedThumbnail.url, width, height, masked: masks.length > 0 || (mode === 'remask' && previousMasked), maskChecked: true, capturedAt: Date.now() }
+      saveMaskPreset(imageFolder, mode === 'create' ? fields.url : sourceUrl, masks)
+      onSubmit(image, mode === 'create' ? { ...fields, name: fields.name.trim(), url: fields.url.trim(), description: fields.description.trim(), newGroupName: creatingGroup ? fields.newGroupName?.trim() : undefined } : null)
     } catch (error) {
       showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.content.screenMapUploadFailed))
     } finally {
@@ -133,7 +160,7 @@ function ScreenMapAddDialog({ mode, data, initialFile, defaultGroupId, targetNam
   return <div className="ad-sm-dialog-overlay" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget && !busy) onCancel() }}>
     <section className="ad-sm-dialog" role="dialog" aria-modal="true" aria-labelledby="ad-sm-dialog-title">
       <header>
-        <div><small>{mode === 'create' ? 'NEW SCREEN' : 'REPLACE IMAGE'}</small><h2 id="ad-sm-dialog-title">{mode === 'create' ? '画面を追加' : `「${targetName || '名称未設定'}」の画像を差し替え`}</h2></div>
+        <div><small>{mode === 'create' ? 'NEW SCREEN' : mode === 'remask' ? 'MASKING' : 'REPLACE IMAGE'}</small><h2 id="ad-sm-dialog-title">{mode === 'create' ? '画面を追加' : mode === 'remask' ? `「${targetName || '名称未設定'}」をマスキングし直す` : `「${targetName || '名称未設定'}」の画像を差し替え`}</h2></div>
         <ol className="ad-sm-steps">
           <li className={stepClass(1)}><span>{step > 1 ? '✓' : '1'}</span>画像を選ぶ</li>
           <li className={stepClass(2)}><span>2</span>マスキング</li>
@@ -148,17 +175,21 @@ function ScreenMapAddDialog({ mode, data, initialFile, defaultGroupId, targetNam
               <span>ドラッグで、隠したい範囲を四角で囲みます。</span>
               <button type="button" disabled={busy || masks.length === 0} onClick={() => setMasks((current) => current.slice(0, -1))}>元に戻す</button>
               <button type="button" disabled={busy || masks.length === 0} onClick={() => setMasks([])}>すべて解除</button>
+              {presets.last.length > 0 && <button type="button" disabled={busy} onClick={() => setMasks(presets.last)}>前回と同じ位置を隠す</button>}
               <button type="button" disabled={busy} onClick={pickFile}>別の画像を選ぶ</button>
+              <span className="ad-sm-mask-zoom" role="group" aria-label="表示の倍率">{[1, 1.5, 2].map((value) => <button type="button" key={value} aria-pressed={zoom === value} className={zoom === value ? 'active' : ''} onClick={() => setZoom(value)}>{value * 100}%</button>)}</span>
             </div>
             <div className="ad-sm-mask-stage">
-              <div className="ad-sm-mask-area">
+              <div className="ad-sm-mask-area" style={{ width: `${zoom * 100}%` }}>
                 <img src={previewUrl} alt="取り込む画像" draggable={false} />
                 <div className="ad-sm-mask-overlay" onPointerDown={startMask} onPointerMove={moveMask} onPointerUp={endMask} onPointerCancel={() => setDraft(null)}>
                   {visibleMasks.map((mask, index) => <span key={index} style={{ left: `${mask.x * 100}%`, top: `${mask.y * 100}%`, width: `${mask.width * 100}%`, height: `${mask.height * 100}%` }}>{index < masks.length && `マスク ${index + 1}`}</span>)}
                 </div>
               </div>
             </div>
-            <p className="ad-sm-mask-note">隠した部分は画像に焼き込んでから保存します。元の画像は保存しません。</p>
+            {presetPattern && <p className="ad-sm-mask-preset">前回、同じ形のURL（{presetPattern}）で隠した位置を使っています。ずれていないか確認してください。</p>}
+            <p className="ad-sm-mask-note">隠した部分は画像に焼き込んでから保存します。元の画像は保存しません。{mode === 'remask' && previousMasked && '前回隠した部分は、焼き込まれたまま残ります。'}</p>
+            {masks.length === 0 && <label className={`ad-sm-mask-confirm${noMaskNeeded ? ' checked' : ''}`}><input type="checkbox" checked={noMaskNeeded} disabled={busy} onChange={(event) => setNoMaskNeeded(event.target.checked)} /><span>隠す情報はない（個人情報や公開できない情報が写っていない）</span></label>}
           </> : <button type="button" className="ad-sm-drop-zone" onClick={pickFile} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); chooseFile(imageFileFrom(event.dataTransfer.files)) }}>
             <strong>スクリーンショットを貼り付け、またはドロップ</strong>
             <span>⌘V（Ctrl+V）で貼り付けるか、ここを押して画像を選びます。PNG・JPEG・WebP、10MBまで。</span>
@@ -168,14 +199,15 @@ function ScreenMapAddDialog({ mode, data, initialFile, defaultGroupId, targetNam
           <h3>画面の情報</h3>
           <label><span>画面名（必須）</span><input value={fields.name} maxLength={100} onChange={(event) => setFields({ ...fields, name: event.target.value })} placeholder="例：友だち一覧" /></label>
           <label><span>URL</span><input value={fields.url} maxLength={2000} onChange={(event) => setFields({ ...fields, url: event.target.value })} placeholder="例：/friends" /></label>
-          <label><span>グループ</span><select value={fields.groupId ?? ''} onChange={(event) => setFields({ ...fields, groupId: event.target.value || undefined })}><option value="">グループなし</option>{data.groups.map((group) => <option key={group.id} value={group.id}>{group.name || '名称未設定'}</option>)}</select></label>
+          <label><span>グループ</span><select value={creatingGroup ? NEW_GROUP : fields.groupId ?? ''} onChange={(event) => { const value = event.target.value; setCreatingGroup(value === NEW_GROUP); setFields({ ...fields, groupId: value && value !== NEW_GROUP ? value : undefined, newGroupName: value === NEW_GROUP ? fields.newGroupName ?? '' : undefined }) }}><option value="">グループなし</option>{data.groups.map((group) => <option key={group.id} value={group.id}>{group.name || '名称未設定'}</option>)}{data.groups.length < SCREEN_MAP_LIMITS.groups && <option value={NEW_GROUP}>＋ 新しいグループを作る</option>}</select></label>
+          {creatingGroup && <label><span>新しいグループの名前（必須）</span><input autoFocus value={fields.newGroupName ?? ''} maxLength={100} placeholder="例：友だち管理" onChange={(event) => setFields({ ...fields, newGroupName: event.target.value })} /></label>}
           <label><span>元の画面（同じ画面の別の状態のとき）</span><select value={fields.stateOf ?? ''} onChange={(event) => setFields({ ...fields, stateOf: event.target.value || undefined })}><option value="">なし</option>{data.screens.map((screen) => <option key={screen.id} value={screen.id}>{screen.name || '名称未設定'}</option>)}</select></label>
           <label><span>説明</span><textarea value={fields.description} maxLength={5000} onChange={(event) => setFields({ ...fields, description: event.target.value })} placeholder="この画面でできることを入力" /></label>
         </div>}
       </div>
       <footer>
         <button type="button" disabled={busy} onClick={onCancel}>キャンセル</button>
-        <button type="button" className="primary" disabled={busy || !file || (mode === 'create' && !fields.name.trim())} onClick={() => void submit()}>{busy ? '登録中…' : masks.length ? 'マスキングして登録' : '登録'}</button>
+        <button type="button" className="primary" disabled={busy || !file || (mode === 'create' && (!fields.name.trim() || newGroupMissing)) || !maskDecided} title={maskDecided ? undefined : '隠す範囲を囲むか、「隠す情報はない」を選んでください'} onClick={() => void submit()}>{busy ? '登録中…' : masks.length ? 'マスキングして登録' : '登録'}</button>
       </footer>
     </section>
   </div>

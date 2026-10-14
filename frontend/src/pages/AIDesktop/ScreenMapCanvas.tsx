@@ -1,7 +1,7 @@
 import { memo, useMemo, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { Background, BackgroundVariant, BaseEdge, ConnectionMode, Controls, EdgeLabelRenderer, getSmoothStepPath, Handle, MarkerType, MiniMap, NodeResizeControl, Position, ReactFlow, type Edge, type EdgeProps, type Node, type NodeChange, type NodeProps } from '@xyflow/react'
-import { screenMapGroupColor, type ScreenMapData, type ScreenMapLabelMode, type ScreenMapPosition, type ScreenMapScreen, type ScreenMapSelection } from './screenMap'
+import { isMaskUnchecked, screenMapGroupColor, type ScreenMapData, type ScreenMapLabelMode, type ScreenMapPosition, type ScreenMapScreen, type ScreenMapSelection } from './screenMap'
 import { groupFrames, resolvedPositions, screenNodeSize, type ScreenNodeSize } from './screenMapLayout'
 
 /**
@@ -40,6 +40,7 @@ const ScreenNodeView = memo(function ScreenNodeView({ data, selected }: NodeProp
       <strong>{screen.name || '名称未設定'}</strong>
       <span>{stateOfName ? `${stateOfName}の状態` : screen.url}</span>
       {screen.verification === 'ai-inferred' && <i className="ad-screen-map-verification ai-inferred">AIの推測</i>}
+      {isMaskUnchecked(image) && <i className="ad-sm-mask-badge" title="マスキングを確認していません">マスク未確認</i>}
     </div>
     {/* 大きさ変更の部品は、渡した関数が変わるとドラッグを受け付けなくなるため、関数は渡さない。終了はonNodesChangeで受け取る。 */}
     {resizeLimits && selected && <NodeResizeControl position="bottom-right" keepAspectRatio minWidth={resizeLimits.min} maxWidth={resizeLimits.max} className="ad-sm-resize">
