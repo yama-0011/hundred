@@ -38,7 +38,7 @@ const ScreenNodeView = memo(function ScreenNodeView({ data, selected }: NodeProp
     <div className="ad-sm-node-thumb">{image ? <img src={image.thumbnailUrl ?? image.url} alt="" draggable={false} loading="lazy" /> : <span>画像なし</span>}</div>
     <div className="ad-sm-node-body">
       <strong>{screen.name || '名称未設定'}</strong>
-      <span>{stateOfName ? `${stateOfName}の状態` : screen.url}</span>
+      {stateOfName && <span>{stateOfName}の状態</span>}
       {screen.verification === 'ai-inferred' && <i className="ad-screen-map-verification ai-inferred">AIの推測</i>}
       {isMaskUnchecked(image) && <i className="ad-sm-mask-badge" title="マスキングを確認していません">マスク未確認</i>}
     </div>
