@@ -1,10 +1,8 @@
 import { memo, useMemo, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { Background, BackgroundVariant, BaseEdge, ConnectionMode, Controls, EdgeLabelRenderer, getSmoothStepPath, Handle, MarkerType, MiniMap, NodeResizeControl, Position, ReactFlow, type Edge, type EdgeProps, type Node, type NodeChange, type NodeProps } from '@xyflow/react'
-import '@xyflow/react/dist/style.css'
 import { screenMapGroupColor, type ScreenMapData, type ScreenMapLabelMode, type ScreenMapPosition, type ScreenMapScreen, type ScreenMapSelection } from './screenMap'
 import { groupFrames, resolvedPositions, screenNodeSize, type ScreenNodeSize } from './screenMapLayout'
-import '../../styles/AIDesktop/ai-desktop-screen-map.css'
 
 /**
  * 概要:
