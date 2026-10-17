@@ -172,7 +172,7 @@ function ScreenMapAddDialog({ mode, data, initialFile, initialFields, defaultGro
         <div className="ad-sm-dialog-image">
           {previewUrl ? <>
             <div className="ad-sm-mask-toolbar" role="toolbar" aria-label="マスキングの操作">
-              <span>ドラッグで、隠したい範囲を四角で囲みます。</span>
+              <span className="ad-sm-mask-hint">ドラッグで、隠したい範囲を四角で囲みます。</span>
               <button type="button" disabled={busy || masks.length === 0} onClick={() => setMasks((current) => current.slice(0, -1))}>元に戻す</button>
               <button type="button" disabled={busy || masks.length === 0} onClick={() => setMasks([])}>すべて解除</button>
               {presets.last.length > 0 && <button type="button" disabled={busy} onClick={() => setMasks(presets.last)}>前回と同じ位置を隠す</button>}

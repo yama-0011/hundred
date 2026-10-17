@@ -7,7 +7,7 @@ import ScreenMapImageLightbox from './ScreenMapImageLightbox'
 import ScreenMapViewSettings from './ScreenMapViewSettings'
 import { removeScreenCapture, useObjectUrl, useScreenCaptures, type ScreenCapture } from './screenCaptureQueue'
 import { imageFileFrom, isMaskUnchecked, newScreenMapId, readScreenMapLabelMode, saveScreenMapLabelMode, SCREEN_MAP_LIMITS, SCREEN_MAP_NODE_SCALE, screenMapGroupColor, type ScreenMapData, type ScreenMapGroup, type ScreenMapImage, type ScreenMapPosition, type ScreenMapScreen, type ScreenMapSelection, type ScreenMapTransition } from './screenMap'
-import { positionForNewScreen, resolvedPositions } from './screenMapLayout'
+import { defaultCardWidth, positionForNewScreen, resolvedPositions } from './screenMapLayout'
 
 const ScreenMapCanvas = lazy(() => import('./ScreenMapCanvas'))
 
@@ -139,8 +139,10 @@ function ScreenMapEditor({ data, imageFolder, fill = false, onChange }: { data: 
     const groupId = newGroup?.id ?? fields.groupId
     const screen: ScreenMapScreen = { id: newScreenMapId('screen'), name: fields.name, url: fields.url, description: fields.description, images: [image], verification: 'confirmed', ...(groupId ? { groupId } : {}), ...(fields.stateOf ? { stateOf: fields.stateOf } : {}) }
     // 新しい画面は、選んでいる画面の右隣（なければ全体のいちばん右）に置く。座標のなかった画面も、今の位置で固定する。
-    const position = positionForNewScreen(data, screen, selectedScreen?.id ?? null)
-    commit({ ...data, groups: newGroup ? [...data.groups, newGroup] : data.groups, screens: [...data.screens, screen], layout: { ...data.layout, screens: { ...layoutWith(resolvedPositions(data)), [screen.id]: position } } })
+    // 初期の幅は画像の大きさから決め、登録した時点で保存する（あとから初期の幅を変えても、置いてある画面の大きさは変わらない）。
+    const cardWidth = defaultCardWidth(image)
+    const position = positionForNewScreen(data, screen, selectedScreen?.id ?? null, cardWidth)
+    commit({ ...data, groups: newGroup ? [...data.groups, newGroup] : data.groups, screens: [...data.screens, screen], layout: { ...data.layout, screens: { ...layoutWith(resolvedPositions(data)), [screen.id]: { ...position, width: cardWidth } } } })
     setSelection({ kind: 'screen', id: screen.id })
   }
   const removeElements = (screenIds: string[], transitionIds: string[]) => {
@@ -212,7 +214,7 @@ function ScreenMapEditor({ data, imageFolder, fill = false, onChange }: { data: 
         <button type="button" disabled={!canRedo} aria-keyshortcuts="Meta+Shift+Z Control+Y" title="やり直す（⇧⌘Z）" onClick={redo}>↷ やり直す</button>
       </div>
       <ScreenMapViewSettings labelMode={labelMode} onLabelMode={(value) => { setLabelMode(value); saveScreenMapLabelMode(value) }} />
-      <span className="ad-sm-editor-hint">スクリーンショットは貼り付け（⌘V）やドロップでも追加できます。画面の丸をドラッグすると矢印をつなげ、選んだ画面の右下の角で大きさを変えられます。</span>
+      <span className="ad-sm-editor-hint">スクリーンショットは貼り付け（⌘V）やドロップでも追加できます。画面の丸をドラッグすると矢印をつなげ、右下の角で大きさを変えられます。Option（Alt）を押しながら動かすと、ほかの画面のラインにそろいます。</span>
     </div>
     <div className="ad-sm-editor-grid">
       <aside className="ad-sm-editor-groups" aria-label="グループ">

@@ -140,7 +140,7 @@
 .ad-sm-dialog-fields h3{margin:0;font-size:14px}
 .ad-sm-dialog-fields label{display:flex;flex-direction:column;gap:5px;color:var(--muted);font-size:12px}
 .ad-sm-mask-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.ad-sm-mask-toolbar>span:first-child{margin-right:auto;color:var(--muted);font-size:12px}
+.ad-sm-mask-hint{margin-right:auto;color:var(--muted);font-size:12px}
 .ad-sm-mask-zoom{display:inline-flex;padding:2px;border:1px solid var(--line);border-radius:9px}
 .ad-sm-mask-zoom button{min-height:34px!important;padding:0 10px!important;border:0!important;border-radius:7px!important;background:transparent!important;color:var(--muted)!important}
 .ad-sm-mask-zoom button.active{background:#3975cf!important;color:#fff!important;font-weight:600}
@@ -240,3 +240,7 @@
 .ad-sm-mask-confirm input,.ad-editor-form label.ad-editor-check input{flex:none;width:18px;height:18px;min-height:0;margin:0;padding:0;accent-color:#3975cf;cursor:pointer}
 .ad-sm-mask-confirm span,.ad-editor-form label.ad-editor-check>span{flex:1;text-align:left}
 .ad-editor-form label.ad-editor-check{justify-content:flex-start}
+/* Option（Alt）＋ドラッグでそろったライン */
+.ad-sm-guide{position:absolute;top:0;left:0;background:#e0548a;pointer-events:none;z-index:1000}
+.ad-sm-guide.vertical{width:1.5px;height:200000px}
+.ad-sm-guide.horizontal{width:200000px;height:1.5px}

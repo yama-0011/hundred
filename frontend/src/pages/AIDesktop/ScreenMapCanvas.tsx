@@ -1,6 +1,6 @@
 import { memo, useMemo, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
-import { Background, BackgroundVariant, BaseEdge, ConnectionMode, Controls, EdgeLabelRenderer, getSmoothStepPath, Handle, MarkerType, MiniMap, NodeResizeControl, Position, ReactFlow, type Edge, type EdgeProps, type Node, type NodeChange, type NodeProps } from '@xyflow/react'
+import { Background, BackgroundVariant, BaseEdge, ConnectionMode, Controls, EdgeLabelRenderer, getSmoothStepPath, Handle, MarkerType, MiniMap, NodeResizeControl, Position, ReactFlow, ViewportPortal, type Edge, type EdgeProps, type Node, type NodeChange, type NodeProps } from '@xyflow/react'
 import { isMaskUnchecked, screenMapGroupColor, type ScreenMapData, type ScreenMapLabelMode, type ScreenMapPosition, type ScreenMapScreen, type ScreenMapSelection } from './screenMap'
 import { groupFrames, resolvedPositions, screenNodeSize, type ScreenNodeSize } from './screenMapLayout'
 
@@ -14,6 +14,7 @@ import { groupFrames, resolvedPositions, screenNodeSize, type ScreenNodeSize } f
  * 保存する座標とカードの幅は「小」の大きさが基準。大きく表示するときは同じ倍率で広げて表示し、保存するときに戻す。
  * カードの高さはスクリーンショットの縦横比に合わせ、画像を切り取らない。編集画面では、選んだカードの右下の角で大きさを変えられる。
  * 操作名は、普段はアイコンだけにし、アイコンを押したときや、つながる画面を選んだときに表示する。
+ * Option（Alt）を押しながら画面を動かすと、ほかの画面の端や中央のラインに吸い付き、そろったラインを線で示す。
  */
 
 export type ScreenMapCanvasMode = 'layout' | 'edit'
@@ -28,6 +29,8 @@ type Side = 'l' | 'r' | 't' | 'b'
 const sides: Array<{ side: Side; position: Position }> = [{ side: 'l', position: Position.Left }, { side: 'r', position: Position.Right }, { side: 't', position: Position.Top }, { side: 'b', position: Position.Bottom }]
 // 矢印の色。SVGのマーカーにも使うため、CSS変数ではなく明るい表示・暗い表示の両方で読める色にしている。
 const edgeColors = { normal: '#8ea3cc', active: '#4f8ff0', inferred: '#d99a2b' }
+// ラインにそろえるときに吸い付く距離（キャンバス上の大きさ）。
+const snapDistance = 14
 
 const ScreenNodeView = memo(function ScreenNodeView({ data, selected }: NodeProps<ScreenNode>) {
   const { screen, color, stateOfName, resizeLimits } = data
@@ -163,6 +166,32 @@ function ScreenMapCanvas({ data, mode, selection, labelMode = 'icon', scale = 1,
     const dy = framePosition.y - frame.y
     return data.screens.filter((screen) => screen.groupId === groupId && basePositions[screen.id]).map((screen) => [screen.id, { x: basePositions[screen.id].x + dx, y: basePositions[screen.id].y + dy }] as const)
   }
+  // Option（Alt）＋ドラッグで、ほかの画面の左端・中央・右端、上端・中央・下端のうち近いラインにそろえる。
+  const [guides, setGuides] = useState<{ x: number | null; y: number | null }>({ x: null, y: null })
+  const snapPosition = (id: string, position: ScreenMapPosition) => {
+    const size = sizes[id]
+    const others = data.screens.filter((screen) => screen.id !== id && positions[screen.id] && sizes[screen.id]).map((screen) => ({ ...positions[screen.id], ...sizes[screen.id] }))
+    const nearest = (start: number, length: number, lines: number[]) => {
+      let best: { shift: number; line: number } | null = null
+      for (const offset of [0, length / 2, length]) {
+        for (const line of lines) {
+          const shift = line - (start + offset)
+          if (Math.abs(shift) <= snapDistance && (!best || Math.abs(shift) < Math.abs(best.shift))) best = { shift, line }
+        }
+      }
+      return best
+    }
+    const snapX = nearest(position.x, size.width, others.flatMap((other) => [other.x, other.x + other.width / 2, other.x + other.width]))
+    const snapY = nearest(position.y, size.height, others.flatMap((other) => [other.y, other.y + other.height / 2, other.y + other.height]))
+    return { position: { x: position.x + (snapX?.shift ?? 0), y: position.y + (snapY?.shift ?? 0) }, guides: { x: snapX?.line ?? null, y: snapY?.line ?? null } }
+  }
+  const handleNodeDrag = (event: { altKey: boolean }, node: CanvasNode, dragged: CanvasNode[]) => {
+    if (!editable || node.type !== 'screen' || dragged.length > 1 || !sizes[node.id]) return
+    if (!event.altKey) { if (guides.x !== null || guides.y !== null) setGuides({ x: null, y: null }); return }
+    const snapped = snapPosition(node.id, node.position)
+    setDragPositions((current) => ({ ...current, [node.id]: snapped.position }))
+    setGuides(snapped.guides)
+  }
   const handleNodesChange = (changes: NodeChange<CanvasNode>[]) => {
     if (!editable) return
     const moved = changes.flatMap((change) => change.type === 'position' && change.position && change.dragging ? change.id.startsWith('group-frame-') ? groupMove(change.id, change.position) : [[change.id, change.position] as const] : [])
@@ -176,7 +205,9 @@ function ScreenMapCanvas({ data, mode, selection, labelMode = 'icon', scale = 1,
     if (finished.length) setResizingSizes({})
   }
   const handleDragStop = (_event: unknown, _node: CanvasNode, dragged: CanvasNode[]) => {
-    const updates = Object.fromEntries(dragged.flatMap((node) => node.type === 'screen' ? [[node.id, node.position] as const] : groupMove(node.id, node.position)).map(([id, position]) => [id, { x: Math.round(position.x / scale), y: Math.round(position.y / scale) }]))
+    // ラインにそろえた位置は、こちらで持っている位置を使う。
+    const updates = Object.fromEntries(dragged.flatMap((node) => node.type === 'screen' ? [[node.id, dragPositions[node.id] ?? node.position] as const] : groupMove(node.id, node.position)).map(([id, position]) => [id, { x: Math.round(position.x / scale), y: Math.round(position.y / scale) }]))
+    setGuides({ x: null, y: null })
     if (Object.keys(updates).length) onMoveScreens?.(updates)
     setDragPositions({})
   }
@@ -188,6 +219,7 @@ function ScreenMapCanvas({ data, mode, selection, labelMode = 'icon', scale = 1,
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
       onNodesChange={handleNodesChange}
+      onNodeDrag={handleNodeDrag}
       onNodeDragStop={handleDragStop}
       // グループの囲みは選べない（選ぶと手前に出て、中の画面を押せなくなるため）。囲みを押したときは、何もない場所と同じく選択を解除する。
       onNodeClick={(_event, node) => onSelect(node.type === 'screen' ? { kind: 'screen', id: node.id } : null)}
@@ -209,6 +241,10 @@ function ScreenMapCanvas({ data, mode, selection, labelMode = 'icon', scale = 1,
       attributionPosition="top-right"
     >
       <Background variant={BackgroundVariant.Dots} gap={22} size={1} />
+      {(guides.x !== null || guides.y !== null) && <ViewportPortal>
+        {guides.x !== null && <div className="ad-sm-guide vertical" style={{ transform: `translate(${guides.x}px, -100000px)` }} />}
+        {guides.y !== null && <div className="ad-sm-guide horizontal" style={{ transform: `translate(-100000px, ${guides.y}px)` }} />}
+      </ViewportPortal>}
       <Controls position="bottom-left" showInteractive={false} />
       {(() => {
         const minimap = <MiniMap position="bottom-right" className={minimapTarget ? 'ad-sm-minimap-docked' : undefined} pannable zoomable nodeColor={(node) => node.type === 'screen' ? (node.data as ScreenNodeData).color : 'transparent'} nodeStrokeWidth={0} />
