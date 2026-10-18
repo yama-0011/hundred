@@ -26,7 +26,7 @@ import { MermaidDiagram } from './MermaidDiagram'
 import { validateMermaidSource } from './mermaidDiagramValidation'
 import { showAIDesktopNotification } from './aiDesktopNotificationBus'
 import { AppHeader, AppMain, AppShell, AppSidebar } from './AppLayout'
-import { isWorkspaceJsonFileCancelled, readWorkspaceJsonFile, selectWorkspaceJsonFile, supportsWorkspaceJsonFile, writeWorkspaceJsonFile } from './workspaceJsonFile'
+import { isWorkspaceCancelled, projectWorkspacePath, readProjectWorkspace, selectWorkspaceFolder, supportsWorkspaceFolder, workspaceContextText, writeProjectWorkspace, type ProjectWorkspaceTarget } from './aiDesktopWorkspaceFolder'
 import { confirmAIDesktop } from './aiDesktopConfirmBus'
 import { isRecordValue, readAIDesktopSessionState, useAIDesktopSessionStateSaver } from './aiDesktopSessionState'
 
@@ -442,6 +442,7 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
   const [memberResults, setMemberResults] = useState<AIDesktopUserSearchResult[]>([])
   const [knownMembers, setKnownMembers] = useState<Record<string, string>>({})
   const [searchingMembers, setSearchingMembers] = useState(false)
+  const [includeAiPrompt, setIncludeAiPrompt] = useState(false)
   const importInputRef = useRef<HTMLInputElement>(null)
 
   const documentOptions = useMemo(() => publishedDocuments.filter((document) => document.status === 'published' && catalog[document.serviceId]).map((document) => ({ serviceId: document.serviceId, categoryId: document.categoryId, contentId: document.contentId, title: document.title, categoryTitle: document.categoryTitle })), [catalog, publishedDocuments])
@@ -626,50 +627,61 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
     setDraft((current) => ({ ...current, ...importedProject }))
   }
 
+  const workspaceTarget = (): ProjectWorkspaceTarget => ({ databaseTarget: import.meta.env.DEV ? 'local' : 'remote', projectId: project?.id ?? null, projectName: draft.name })
+
   const writeWorkspaceTemplate = async () => {
-    if (!(await confirmAIDesktop({ title: '現在のプロジェクト情報をJSONへ書き出しますか？', message: '選択中のJSONは上書きされます。', confirmLabel: '書き出す' }))) return
+    const target = workspaceTarget()
+    const payload = projectEditingTemplate(draft, project?.id ?? null)
+    if (!(await confirmAIDesktop({ title: '現在のプロジェクト情報をワークスペースへ書き出しますか？', message: `${projectWorkspacePath(target)} を上書きします。`, confirmLabel: '書き出す' }))) return
+    if (!supportsWorkspaceFolder()) {
+      downloadProjectJson(payload, 'Hundred_Project_テンプレート.json', null)
+      showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.workspace.unsupported)
+      return
+    }
     try {
-      const name = await writeWorkspaceJsonFile(`${JSON.stringify(projectEditingTemplate(draft, project?.id ?? null), null, 2)}\n`)
-      showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.project.workspaceWritten(name))
+      showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.workspace.written(await writeProjectWorkspace(target, payload)))
     } catch (error) {
-      if (isWorkspaceJsonFileCancelled(error)) return
-      if (!supportsWorkspaceJsonFile()) {
-        downloadProjectJson(projectEditingTemplate(draft, project?.id ?? null), 'Hundred_Project_テンプレート.json', null)
-        showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.project.workspaceUnsupported)
-        return
-      }
-      showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.project.workspaceWriteFailed)
+      if (isWorkspaceCancelled(error)) return
+      showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.workspace.writeFailed)
     }
   }
 
   const readWorkspaceTemplate = async () => {
-    if (!(await confirmAIDesktop({ title: 'JSONのプロジェクト情報を読み込みますか？', message: '現在の未保存の編集内容は置き換えられます。', confirmLabel: '読み込む' }))) return
-    if (!supportsWorkspaceJsonFile()) {
+    const target = workspaceTarget()
+    if (!(await confirmAIDesktop({ title: 'ワークスペースのJSONを読み込みますか？', message: `${projectWorkspacePath(target)} を読み込みます。現在の未保存の編集内容は置き換えられます。`, confirmLabel: '読み込む' }))) return
+    if (!supportsWorkspaceFolder()) {
       importInputRef.current?.click()
       return
     }
     try {
-      const file = await readWorkspaceJsonFile()
+      const file = await readProjectWorkspace(target)
       await applyTemplate(file.content)
-      showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.project.workspaceRead(file.name))
+      showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.workspace.read(file.name))
     } catch (error) {
-      if (isWorkspaceJsonFileCancelled(error)) return
-      showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.project.workspaceReadFailed))
+      if (isWorkspaceCancelled(error)) return
+      if (error instanceof Error && error.message === 'WORKSPACE_FILE_NOT_FOUND') { showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.workspace.fileNotFound(projectWorkspacePath(target))); return }
+      showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.workspace.readFailed))
     }
   }
 
-  const changeWorkspaceFile = async () => {
-    if (!supportsWorkspaceJsonFile()) {
-      showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.project.workspaceUnsupported)
+  const changeWorkspaceFolder = async () => {
+    if (!supportsWorkspaceFolder()) {
+      showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.workspace.folderUnsupported)
       return
     }
     try {
-      const name = await selectWorkspaceJsonFile()
-      showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.project.workspaceSelected(name))
+      showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.workspace.folderSelected(await selectWorkspaceFolder()))
     } catch (error) {
-      if (isWorkspaceJsonFileCancelled(error)) return
-      showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.project.workspaceSelectFailed)
+      if (isWorkspaceCancelled(error)) return
+      showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.workspace.folderSelectFailed)
     }
+  }
+
+  const copyWorkspaceContext = async () => {
+    const target = workspaceTarget()
+    const value = workspaceContextText({ subject: 'プロジェクト情報', editFields: 'data.project', path: projectWorkspacePath(target), target: { projectId: target.projectId, databaseTarget: target.databaseTarget }, withPrompt: includeAiPrompt })
+    try { await navigator.clipboard.writeText(value); showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.workspace.contextCopied) }
+    catch { showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.workspace.contextCopyFailed) }
   }
 
   const importTemplate = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -801,14 +813,14 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
           </div>}
           <div className="ad-project-toolbar-actions">
             {project && !creating && <button type="button" onClick={() => onOpenDesignDocuments(project.id)}>ドキュメントを開く</button>}
-            <button type="button" onClick={() => void copyProjectInfo()} disabled={!draft.name.trim()}>コンテキストをコピー</button>
+            <button type="button" onClick={() => void copyProjectInfo()} disabled={!draft.name.trim()}>プロジェクト情報をコピー</button>
             {view === 'edit' && (creating || project?.canEdit !== false) && <>
               {(dirty || creating) && <span className="ad-project-unsaved"><i />未保存</span>}
               <details className="ad-project-json-menu ad-project-json-menu--labeled">
                 <summary>JSON連携 <span aria-hidden="true">⌄</span></summary>
                 <div>
-                  <section><strong>連携ファイル</strong><button type="button" onClick={() => void writeWorkspaceTemplate()}>JSONへ書き出す</button><button type="button" onClick={() => void readWorkspaceTemplate()}>JSONから読み込む</button><button type="button" onClick={() => void changeWorkspaceFile()}>連携ファイルを変更</button></section>
-                  <section><strong>ファイル操作</strong><button type="button" onClick={() => downloadProjectJson()}>JSONをダウンロード</button><button type="button" onClick={() => importInputRef.current?.click()}>JSONをインポート</button><button type="button" onClick={downloadProjectTemplate}>テンプレートをダウンロード</button></section>
+                  <section><strong>ワークスペース</strong><button type="button" onClick={() => void writeWorkspaceTemplate()}>JSONへ書き出す</button><button type="button" onClick={() => void readWorkspaceTemplate()}>JSONから読み込む</button><button type="button" onClick={() => void changeWorkspaceFolder()}>ワークスペースのフォルダを変更</button></section><section><strong>ファイル操作</strong><button type="button" onClick={() => downloadProjectJson()}>JSONをダウンロード</button><button type="button" onClick={() => importInputRef.current?.click()}>JSONをインポート</button><button type="button" onClick={downloadProjectTemplate}>テンプレートをダウンロード</button></section>
+                  <section className="ad-json-menu-copy"><strong>AIへの依頼</strong><label><input type="checkbox" checked={includeAiPrompt} onChange={(event) => setIncludeAiPrompt(event.target.checked)} /><span>AI用指示付き</span></label><button type="button" disabled={!draft.name.trim()} onClick={() => void copyWorkspaceContext()}>コンテキストをコピー</button></section>
                   {project?.canManageMembers && <section className="danger-zone"><button type="button" className="danger" onClick={() => void remove()} disabled={saving}>Projectを削除</button></section>}
                 </div>
               </details>

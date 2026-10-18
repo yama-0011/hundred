@@ -10,15 +10,28 @@ AI Desktopの資料をCodex CLIで編集するための一時作業領域です�
 
 ## ディレクトリ構成
 
-`pull`したJSONは対象環境、サービス、カテゴリ、コンテンツの順に保存されます。
+マイ資料・ドキュメント・プロジェクトの「JSON連携 → JSONへ書き出す」と、マイ資料の`pull`は、対象環境ごとに次の場所へ保存します。フォルダ名とファイル名はタイトルです。マイ資料のページの番号はAI Desktopでの表示順です（先頭がScreen Mapのカテゴリは00から、そうでなければ01から）。
 
 ```text
 ai-desktop-workspace/
-├── local/<serviceId>/<categoryId>/<contentId>.json
-└── remote/<serviceId>/<categoryId>/<contentId>.json
+├── local/ と remote/
+│   ├── マイ資料/
+│   │   └── <資料名>/
+│   │       └── <カテゴリ名>/
+│   │           ├── 00 Screen Map.json
+│   │           ├── 00 Screen Map の画像/
+│   │           └── 01 <ページ名>.json
+│   └── プロジェクト/
+│       └── <プロジェクト名>/
+│           ├── プロジェクト.json
+│           └── ドキュメント/
+│               └── <カテゴリ名>/<ドキュメント名>.json
+└── Workspace JSON.json
 ```
 
-同じ対象を再取得すると同じファイルを上書きします。版を増やす必要はありません。AI下書きの版管理はD1が行います。
+IDは、JSONの`target`だけに持ちます。`push`や「JSONから読み込む」は`target`で対象を決めるため、ファイルの場所や名前が変わっても動きます。
+
+同じページを再取得すると同じファイルを上書きします。版を増やす必要はありません。AI下書きの版管理はD1が行います。タイトルや表示順が変わっていたら、`target`のIDで以前のフォルダとファイルを探して名前を付け直します。ファイル名に使えない文字（`/`など）は全角に置き換えます。AI Desktopにないページのファイルは削除せず、名前を表示します。
 
 ## D1から取得する
 
@@ -38,17 +51,17 @@ npm run ai-desktop:pull -- \
 
 ### マイ資料の編集画面から書き出す
 
-マイ資料の編集画面の「JSON連携 → JSONへ書き出す」は、このフォルダを選ぶと、`pull`と同じ場所（`local/<serviceId>/<categoryId>/<contentId>.json`）へ、同じ形のJSONを書き出します。同じページは同じ名前で上書きします。版の履歴はAI Desktopの下書き履歴で残してください。
+マイ資料の編集画面の「JSON連携 → JSONへ書き出す」は、このフォルダを選ぶと、`pull`と同じ場所（`local/マイ資料/<資料名>/<カテゴリ名>/<番号> <ページ名>.json`）へ、同じ形のJSONを書き出します。同じページは同じ名前で上書きします。版の履歴はAI Desktopの下書き履歴で残してください。
 
 ### Screen Mapの画像
 
-Screen Mapのページは、画面ごとのスクリーンショットをJSONと同じ場所の`<contentId>-images/`へ保存し、JSONの`screenImages`に画面IDとパスを書きます（画面からの書き出しと`pull`のどちらも同じです）。AIは質問に必要な画面の画像だけを開いてください。画像はGitの管理対象から除外しています。
+Screen Mapのページは、画面ごとのスクリーンショットをJSONと同じ場所の`<番号> <ページ名> の画像/`へ`<番号> <画面名>.png`の名前で保存し、JSONの`screenImages`に画面IDとパスを書きます（画面からの書き出しと`pull`のどちらも同じです）。AIは質問に必要な画面の画像だけを開いてください。画像はGitの管理対象から除外しています。
 
 ## AI下書きへ保存する
 
 ```bash
 npm run ai-desktop:push -- \
-  --file ../../ai-desktop-workspace/local/<serviceId>/<カテゴリID>/<コンテンツID>.json \
+  --file "../../ai-desktop-workspace/local/マイ資料/<資料名>/<カテゴリ名>/<番号> <ページ名>.json" \
   --local
 ```
 
@@ -56,7 +69,7 @@ npm run ai-desktop:push -- \
 
 ```bash
 npm run ai-desktop:push -- \
-  --file ../../ai-desktop-workspace/remote/<serviceId>/<カテゴリID>/<コンテンツID>.json \
+  --file "../../ai-desktop-workspace/remote/マイ資料/<資料名>/<カテゴリ名>/<番号> <ページ名>.json" \
   --remote \
   --dry-run
 ```

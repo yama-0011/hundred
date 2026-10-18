@@ -21,8 +21,7 @@ import AIDesktopNotifications from './AIDesktopNotifications'
 import AIDesktopConfirmDialog from './AIDesktopConfirmDialog'
 import { AppContent, AppHeader, AppShell } from './AppLayout'
 import { showAIDesktopNotification } from './aiDesktopNotificationBus'
-import { contentWorkspacePath, readContentWorkspace, selectContentWorkspaceFolder, supportsContentWorkspaceFolder, writeContentWorkspace, type ContentWorkspaceTarget, type ScreenMapImageEntry } from './contentWorkspaceFolder'
-import { isWorkspaceJsonFileCancelled } from './workspaceJsonFile'
+import { contentWorkspacePath, isWorkspaceCancelled, readContentWorkspace, selectWorkspaceFolder, supportsWorkspaceFolder, workspacePageNumbers, writeContentWorkspace, type ContentWorkspaceTarget, type ScreenMapImageEntry } from './aiDesktopWorkspaceFolder'
 import '../../styles/AIDesktop/ai-desktop.css'
 import '../../styles/AIDesktop/ai-desktop-projects.css'
 import '../../styles/AIDesktop/ai-desktop-app-layout.css'
@@ -437,7 +436,11 @@ ${targetJson}
   }
   // ワークスペースへの書き出しは ai-desktop:pull と同じ場所・同じ形にし、AIがそのまま読み、ai-desktop:push できるようにする。
   // Screen Mapのページは、画面ごとの画像も一緒に書き出す。
-  const workspaceTarget = (): ContentWorkspaceTarget | null => selectedItem ? { databaseTarget: import.meta.env.DEV ? 'local' : 'remote', serviceId, categoryId: category.id, contentId: selectedItem.id } : null
+  const workspaceTarget = (): ContentWorkspaceTarget | null => {
+    if (!selectedItem) return null
+    const numbers = workspacePageNumbers(items, Boolean(screenMapBlockOf(items[0])))
+    return { databaseTarget: import.meta.env.DEV ? 'local' : 'remote', serviceId, serviceName: service.name, categoryId: category.id, categoryName: title, contentId: selectedItem.id, siblings: items.map((item) => ({ id: item.id, name: item.navTitle, number: numbers.get(item.id)! })) }
+  }
   const workspacePayload = (screenImages: Record<string, ScreenMapImageEntry> | null) => {
     const payload = currentContentPayload()
     if (!payload || !selectedItem) return null
@@ -447,43 +450,44 @@ ${targetJson}
     const target = workspaceTarget()
     const payload = workspacePayload(null)
     if (!selectedItem || !target || !payload || !(await confirmAIDesktop({ title: '現在のページをワークスペースへ書き出しますか？', message: `${contentWorkspacePath(target)} を上書きします。${selectedIsScreenMap ? '画面の画像も書き出します。' : ''}${uncheckedScreenCount ? AI_DESKTOP_MESSAGES.content.unmaskedScreens(uncheckedScreenCount) : ''}`, confirmLabel: '書き出す' }))) return
-    if (!supportsContentWorkspaceFolder()) {
+    if (!supportsWorkspaceFolder()) {
       downloadContentJson(payload, `${safeContentFileName(selectedItem.id)}.json`)
-      showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.content.workspaceUnsupported)
+      showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.workspace.unsupported)
       return
     }
     try {
       const result = await writeContentWorkspace(target, screenMapBlock?.data ?? null, (screenImages) => workspacePayload(screenImages))
       if (result.failedScreens.length) showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.content.screenMapImagesFailed(result.failedScreens))
       else showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.content.workspaceWritten(result.path, selectedIsScreenMap ? result.imageCount : null))
+      if (result.orphanFiles.length) showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.content.workspaceOrphanFiles(result.orphanFiles))
     } catch (error) {
-      if (isWorkspaceJsonFileCancelled(error)) return
-      showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.project.workspaceWriteFailed)
+      if (isWorkspaceCancelled(error)) return
+      showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.workspace.writeFailed)
     }
   }
   const readContentWorkspaceJson = async () => {
     const target = workspaceTarget()
     if (!selectedItem || !target || !(await confirmAIDesktop({ title: 'ワークスペースのJSONを読み込みますか？', message: `${contentWorkspacePath(target)} を読み込みます。現在の未保存の編集内容は置き換えられます。`, confirmLabel: '読み込む' }))) return
-    if (!supportsContentWorkspaceFolder()) { importContentJson(); return }
+    if (!supportsWorkspaceFolder()) { importContentJson(); return }
     try {
       const file = await readContentWorkspace(target)
       await applyContentJson(file.content)
-      showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.project.workspaceRead(file.name))
+      showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.workspace.read(file.name))
     } catch (error) {
-      if (isWorkspaceJsonFileCancelled(error)) return
-      if (error instanceof Error && error.message === 'WORKSPACE_FILE_NOT_FOUND') { showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.content.workspaceFileNotFound(contentWorkspacePath(target))); return }
+      if (isWorkspaceCancelled(error)) return
+      if (error instanceof Error && error.message === 'WORKSPACE_FILE_NOT_FOUND') { showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.workspace.fileNotFound(contentWorkspacePath(target))); return }
       if (error instanceof Error && (error.message.startsWith('TARGET_SCOPE:') || ['RESOURCE_TYPE', 'TARGET_FORMAT', 'MERMAID', 'FORMAT', 'CONTENT', 'GLOSSARY', 'KIND', 'SCREEN_MAP'].includes(error.message))) { showContentImportError(error); return }
-      showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.project.workspaceReadFailed)
+      showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.workspace.readFailed)
     }
   }
   const changeContentWorkspaceJson = async () => {
-    if (!supportsContentWorkspaceFolder()) { showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.content.workspaceUnsupported); return }
+    if (!supportsWorkspaceFolder()) { showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.workspace.folderUnsupported); return }
     try {
-      const name = await selectContentWorkspaceFolder()
-      showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.content.workspaceFolderSelected(name))
+      const name = await selectWorkspaceFolder()
+      showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.workspace.folderSelected(name))
     } catch (error) {
-      if (isWorkspaceJsonFileCancelled(error)) return
-      showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.project.workspaceSelectFailed)
+      if (isWorkspaceCancelled(error)) return
+      showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.workspace.folderSelectFailed)
     }
   }
   const save = async () => {

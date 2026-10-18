@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
@@ -67,8 +67,104 @@ function databaseTarget(args) {
   return targetFlag(args).slice(2);
 }
 
-function defaultWorkspacePath(args, serviceId, categoryId, contentId) {
-  return resolve(workspaceRoot, "ai-desktop-workspace", databaseTarget(args), safeName(serviceId), safeName(categoryId), `${safeName(contentId)}.json`);
+// ワークスペースの名前の規則。AI Desktopの「JSONへ書き出す」（frontend/src/pages/AIDesktop/aiDesktopWorkspaceFolder.ts）と同じにする。
+// マイ資料のページは <local|remote>/マイ資料/<資料名>/<カテゴリ名>/<番号> <ページ名>.json に置く。
+// フォルダ名・ファイル名はタイトルにし、IDはJSONのtargetだけに持つ。ファイル名に使えない文字は全角に置き換える。
+const fullWidth = { "\\": "＼", "/": "／", ":": "：", "*": "＊", "?": "？", "\"": "＂", "<": "＜", ">": "＞", "|": "｜" };
+const workspaceName = (value) => String(value ?? "").replace(/[\\/:*?"<>|]/gu, (character) => fullWidth[character]).replace(/\s+/gu, " ").trim().replace(/[. ]+$/u, "").slice(0, 80) || "名称未設定";
+const pageStem = (page) => `${page.number} ${workspaceName(page.name)}`;
+const imageFolderName = (stem) => `${stem} の画像`;
+const imageFileName = (index, name, extension) => `${String(index + 1).padStart(2, "0")} ${workspaceName(name)}.${extension}`;
+
+function readJsonTarget(file) {
+  try {
+    const target = JSON.parse(readFileSync(file, "utf8"))?.target;
+    return target && typeof target === "object" ? target : null;
+  } catch {
+    return null;
+  }
+}
+
+const subdirectories = (directory) => existsSync(directory) ? readdirSync(directory, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name) : [];
+const jsonTargets = (directory) => readdirSync(directory, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(".json")).flatMap((entry) => {
+  const target = readJsonTarget(resolve(directory, entry.name));
+  return target ? [{ name: entry.name, target }] : [];
+});
+
+// フォルダの中のJSON（depthの階層まで）のtargetから持ち主を判定する。JSONがなければnull（だれのものでもない）。
+function ownerOf(directory, matches, depth) {
+  const targets = jsonTargets(directory);
+  if (targets.some(({ target }) => matches(target))) return true;
+  let owner = targets.length ? false : null;
+  if (depth > 0) for (const child of subdirectories(directory)) {
+    const result = ownerOf(resolve(directory, child), matches, depth - 1);
+    if (result) return true;
+    if (result === false) owner = false;
+  }
+  return owner;
+}
+
+function moveEntry(from, to) {
+  if (from === to) return;
+  if (!existsSync(to)) { renameSync(from, to); return; }
+  cpSync(from, to, { recursive: true });
+  rmSync(from, { recursive: true, force: true });
+}
+
+// 資料・カテゴリのフォルダを用意する。以前の名前のフォルダがあれば付け直し、新しい名前が別の資料・カテゴリのものならIDの先頭を付けて区別する。
+// legacyには、構成を変える前に置いていた親フォルダを渡し、見つかれば移す。
+function placeFolder(parent, desired, id, matches, depth, legacy = null) {
+  mkdirSync(parent, { recursive: true });
+  let previous = null;
+  const occupied = new Set();
+  for (const name of subdirectories(parent)) {
+    const owner = ownerOf(resolve(parent, name), matches, depth);
+    if (owner === true) previous ??= resolve(parent, name);
+    else if (owner === false) occupied.add(name);
+  }
+  if (!previous && legacy) {
+    const name = subdirectories(legacy.parent).find((candidate) => !legacy.skip.includes(candidate) && ownerOf(resolve(legacy.parent, candidate), matches, depth) === true);
+    if (name) previous = resolve(legacy.parent, name);
+  }
+  const name = occupied.has(desired) ? `${desired}（${id.slice(0, 8)}）` : desired;
+  if (previous && previous !== resolve(parent, name)) moveEntry(previous, resolve(parent, name));
+  mkdirSync(resolve(parent, name), { recursive: true });
+  return resolve(parent, name);
+}
+
+// カテゴリ内のページの番号（2桁）。先頭がScreen Mapのカテゴリは00から、そうでなければ01から振る。
+function workspacePages(category, contentId, contentName) {
+  const items = category.items ?? [];
+  const offset = isScreenMapPage(items[0]) ? 0 : 1;
+  const pages = items.map((item, index) => ({ id: item.id, name: item.navTitle, number: String(index + offset).padStart(2, "0") }));
+  if (!pages.some((page) => page.id === contentId)) pages.push({ id: contentId, name: contentName, number: String(items.length + offset).padStart(2, "0") });
+  return pages;
+}
+
+// 保存先を決め、カテゴリ内のページのファイルを現在の名前と番号に付け直す。AI Desktopにないページのファイルは消さずに返す。
+function prepareWorkspacePath(args, ids, names, pages) {
+  const database = resolve(workspaceRoot, "ai-desktop-workspace", databaseTarget(args));
+  // 以前は資料のフォルダを <local|remote> の直下に置いていた。見つかればマイ資料の下へ移す。
+  const service = placeFolder(resolve(database, "マイ資料"), workspaceName(names.service), ids.serviceId, (target) => target.serviceId === ids.serviceId, 1, { parent: database, skip: ["マイ資料", "プロジェクト"] });
+  const directory = placeFolder(service, workspaceName(names.category), ids.categoryId, (target) => target.serviceId === ids.serviceId && target.categoryId === ids.categoryId, 0);
+  const stems = new Map(pages.map((page) => [page.id, pageStem(page)]));
+  const orphanFiles = [];
+  for (const { name, target } of jsonTargets(directory)) {
+    if (target.serviceId !== ids.serviceId || target.categoryId !== ids.categoryId || typeof target.contentId !== "string") continue;
+    const stem = stems.get(target.contentId);
+    if (!stem) { orphanFiles.push(name); continue; }
+    if (name === `${stem}.json`) continue;
+    if (existsSync(resolve(directory, `${stem}.json`))) {
+      if (target.contentId === ids.contentId) rmSync(resolve(directory, name));
+      continue;
+    }
+    renameSync(resolve(directory, name), resolve(directory, `${stem}.json`));
+    const previousStem = name.replace(/\.json$/u, "");
+    for (const previousImages of [imageFolderName(previousStem), `${previousStem}-images`]) {
+      if (existsSync(resolve(directory, previousImages))) moveEntry(resolve(directory, previousImages), resolve(directory, imageFolderName(stem)));
+    }
+  }
+  return { path: resolve(directory, `${stems.get(ids.contentId)}.json`), orphanFiles };
 }
 
 function executeD1(args, extraArgs) {
@@ -90,10 +186,6 @@ function requiredId(value, name) {
 
 function sqlText(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
-}
-
-function safeName(value) {
-  return value.replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, "-");
 }
 
 function validGlossary(value) {
@@ -258,14 +350,14 @@ const isScreenMapPage = (content) => Array.isArray(content?.blocks) && content.b
 function saveScreenMapImages(args, content, outputPath) {
   const block = isScreenMapPage(content) ? content.blocks[0] : null;
   if (!block) return null;
-  const directory = outputPath.replace(/\.json$/u, "") + "-images";
+  const directory = resolve(dirname(outputPath), imageFolderName(basename(outputPath).replace(/\.json$/u, "")));
   rmSync(directory, { recursive: true, force: true });
   mkdirSync(directory, { recursive: true });
   const images = {};
-  for (const screen of block.data?.screens ?? []) {
+  for (const [index, screen] of (block.data?.screens ?? []).entries()) {
     const image = screen.images?.[0];
     if (!image || typeof image.imageId !== "string" || !/^[0-9a-f-]+\.(?:jpg|png|webp|gif|avif)$/u.test(image.imageId)) continue;
-    const file = resolve(directory, `${safeName(screen.id)}.${image.imageId.split(".").pop()}`);
+    const file = resolve(directory, imageFileName(index, screen.name, image.imageId.split(".").pop()));
     execFileSync(wrangler, ["r2", "object", "get", `${mediaBucket}/ai-desktop/${image.imageId}`, targetFlag(args), "--file", file], {
       cwd: apiRoot,
       env: { ...process.env, NO_COLOR: "1", WRANGLER_LOG_PATH: resolve(tmpdir(), "hundred-wrangler.log") },
@@ -288,13 +380,21 @@ function automaticLayoutContent(content) {
   return next;
 }
 
-function loadPublishedCategory(args, serviceId, categoryId) {
+function loadPublishedCatalogCategory(args, serviceId, categoryId) {
   const rows = executeD1(args, ["--command", `SELECT catalog_json FROM ai_desktop_catalogs WHERE service_id = ${sqlText(serviceId)} LIMIT 1;`]);
   if (!rows[0]?.catalog_json) throw new Error(`${serviceId} の公開カタログがDBにありません`);
   const catalog = JSON.parse(rows[0].catalog_json);
   const category = catalog.categoryGroups?.flatMap((group) => group.categories ?? []).find((candidate) => candidate.id === categoryId);
   if (!category) throw new Error(`カテゴリが見つかりません: ${categoryId}`);
-  return category;
+  return { serviceName: catalog.name ?? serviceId, category };
+}
+
+function loadPublishedCategory(args, serviceId, categoryId) {
+  return loadPublishedCatalogCategory(args, serviceId, categoryId).category;
+}
+
+function printOrphanFiles(orphanFiles) {
+  if (orphanFiles.length) console.log(`AI Desktopにないページのファイルがあります（不要なら削除してください）: ${orphanFiles.join("、")}`);
 }
 
 function pull(args) {
@@ -309,20 +409,22 @@ function pull(args) {
     if (!rows[0]?.payload_json) throw new Error(`${contentId} のAI下書きがDBにありません`);
     const payload = JSON.parse(rows[0].payload_json);
     payload.content = automaticLayoutContent(payload.content);
-    if (payload.glossary === undefined) payload.glossary = loadPublishedCategory(args, serviceId, categoryId).glossary ?? [];
+    const published = !args.file || payload.glossary === undefined ? loadPublishedCatalogCategory(args, serviceId, categoryId) : null;
+    if (payload.glossary === undefined) payload.glossary = published.category.glossary ?? [];
     payload.blockCatalog = currentBlockCatalog();
     payload.target = { serviceId, categoryId, contentId, source: "draft", databaseTarget: databaseTarget(args), pulledAt: Date.now() };
-    const defaultPath = defaultWorkspacePath(args, serviceId, categoryId, contentId);
-    const outputPath = resolve(process.cwd(), args.file ?? defaultPath);
+    const workspace = args.file ? null : prepareWorkspacePath(args, { serviceId, categoryId, contentId }, { service: published.serviceName, category: published.category.title }, workspacePages(published.category, contentId, payload.content.navTitle));
+    const outputPath = args.file ? resolve(process.cwd(), args.file) : workspace.path;
     mkdirSync(dirname(outputPath), { recursive: true });
     const draftImages = saveScreenMapImages(args, payload.content, outputPath);
     if (draftImages) { payload.screenImages = draftImages; payload.instructions = [...(Array.isArray(payload.instructions) ? payload.instructions : []), screenMapImageInstruction]; }
     writeFileSync(outputPath, `${JSON.stringify(payload, null, 2)}\n`);
     console.log(`取得しました: ${outputPath}`);
     console.log(`対象: ${serviceId} / AI下書き 第${rows[0].revision}版`);
+    if (workspace) printOrphanFiles(workspace.orphanFiles);
     return;
   }
-  const category = loadPublishedCategory(args, serviceId, categoryId);
+  const { serviceName, category } = loadPublishedCatalogCategory(args, serviceId, categoryId);
   const content = category.items?.find((candidate) => candidate.id === contentId);
   if (!content) throw new Error(`コンテンツが見つかりません: ${contentId}`);
   const screenMapInstructions = [
@@ -351,8 +453,8 @@ function pull(args) {
     blockCatalog: currentBlockCatalog(),
     content: automaticLayoutContent(content),
   };
-  const defaultPath = defaultWorkspacePath(args, serviceId, categoryId, contentId);
-  const outputPath = resolve(process.cwd(), args.file ?? defaultPath);
+  const workspace = args.file ? null : prepareWorkspacePath(args, { serviceId, categoryId, contentId }, { service: serviceName, category: category.title }, workspacePages(category, contentId, content.navTitle));
+  const outputPath = args.file ? resolve(process.cwd(), args.file) : workspace.path;
   mkdirSync(dirname(outputPath), { recursive: true });
   const images = saveScreenMapImages(args, payload.content, outputPath);
   if (images) { payload.screenImages = images; payload.instructions.push(screenMapImageInstruction); }
@@ -360,6 +462,7 @@ function pull(args) {
   console.log(`取得しました: ${outputPath}`);
   console.log(`対象: ${serviceId} / ${category.title} / ${content.navTitle}`);
   if (images) console.log(`画像: ${Object.keys(images).length}件を ${dirname(outputPath)} に保存しました`);
+  if (workspace) printOrphanFiles(workspace.orphanFiles);
 }
 
 async function push(args) {
