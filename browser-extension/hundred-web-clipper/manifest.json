@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Hundred Web資料の取り込み",
+  "version": "0.1.0",
+  "description": "記事の本文から不要な部分を外し、Markdownと画像にして、選んだフォルダへ保存します。AIが資料の中身を読めるようにするためのツールです。",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": [
+    "sidePanel",
+    "scripting",
+    "storage",
+    "tabs"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "background": {
+    "service_worker": "hundredWebClipper.js"
+  },
+  "action": {
+    "default_title": "Web資料の取り込みを開く",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "hundredWebClipperPanel.html"
+  }
+}

@@ -8,8 +8,7 @@ local/**/*-images/
 remote/**/*-images/
 local/**/* の画像/
 remote/**/* の画像/
-# Chrome拡張で取り込んだWeb資料（他社の文章と画像）
-local/**/Web資料/
-remote/**/Web資料/
+# Chrome拡張（browser-extension/hundred-web-clipper）で取り込んだWeb資料（他社の文章と画像）
+Web資料/
 !local/.gitkeep
 !remote/.gitkeep

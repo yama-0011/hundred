@@ -1,0 +1,53 @@
+:root {
+  color-scheme: light dark;
+  --background: #f6f7f9;
+  --surface: #ffffff;
+  --text: #1d2330;
+  --muted: #5d6677;
+  --border: #d8dce4;
+  --accent: #2f6fe0;
+  --accent-text: #ffffff;
+  --success: #1f8a5b;
+  --warning: #a66300;
+  --error: #c42b1c;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #15181e;
+    --surface: #1f232b;
+    --text: #e7eaf0;
+    --muted: #a0a8b8;
+    --border: #353b47;
+    --accent: #5b8ff0;
+    --success: #4cc28a;
+    --warning: #e0a040;
+    --error: #ff7a6b;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 16px; display: grid; gap: 12px; background: var(--background); color: var(--text); font: 14px/1.6 system-ui, -apple-system, "Hiragino Sans", sans-serif; }
+header { display: grid; gap: 2px; }
+header small, .note { color: var(--muted); font-size: 12px; }
+header strong { font-size: 15px; word-break: break-all; }
+header p { margin: 0; color: var(--muted); font-size: 12px; }
+h2 { margin: 0 0 8px; font-size: 13px; }
+p { margin: 0 0 8px; }
+.card { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.card > :last-child { margin-bottom: 0; }
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.row > span:first-child { flex: 1; min-width: 0; word-break: break-all; }
+button { padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+button:disabled { opacity: 0.45; cursor: default; }
+button.primary { border-color: var(--accent); background: var(--accent); color: var(--accent-text); font-weight: 600; }
+.field { display: grid; gap: 4px; color: var(--muted); font-size: 12px; }
+.field input { padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); color: var(--text); font: inherit; font-size: 14px; }
+.save { padding: 10px; font-size: 15px; }
+.segmented { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.segmented button.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.help { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12px; }
+.help .body { color: var(--success); }
+.help .exclude { color: var(--error); }
+#status { margin: 0; font-size: 13px; }
+#status[data-tone="success"] { color: var(--success); }
+#status[data-tone="warning"] { color: var(--warning); }
+#status[data-tone="error"] { color: var(--error); }

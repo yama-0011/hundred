@@ -26,8 +26,14 @@ ai-desktop-workspace/
 │           ├── プロジェクト.json
 │           └── ドキュメント/
 │               └── <カテゴリ名>/<ドキュメント名>.json
+├── Web資料/
+│   └── <サイト名>/
+│       ├── index.md
+│       └── <記事名>/本文.md と画像
 └── Workspace JSON.json
 ```
+
+`local/`と`remote/`はAI DesktopのDB（開発・本番）に対応するフォルダです。`Web資料/`は、Chrome拡張「Hundred Web資料の取り込み」（`browser-extension/hundred-web-clipper`）で保存した製品マニュアルなどで、DBとは関係ありません。AIは`index.md`を見て、必要な記事と画像だけを開いてください。他社の文章と画像のため、Gitの対象外にしています。
 
 IDは、JSONの`target`だけに持ちます。`push`や「JSONから読み込む」は`target`で対象を決めるため、ファイルの場所や名前が変わっても動きます。
 

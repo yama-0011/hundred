@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Web資料の取り込み</title>
+  <link rel="stylesheet" href="hundred-web-clipper-panel.css">
+</head>
+<body>
+  <header>
+    <small>開いているページ</small>
+    <strong id="site"></strong>
+    <p id="title"></p>
+  </header>
+
+  <section id="permission" class="card" hidden>
+    <p>このサイトの記事を読み取るには、許可が必要です（サイトごとに初回だけ）。</p>
+    <button type="button" id="allow" class="primary">このサイトの読み取りを許可</button>
+  </section>
+
+  <section class="card">
+    <h2>保存先</h2>
+    <div class="row"><span id="folder"></span><button type="button" id="chooseFolder"></button></div>
+    <label class="field"><span>サイト名（この名前のフォルダを作ります）</span><input id="siteName" type="text" maxlength="80"></label>
+  </section>
+
+  <section class="card">
+    <h2>取り込む範囲</h2>
+    <p id="ruleState" class="note"></p>
+    <div class="row">
+      <button type="button" id="select">範囲を選ぶ</button>
+      <button type="button" id="stopSelect" hidden>選ぶのをやめる</button>
+      <span id="excludeCount" class="note"></span>
+    </div>
+    <div class="segmented" role="group" aria-label="クリックしたときの動き">
+      <button type="button" id="modeExclude">除外を選ぶ</button>
+      <button type="button" id="modeBody">本文を選ぶ</button>
+    </div>
+    <ul id="selectionHelp" class="help" hidden>
+      <li><b class="body">緑の枠</b>が本文、<b class="exclude">赤</b>が除外する部分です。</li>
+      <li>「除外を選ぶ」でクリックすると、除外と取り込むが切り替わります。</li>
+      <li>「本文を選ぶ」でクリックすると、その要素を本文にします。</li>
+      <li>↑キーで1つ外側の要素に広げ、↓キーで戻します。Escでやめます。</li>
+    </ul>
+    <button type="button" id="reset">選んだ範囲を戻す</button>
+  </section>
+
+  <button type="button" id="save" class="primary save">この記事を保存</button>
+  <p id="status" role="status"></p>
+
+  <script type="module" src="hundredWebClipperPanel.js"></script>
+</body>
+</html>
