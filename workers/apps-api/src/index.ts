@@ -178,13 +178,6 @@ import {
   updateAIDesktopDesignCategory,
 } from "./ai-desktop-design-categories";
 import {
-  appendAppleIntelligenceMessage,
-  AppleIntelligenceChatError,
-  createAppleIntelligenceChat,
-  getAppleIntelligenceChat,
-  listAppleIntelligenceChats,
-} from "./apple-intelligence-chats";
-import {
   AnigramStoryRendererError,
   serveAnigramStoryRender,
   type AnigramStoryRendererEnv,
@@ -901,49 +894,6 @@ export default {
         if (error instanceof AIDesktopDesignTemplateError || error instanceof SyntaxError) return json(request, env, { error: "テンプレートの入力内容が正しくありません" }, 400);
         console.error("Failed to process AI Desktop design template", { templateId: aiDesktopDesignTemplateMatch[1], error });
         return json(request, env, { error: "テンプレートを処理できませんでした" }, 500);
-      }
-    }
-
-    if (url.pathname === "/api/apple-intelligence/chats" && (request.method === "GET" || request.method === "POST")) {
-      try {
-        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
-        if (request.method === "GET") return json(request, env, await listAppleIntelligenceChats(env, ownerUserId));
-        return json(request, env, await createAppleIntelligenceChat(request, env, ownerUserId), 201);
-      } catch (error) {
-        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
-        if (error instanceof AppleIntelligenceChatError || error instanceof SyntaxError) {
-          const status = error instanceof AppleIntelligenceChatError && error.code === "CHAT_LIMIT_REACHED" ? 409 : 400;
-          return json(request, env, { error: status === 409 ? "保存できるチャットは100件までです" : "チャットの設定が正しくありません" }, status);
-        }
-        return json(request, env, { error: "チャット履歴を処理できませんでした" }, 500);
-      }
-    }
-
-    const appleIntelligenceChatMatch = url.pathname.match(/^\/api\/apple-intelligence\/chats\/([0-9a-f-]+)$/iu);
-    if (appleIntelligenceChatMatch && request.method === "GET") {
-      try {
-        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
-        return json(request, env, await getAppleIntelligenceChat(env, ownerUserId, appleIntelligenceChatMatch[1]));
-      } catch (error) {
-        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
-        if (error instanceof AppleIntelligenceChatError && error.code === "NOT_FOUND") return json(request, env, { error: "チャットが見つかりません" }, 404);
-        return json(request, env, { error: "チャット履歴を取得できませんでした" }, 500);
-      }
-    }
-
-    const appleIntelligenceMessageMatch = url.pathname.match(/^\/api\/apple-intelligence\/chats\/([0-9a-f-]+)\/messages$/iu);
-    if (appleIntelligenceMessageMatch && request.method === "POST") {
-      try {
-        const { ownerUserId } = await verifyCognitoAccessToken(request, env);
-        return json(request, env, await appendAppleIntelligenceMessage(request, env, ownerUserId, appleIntelligenceMessageMatch[1]), 201);
-      } catch (error) {
-        if (error instanceof CognitoAuthenticationError) return json(request, env, { error: "認証が必要です" }, 401);
-        if (error instanceof AppleIntelligenceChatError) {
-          const status = error.code === "NOT_FOUND" ? 404 : error.code === "MESSAGE_LIMIT_REACHED" ? 409 : 400;
-          const message = error.code === "NOT_FOUND" ? "チャットが見つかりません" : error.code === "MESSAGE_LIMIT_REACHED" ? "このチャットのメッセージ上限に達しました" : "メッセージが正しくありません";
-          return json(request, env, { error: message }, status);
-        }
-        return json(request, env, { error: "メッセージを保存できませんでした" }, 500);
       }
     }
 

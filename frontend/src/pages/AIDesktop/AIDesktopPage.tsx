@@ -1,10 +1,8 @@
 import { fetchAuthSession, fetchUserAttributes, getCurrentUser, signOut } from 'aws-amplify/auth'
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { endHundredGuestSession } from '../../components/Hundred/Auth/hundredGuestSession'
-import { useHundredAppleIntelligence } from '../../components/Hundred/AppleIntelligence/HundredAppleIntelligenceContext'
-import AppleIntelligenceMark from '../../components/Hundred/AppleIntelligence/AppleIntelligenceMark'
-import { createAIDesktopCatalog, deleteAIDesktopContentDraftHistory, getAIDesktopCatalogs, getAIDesktopContentDraftHistory, getAIDesktopState, getManageableAIDesktopCatalogs, listAIDesktopContentDraftHistory, listAIDesktopDocuments, saveAIDesktopCatalog, saveAIDesktopContentDraft, saveAIDesktopState, setAIDesktopCatalogPublication, syncAIDesktopUserProfile, type AIDesktopCatalogPublication, type AIDesktopCustomApp, type AIDesktopDocument, type AIDesktopDraftHistoryEntry, type AIDesktopProjectDocument, type AIDesktopTaskbarPosition } from '../../services/AIDesktop/aiDesktopApi'
+import { createAIDesktopCatalog, deleteAIDesktopContentDraftHistory, getAIDesktopCatalogs, getAIDesktopContentDraftHistory, getAIDesktopState, getManageableAIDesktopCatalogs, listAIDesktopContentDraftHistory, listAIDesktopDocuments, saveAIDesktopCatalog, saveAIDesktopContentDraft, saveAIDesktopState, setAIDesktopCatalogPublication, syncAIDesktopUserProfile, type AIDesktopCatalogPublication, type AIDesktopCustomApp, type AIDesktopDocument, type AIDesktopDraftHistoryEntry, type AIDesktopProjectDocument, type AIDesktopSharedState, type AIDesktopTaskbarPosition } from '../../services/AIDesktop/aiDesktopApi'
 import { BlockRenderer, ContentCanvas, ContentTableOfContents, createContent, normalizeServiceConfig, type Category, type CategoryGroup, type ContentBlock, type ContentItem, type GlossaryEntry, type LeafBlock, type ServiceConfig } from './contentBlocks'
 import { createContentBlockCatalog } from './contentBlockCatalog'
 import { copyArticleImage } from './copyArticleImage'
@@ -13,10 +11,11 @@ import { categoryKindOf, containsScreenMapBlock, createScreenMapContent, isMaskU
 import { listenScreenCaptures } from './screenCaptureQueue'
 import ScreenMapEditor from './ScreenMapEditor'
 import ScreenMapOverview from './ScreenMapOverview'
-import ImageExplorer from './ImageExplorer'
-import ProjectsApp from './ProjectsApp'
-import DesignDocumentsApp, { type DesignDocumentsProjectRequest } from './DesignDocumentsApp'
+import AIDesktopProjects from './AIDesktopProjects'
+import type { DesignDocumentRequest } from './DesignDocumentsApp'
 import { AI_DESKTOP_MESSAGES, localizedErrorMessage } from './aiDesktopMessages'
+import AIDesktopHome from './AIDesktopHome'
+import AIDesktopNavigation from './AIDesktopNavigation'
 import AIDesktopNotifications from './AIDesktopNotifications'
 import AIDesktopConfirmDialog from './AIDesktopConfirmDialog'
 import { AppContent, AppHeader, AppShell } from './AppLayout'
@@ -25,6 +24,7 @@ import { contentWorkspacePath, isWorkspaceCancelled, readContentWorkspace, selec
 import '../../styles/AIDesktop/ai-desktop.css'
 import '../../styles/AIDesktop/ai-desktop-projects.css'
 import '../../styles/AIDesktop/ai-desktop-app-layout.css'
+import '../../styles/AIDesktop/ai-desktop-home.css'
 // Screen Mapの見出し・表示設定・空表示はキャンバス（遅延読み込み）より先に出るため、CSSは本体と一緒に読み込む。
 import '@xyflow/react/dist/style.css'
 import '../../styles/AIDesktop/ai-desktop-screen-map.css'
@@ -32,31 +32,26 @@ import '../../styles/Hundred/hundred-login-status.css'
 import { confirmAIDesktop } from './aiDesktopConfirmBus'
 import { isRecordValue, readAIDesktopSessionState, useAIDesktopSessionStateSaver } from './aiDesktopSessionState'
 
-type AppId = 'my-documents' | 'documents' | 'projects' | 'design-documents' | 'explorer' | 'settings'
+type AppId = 'documents' | 'projects' | 'settings'
 type ServiceId = string
-type WindowState = { id: AppId; x: number; y: number; width: number; height: number; minimized: boolean; maximized: boolean; z: number }
+type DesktopLayout = { iconPositions: AIDesktopSharedState['iconPositions']; taskbarVisible: boolean; taskbarPosition: AIDesktopTaskbarPosition }
 type ServiceNavigation = { categoryId: string | null; contentId: string | null }
 type ServiceMode = 'view' | 'edit'
-type DesktopIconPosition = { x: number; y: number }
 type SharedContentTarget = { serviceId: ServiceId; categoryId: string; contentId: string }
 
 const apps = [
-  { id: 'my-documents' as const, name: 'マイ資料', mark: '✎', color: '#2878c8' },
-  { id: 'documents' as const, name: '公開資料', mark: '▤', color: '#16876d' },
-  { id: 'projects' as const, name: 'プロジェクト', mark: '◆', color: '#7657c8' },
-  { id: 'design-documents' as const, name: 'ドキュメント', mark: '▧', color: '#b4527f' },
-  { id: 'explorer' as const, name: 'Explorer', mark: '▰', color: '#e6a700' },
-  { id: 'settings' as const, name: '設定', mark: '⚙', color: '#5277d8' },
+  { id: 'projects' as const, name: 'プロジェクト' },
+  { id: 'documents' as const, name: '資料' },
+  { id: 'settings' as const, name: '設定' },
 ]
 
-// リロードしても同じウィンドウと画面に戻れるよう、表示状態だけをタブ単位で保つ。
-type DesktopSession = { windows: WindowState[]; active: AppId | null; personalServiceId: ServiceId | null; publishedServiceId: ServiceId | null; serviceNavigation: Record<ServiceId, ServiceNavigation> }
+// リロードしても同じ資料と画面に戻れるよう、表示状態だけをタブ単位で保つ。開いている機能はURLで決まる。
+type DocumentFilter = 'all' | 'published' | 'private'
+type DesktopSession = { documentsServiceId?: ServiceId | null; serviceNavigation: Record<ServiceId, ServiceNavigation> }
 const isAppId = (value: unknown): value is AppId => apps.some((app) => app.id === value)
-const isWindowState = (value: unknown): value is WindowState => isRecordValue(value) && isAppId(value.id) && ['x', 'y', 'width', 'height', 'z'].every((key) => typeof value[key] === 'number') && typeof value.minimized === 'boolean' && typeof value.maximized === 'boolean'
-const isDesktopSession = (value: unknown): value is DesktopSession => isRecordValue(value) && Array.isArray(value.windows) && value.windows.every(isWindowState) && (value.active === null || isAppId(value.active)) && isRecordValue(value.serviceNavigation)
-const restoredWindows = (session: DesktopSession | null) => (session?.windows ?? []).map((win) => ({ ...win, x: Math.min(win.x, Math.max(0, window.innerWidth - 160)), y: Math.min(win.y, Math.max(0, window.innerHeight - 120)) }))
+const isDesktopSession = (value: unknown): value is DesktopSession => isRecordValue(value) && isRecordValue(value.serviceNavigation)
 
-const defaultDesktopIconPositions: Record<AppId, DesktopIconPosition> = { 'my-documents': { x: 18, y: 18 }, documents: { x: 18, y: 110 }, projects: { x: 18, y: 202 }, 'design-documents': { x: 18, y: 294 }, explorer: { x: 18, y: 386 }, settings: { x: 18, y: 478 } }
+const defaultDesktopIconPositions: DesktopLayout['iconPositions'] = { 'my-documents': { x: 18, y: 18 }, documents: { x: 18, y: 110 }, projects: { x: 18, y: 202 }, 'design-documents': { x: 18, y: 294 }, explorer: { x: 18, y: 386 }, settings: { x: 18, y: 478 } }
 
 const content = createContent
 const isServiceId = (id: unknown): id is ServiceId => typeof id === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/u.test(id)
@@ -75,11 +70,6 @@ function resolveAccountName(cognitoUsername: string, name?: string, preferredUse
   const normalizedPreferredUsername = preferredUsername?.trim()
   if (normalizedPreferredUsername) return normalizedPreferredUsername
   return email?.split('@', 1)[0]?.trim() || cognitoUsername
-}
-
-function AppIcon({ id, size = 'large' }: { id: AppId; size?: 'small' | 'large' }) {
-  const app = apps.find((candidate) => candidate.id === id)!
-  return <span className={`ad-app-icon ${size}`} style={{ '--app-color': app.color } as CSSProperties}>{app.mark}</span>
 }
 
 const allCategories = (service: ServiceConfig) => service.categoryGroups.flatMap((group) => group.categories)
@@ -581,15 +571,14 @@ function ServiceContent({ serviceId, service, mode, canEdit, navigation, publica
   return <CategoryDetail serviceId={serviceId} service={service} category={category} selectedId={navigation.contentId ?? category.items[0]?.id ?? ''} canEdit={canEdit} onMode={onMode} onBack={() => onChange({ categoryId: null, contentId: null })} onSelect={(contentId) => onChange({ categoryId: category.id, contentId })} />
 }
 
-function DocumentsWorkspace({ kind, selectedServiceId, catalog, publications, modes, navigation, canEdit, onService, onMode, onChange, onAddCategory, onUpdateService, onSaveCategory, onDelete, onCreateCatalog, onCatalogPublication }: { kind: 'personal' | 'published'; selectedServiceId: ServiceId | null; catalog: Record<ServiceId, ServiceConfig>; publications: Record<ServiceId, AIDesktopCatalogPublication>; modes: Record<ServiceId, ServiceMode>; navigation: Record<ServiceId, ServiceNavigation>; canEdit: boolean; onService: (serviceId: ServiceId | null) => void; onMode: (serviceId: ServiceId, mode: ServiceMode) => void; onChange: (serviceId: ServiceId, next: ServiceNavigation) => void; onAddCategory: (serviceId: ServiceId, groupId: string) => void; onUpdateService: (serviceId: ServiceId, service: ServiceConfig) => void; onSaveCategory: (serviceId: ServiceId, category: Category, sourceGroupId: string, targetGroupId: string, contentId: string | null) => Promise<void>; onDelete: (serviceId: ServiceId, categoryId: string) => void; onCreateCatalog: (name: string, eyebrow: string, introduction: string) => Promise<ServiceId>; onCatalogPublication: (serviceId: ServiceId, published: boolean) => Promise<void> }) {
-  const isPersonal = kind === 'personal'
+function DocumentsWorkspace({ selectedServiceId, catalog, publications, modes, navigation, canEdit, onService, onMode, onChange, onAddCategory, onUpdateService, onSaveCategory, onDelete, onCreateCatalog, onCatalogPublication }: { selectedServiceId: ServiceId | null; catalog: Record<ServiceId, ServiceConfig>; publications: Record<ServiceId, AIDesktopCatalogPublication>; modes: Record<ServiceId, ServiceMode>; navigation: Record<ServiceId, ServiceNavigation>; canEdit: boolean; onService: (serviceId: ServiceId | null) => void; onMode: (serviceId: ServiceId, mode: ServiceMode) => void; onChange: (serviceId: ServiceId, next: ServiceNavigation) => void; onAddCategory: (serviceId: ServiceId, groupId: string) => void; onUpdateService: (serviceId: ServiceId, service: ServiceConfig) => void; onSaveCategory: (serviceId: ServiceId, category: Category, sourceGroupId: string, targetGroupId: string, contentId: string | null) => Promise<void>; onDelete: (serviceId: ServiceId, categoryId: string) => void; onCreateCatalog: (name: string, eyebrow: string, introduction: string) => Promise<ServiceId>; onCatalogPublication: (serviceId: ServiceId, published: boolean) => Promise<void> }) {
   const [createOpen, setCreateOpen] = useState(false)
   const [createName, setCreateName] = useState('')
   const [createEyebrow, setCreateEyebrow] = useState('KNOWLEDGE BASE')
   const [createIntroduction, setCreateIntroduction] = useState('')
   const [busyServiceId, setBusyServiceId] = useState<ServiceId | null>(null)
-  if (isPersonal && !canEdit) return <div className="ad-auth-required"><span>✎</span><h1>マイ資料</h1><p>資料を作成・編集・公開するには、Hundredへサインインしてください。</p></div>
-  const workspaceCatalog = Object.fromEntries(Object.entries(catalog).filter(([serviceId]) => isPersonal || (publications[serviceId]?.status ?? 'published') === 'published')) as Record<ServiceId, ServiceConfig>
+  const [filter, setFilter] = useState<DocumentFilter>('all')
+  const workspaceCatalog = Object.fromEntries(Object.entries(catalog).filter(([serviceId]) => canEdit || (publications[serviceId]?.status ?? 'published') === 'published')) as Record<ServiceId, ServiceConfig>
   const publicationLabel = (serviceId: ServiceId) => { const status = publications[serviceId]?.status ?? 'published'; return status === 'published' ? '公開中' : status === 'draft' ? '下書き' : '非公開' }
   const publicationClass = (serviceId: ServiceId) => publications[serviceId]?.status ?? 'published'
   const submitCreate = async () => {
@@ -621,39 +610,31 @@ function DocumentsWorkspace({ kind, selectedServiceId, catalog, publications, mo
     }
   }
   if (!selectedServiceId) {
-    return <AppShell className="ad-documents-home"><AppHeader eyebrow={isPersonal ? 'PERSONAL WORKSPACE' : 'PUBLISHED LIBRARY'} title={isPersonal ? 'マイ資料' : '公開資料'} description={isPersonal ? '資料の作成・編集・公開状態を管理します。公開した資料だけが公開資料に表示されます。' : '公開済みの資料を閲覧します。'} actions={<div className="ad-document-home-actions"><span className={`ad-document-scope ${isPersonal ? 'personal' : 'published'}`}>{isPersonal ? '作成・編集' : '公開済み'}</span>{isPersonal && <button type="button" className="primary" disabled={!canEdit} onClick={() => setCreateOpen(true)}>＋ 資料を作成</button>}</div>} />
-      <AppContent><div className="ad-document-library-layout"><section className="ad-material-list-panel"><header><h2>資料一覧</h2><span>{Object.keys(workspaceCatalog).length}件</span></header><div className={`ad-document-service-grid ${isPersonal ? 'personal' : 'published'}`}>{Object.entries(workspaceCatalog).map(([serviceId, service]) => { const categories = allCategories(service); const pageCount = categories.reduce((total, category) => total + category.items.length, 0); return <article key={serviceId}><button type="button" className="ad-document-service-open" onClick={() => onService(serviceId)}><i>{serviceId === 'chatgpt' ? '◎' : serviceId === 'codex' ? '⌘' : serviceId === 'claude' ? 'C' : serviceId === 'ai-desktop' ? '▦' : '◇'}</i><span><strong>{service.name}</strong><small>{categories.length}カテゴリ ・ {pageCount}ページ{isPersonal ? ` ・ ${publicationLabel(serviceId)}` : ''}</small></span><b>›</b></button></article> })}</div></section><aside className="ad-document-history"><header><h2>履歴</h2></header><div className="ad-document-history-empty"><span>◷</span><strong>履歴はありません</strong><p>履歴機能は今後ここに表示します。</p></div></aside></div></AppContent>
+    const filteredCatalog = Object.entries(workspaceCatalog).filter(([serviceId]) => filter === 'all' || (filter === 'published') === (publicationClass(serviceId) === 'published'))
+    return <AppShell className="ad-documents-home"><AppHeader title="資料" description={canEdit ? '資料の作成・編集と、公開の切り替えができます。' : '公開済みの資料を読めます。作成や編集には、Hundredへのサインインが必要です。'} actions={canEdit ? <div className="ad-document-home-actions"><button type="button" className="primary" onClick={() => setCreateOpen(true)}>＋ 資料を作成</button></div> : undefined} />
+      <AppContent><div className="ad-document-library-layout"><section className="ad-material-list-panel"><header><h2>資料一覧</h2>{canEdit && <div className="ad-mode-switch" role="group" aria-label="公開状態で絞り込む">{([['all', 'すべて'], ['published', '公開中'], ['private', '下書き・非公開']] as const).map(([value, label]) => <button key={value} type="button" className={filter === value ? 'active' : ''} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}</div>}<span>{filteredCatalog.length}件</span></header><div className="ad-document-service-grid published">{filteredCatalog.map(([serviceId, service]) => { const categories = allCategories(service); const pageCount = categories.reduce((total, category) => total + category.items.length, 0); return <article key={serviceId}><button type="button" className="ad-document-service-open" onClick={() => onService(serviceId)}><i>{serviceId === 'chatgpt' ? '◎' : serviceId === 'codex' ? '⌘' : serviceId === 'claude' ? 'C' : serviceId === 'ai-desktop' ? '▦' : '◇'}</i><span><strong>{service.name}</strong><small>{categories.length}カテゴリ ・ {pageCount}ページ{canEdit ? ` ・ ${publicationLabel(serviceId)}` : ''}</small></span><b>›</b></button></article> })}</div></section><aside className="ad-document-history"><header><h2>履歴</h2></header><div className="ad-document-history-empty"><span>◷</span><strong>履歴はありません</strong><p>履歴機能は今後ここに表示します。</p></div></aside></div></AppContent>
       {createOpen && <div className="ad-document-create-overlay" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget && !busyServiceId) setCreateOpen(false) }}><section role="dialog" aria-modal="true" aria-labelledby="ad-document-create-title"><header><div><small>NEW MATERIAL</small><h2 id="ad-document-create-title">資料を作成</h2><p>ChatGPTやCodexと同じ階層に、非公開の資料を作成します。</p></div><button type="button" aria-label="閉じる" disabled={Boolean(busyServiceId)} onClick={() => setCreateOpen(false)}>×</button></header><label><span>資料名</span><input autoFocus maxLength={100} value={createName} onChange={(event) => setCreateName(event.target.value)} placeholder="例：社内開発ガイド" /></label><label><span>英字ラベル</span><input maxLength={100} value={createEyebrow} onChange={(event) => setCreateEyebrow(event.target.value)} placeholder="KNOWLEDGE BASE" /></label><label><span>説明</span><textarea rows={4} maxLength={2000} value={createIntroduction} onChange={(event) => setCreateIntroduction(event.target.value)} placeholder="この資料で扱う内容を入力してください。" /></label><footer><button type="button" disabled={Boolean(busyServiceId)} onClick={() => setCreateOpen(false)}>キャンセル</button><button type="button" className="primary" disabled={Boolean(busyServiceId) || !createName.trim()} onClick={() => void submitCreate()}>{busyServiceId ? '作成中…' : '作成して編集'}</button></footer></section></div>}
     </AppShell>
   }
   const service = workspaceCatalog[selectedServiceId]
-  if (!service) return <div className="ad-content-empty"><h1>この資料は非公開です</h1><button type="button" onClick={() => onService(null)}>公開資料へ戻る</button></div>
+  if (!service) return <div className="ad-content-empty"><h1>この資料は非公開です</h1><button type="button" onClick={() => onService(null)}>資料一覧へ戻る</button></div>
   const currentNavigation = navigation[selectedServiceId] ?? { categoryId: null, contentId: null }
   const currentMode = modes[selectedServiceId] ?? 'view'
-  return <div className="ad-documents-content ad-documents-content--standalone"><ServiceContent serviceId={selectedServiceId} service={service} mode={isPersonal ? currentMode : 'view'} canEdit={isPersonal && canEdit} navigation={currentNavigation} publicationStatus={isPersonal ? publicationClass(selectedServiceId) : undefined} publicationBusy={Boolean(busyServiceId)} onMaterialList={() => onService(null)} onPublication={isPersonal ? () => void changePublication(selectedServiceId) : undefined} onMode={(mode) => onMode(selectedServiceId, mode)} onChange={(next) => onChange(selectedServiceId, next)} onAddCategory={(groupId) => onAddCategory(selectedServiceId, groupId)} onUpdateService={(next) => onUpdateService(selectedServiceId, next)} onSaveCategory={(category, sourceGroupId, targetGroupId, contentId) => onSaveCategory(selectedServiceId, category, sourceGroupId, targetGroupId, contentId)} onDelete={(categoryId) => onDelete(selectedServiceId, categoryId)} /></div>
-}
-
-function GenericContent({ id, canEdit, catalog, documents, customApps, visibility, onTheme, onSaveApps, onOpenProjectDocument, documentsProjectRequest, onOpenProjectDesignDocuments, taskbarPosition, onTaskbarPosition }: { id: 'projects' | 'design-documents' | 'explorer' | 'settings'; canEdit: boolean; catalog: Record<ServiceId, ServiceConfig>; documents: AIDesktopDocument[]; customApps: AIDesktopCustomApp[]; visibility: Record<string, boolean>; onTheme: () => void; onSaveApps: (apps: AIDesktopCustomApp[], visibility: Record<string, boolean>) => void; onOpenProjectDocument: (document: AIDesktopProjectDocument, edit?: boolean) => void; documentsProjectRequest: DesignDocumentsProjectRequest | null; onOpenProjectDesignDocuments: (projectId: string) => void; taskbarPosition: AIDesktopTaskbarPosition; onTaskbarPosition: (position: AIDesktopTaskbarPosition) => void }) {
-  if (id === 'settings') return <div className="ad-generic"><p className="ad-eyebrow">PERSONALIZE</p><h1>設定</h1><div className="ad-setting-row"><div><strong>タスクバーの位置</strong><p>左右に置くと、資料を表示する縦の領域が広がります。</p></div><div className="ad-setting-options" role="group" aria-label="タスクバーの位置">{(['bottom', 'left', 'right'] as const).map((position) => <button type="button" key={position} className={taskbarPosition === position ? 'active' : ''} aria-pressed={taskbarPosition === position} onClick={() => onTaskbarPosition(position)}>{{ bottom: '下', left: '左', right: '右' }[position]}</button>)}</div></div><div className="ad-setting-row"><div><strong>カラーモード</strong><p>{canEdit ? 'デスクトップとウィンドウの表示を切り替え、DBへ保存します。' : 'デスクトップとウィンドウの表示を切り替えます。ゲスト利用中の変更は保存されません。'}</p></div><button onClick={onTheme}>ライト / ダークを切り替え</button></div><div className="ad-setting-row"><div><strong>壁紙</strong><p>現在の壁紙: Aurora</p></div><span className="ad-wallpaper-chip" /></div></div>
-  if (id === 'projects') return <ProjectsApp canManage={canEdit} catalog={catalog} publishedDocuments={documents.filter((document) => document.status === 'published')} onOpenDocument={onOpenProjectDocument} onOpenDesignDocuments={onOpenProjectDesignDocuments} />
-  if (id === 'design-documents') return <DesignDocumentsApp canManage={canEdit} projectRequest={documentsProjectRequest} />
-  if (!canEdit) return <div className="ad-auth-required"><span>▰</span><h1>Explorer</h1><p>画像と追加APPを管理するには、Hundredへサインインしてください。</p></div>
-  return <ImageExplorer canManage={canEdit} builtInApps={apps} customApps={customApps} visibility={visibility} onSaveApps={onSaveApps} />
+  return <div className="ad-documents-content ad-documents-content--standalone"><ServiceContent serviceId={selectedServiceId} service={service} mode={canEdit ? currentMode : 'view'} canEdit={canEdit} navigation={currentNavigation} publicationStatus={canEdit ? publicationClass(selectedServiceId) : undefined} publicationBusy={Boolean(busyServiceId)} onMaterialList={() => onService(null)} onPublication={canEdit ? () => void changePublication(selectedServiceId) : undefined} onMode={(mode) => onMode(selectedServiceId, mode)} onChange={(next) => onChange(selectedServiceId, next)} onAddCategory={(groupId) => onAddCategory(selectedServiceId, groupId)} onUpdateService={(next) => onUpdateService(selectedServiceId, next)} onSaveCategory={(category, sourceGroupId, targetGroupId, contentId) => onSaveCategory(selectedServiceId, category, sourceGroupId, targetGroupId, contentId)} onDelete={(categoryId) => onDelete(selectedServiceId, categoryId)} /></div>
 }
 
 function AIDesktopPage() {
   const navigate = useNavigate()
-  const { openAppleIntelligence } = useHundredAppleIntelligence()
+  const location = useLocation()
+  const section = location.pathname.split('/')[2]
+  const activeApp: AppId | null = isAppId(section) ? section : null
   const [restoredSession] = useState(() => readAIDesktopSessionState('desktop', isDesktopSession))
-  const [windows, setWindows] = useState<WindowState[]>(() => restoredWindows(restoredSession))
-  const [documentsProjectRequest, setDocumentsProjectRequest] = useState<DesignDocumentsProjectRequest | null>(null)
-  const [active, setActive] = useState<AppId | null>(restoredSession?.active ?? null)
-  const [startOpen, setStartOpen] = useState(false)
-  const [taskbarVisible, setTaskbarVisible] = useState(true)
-  const [taskbarPosition, setTaskbarPosition] = useState<AIDesktopTaskbarPosition>('bottom')
-  const [taskbarPeekOpen, setTaskbarPeekOpen] = useState(false)
-  const [layoutEditing, setLayoutEditing] = useState(false)
-  const [desktopIconPositions, setDesktopIconPositions] = useState<Record<AppId, DesktopIconPosition>>(defaultDesktopIconPositions)
+  const [documentRequest, setDocumentRequest] = useState<(DesignDocumentRequest & { projectId: string }) | null>(null)
+  // 編集中の内容を失わないよう、一度開いた機能は表示を切り替えるだけで、閉じない。
+  const [visitedApps, setVisitedApps] = useState<AppId[]>(activeApp ? [activeApp] : [])
+  if (activeApp && !visitedApps.includes(activeApp)) setVisitedApps([...visitedApps, activeApp])
+  // デスクトップ時代の配置と追加APPは使わないが、保存形式と保存済みのデータを保つため、読み込んだ値をそのまま書き戻す。
+  const [desktopLayout, setDesktopLayout] = useState<DesktopLayout>({ iconPositions: defaultDesktopIconPositions, taskbarVisible: true, taskbarPosition: 'bottom' })
   const [customApps, setCustomApps] = useState<AIDesktopCustomApp[]>([])
   const [desktopAppVisibility, setDesktopAppVisibility] = useState<Record<string, boolean>>({})
   const [dark, setDark] = useState(false)
@@ -665,14 +646,10 @@ function AIDesktopPage() {
   const [catalogReady, setCatalogReady] = useState(false)
   const [serviceModes, setServiceModes] = useState<Record<ServiceId, ServiceMode>>({ codex: 'view', chatgpt: 'view', claude: 'view', 'ai-desktop': 'view' })
   const [serviceNavigation, setServiceNavigation] = useState<Record<ServiceId, ServiceNavigation>>(() => ({ ...{ codex: { categoryId: null, contentId: null }, chatgpt: { categoryId: null, contentId: null }, claude: { categoryId: null, contentId: null }, 'ai-desktop': { categoryId: null, contentId: null } }, ...restoredSession?.serviceNavigation }))
-  const [personalServiceId, setPersonalServiceId] = useState<ServiceId | null>(restoredSession?.personalServiceId ?? null)
-  const [publishedServiceId, setPublishedServiceId] = useState<ServiceId | null>(restoredSession?.publishedServiceId ?? null)
+  const [documentsServiceId, setDocumentsServiceId] = useState<ServiceId | null>(restoredSession?.documentsServiceId ?? null)
   const [accountDialogOpen, setAccountDialogOpen] = useState(false)
   const [changingAccount, setChangingAccount] = useState(false)
-  const zRef = useRef(Math.max(2, ...(restoredSession?.windows.map((win) => win.z) ?? [])))
-  useAIDesktopSessionStateSaver('desktop', { windows, active, personalServiceId, publishedServiceId, serviceNavigation })
-  const draggedDesktopIconRef = useRef<AppId | null>(null)
-  const hiddenTaskbarRef = useRef<HTMLDivElement>(null)
+  useAIDesktopSessionStateSaver('desktop', { documentsServiceId, serviceNavigation })
   const sharedTargetRef = useRef<SharedContentTarget | null>(sharedContentTarget(window.location.search))
   const sharedTargetAppliedRef = useRef(false)
   // 公開済みの一覧と、自分の資料（非公開を含む）の一覧は別々に届く。自分の資料を反映したあとに公開済みの一覧で上書きすると、非公開の資料が消えるため、後から届いた公開済みの一覧は使わない。
@@ -711,14 +688,6 @@ function AIDesktopPage() {
     return () => { active = false }
   }, [])
   useEffect(() => { if (!accountDialogOpen) return; const close = (event: KeyboardEvent) => { if (event.key === 'Escape' && !changingAccount) setAccountDialogOpen(false) }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close) }, [accountDialogOpen, changingAccount])
-  useEffect(() => {
-    if (!taskbarPeekOpen) return
-    const closePeek = (event: PointerEvent) => { if (!hiddenTaskbarRef.current?.contains(event.target as Node)) setTaskbarPeekOpen(false) }
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setTaskbarPeekOpen(false) }
-    document.addEventListener('pointerdown', closePeek, true)
-    window.addEventListener('keydown', closeOnEscape)
-    return () => { document.removeEventListener('pointerdown', closePeek, true); window.removeEventListener('keydown', closeOnEscape) }
-  }, [taskbarPeekOpen])
   useEffect(() => { let active = true; void getAIDesktopCatalogs<unknown>().then(({ catalogs, publications }) => { if (!active || manageableCatalogsAppliedRef.current) return; applyCatalogs(catalogs); setCatalogPublications(publications) }).catch(() => { /* Local API未起動時は初期データを表示する。 */ }).finally(() => { if (active) setCatalogReady(true) }); return () => { active = false } }, [])
   useEffect(() => { void listAIDesktopDocuments().then((result) => setDocuments(result.documents)).catch(() => undefined) }, [])
   // Chrome拡張で撮ったスクリーンショットを、AI Desktopを開いている間ずっと受け取り、取り込み待ちに入れる。
@@ -737,45 +706,29 @@ function AIDesktopPage() {
     }
     setServiceModes((current) => ({ ...current, [target.serviceId]: 'view' }))
     setServiceNavigation((current) => ({ ...current, [target.serviceId]: { categoryId: category.id, contentId: item.id } }))
-    zRef.current += 1
-    setPublishedServiceId(target.serviceId)
-    setWindows([{ id: 'documents', x: 0, y: 0, width: window.innerWidth, height: window.innerHeight, minimized: false, maximized: true, z: zRef.current }])
-    setActive('documents')
-  }, [catalog, catalogReady])
-  useEffect(() => { let active = true; void getAIDesktopState().then(({ state }) => { if (!active || !state) return; const saved = state.iconPositions as Partial<Record<AppId, DesktopIconPosition>>; setDesktopIconPositions({ ...defaultDesktopIconPositions, ...saved }); setTaskbarVisible(state.taskbarVisible); setTaskbarPosition(state.taskbarPosition ?? 'bottom'); setDark(state.theme === 'dark'); setCustomApps(state.customApps ?? []); const savedVisibility = state.desktopAppVisibility ?? {}; setDesktopAppVisibility({ ...savedVisibility, 'my-documents': savedVisibility['my-documents'] ?? true, documents: savedVisibility.documents ?? true }) }).catch(() => { /* マイグレーション前は既定配置を使用する。 */ }); return () => { active = false } }, [])
-  const appById = useMemo(() => Object.fromEntries(apps.map((app) => [app.id, app])), [])
+    setDocumentsServiceId(target.serviceId)
+    navigate('/ai-desktop/documents', { replace: true })
+  }, [catalog, catalogReady, navigate])
+  useEffect(() => { let active = true; void getAIDesktopState().then(({ state }) => { if (!active || !state) return; setDesktopLayout({ iconPositions: { ...defaultDesktopIconPositions, ...state.iconPositions }, taskbarVisible: state.taskbarVisible, taskbarPosition: state.taskbarPosition ?? 'bottom' }); setDark(state.theme === 'dark'); setCustomApps(state.customApps ?? []); const savedVisibility = state.desktopAppVisibility ?? {}; setDesktopAppVisibility({ ...savedVisibility, 'my-documents': savedVisibility['my-documents'] ?? true, documents: savedVisibility.documents ?? true }) }).catch(() => { /* マイグレーション前は既定配置を使用する。 */ }); return () => { active = false } }, [])
 
   const goToSignIn = async () => { setChangingAccount(true); try { try { await signOut() } catch { /* Guest session */ } endHundredGuestSession(); navigate('/', { replace: true }) } finally { setChangingAccount(false) } }
-  const openApp = (id: AppId) => { zRef.current += 1; setWindows((current) => { const existing = current.find((win) => win.id === id); if (existing) return current.map((win) => win.id === id ? { ...win, minimized: false, z: zRef.current } : win); const offset = current.length * 28; return [...current, { id, x: 110 + offset, y: 62 + offset, width: Math.min(940, window.innerWidth - 150), height: Math.min(650, window.innerHeight - 120), minimized: false, maximized: false, z: zRef.current }] }); setActive(id); setStartOpen(false) }
-  const focus = (id: AppId) => { zRef.current += 1; setActive(id); setWindows((current) => current.map((win) => win.id === id ? { ...win, z: zRef.current } : win)) }
-  const update = (id: AppId, next: Partial<WindowState>) => setWindows((current) => current.map((win) => win.id === id ? { ...win, ...next } : win))
-  const close = (id: AppId) => { setWindows((current) => current.filter((win) => win.id !== id)); if (active === id) setActive(null) }
+  const openApp = (id: AppId) => navigate(`/ai-desktop/${id}`)
   const persistService = async (id: ServiceId, next: ServiceConfig, afterSave?: () => void) => { try { await saveAIDesktopCatalog(id, next); setCatalog((current) => ({ ...current, [id]: next })); await refreshDocuments(true); afterSave?.() } catch (error: unknown) { showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.content.saveFailed)); throw error } }
   const addCategory = (id: ServiceId, groupId: string) => { const categoryId = `category-${Date.now()}`; const nextCategory: Category = { id: categoryId, title: '新しいカテゴリ', description: 'カテゴリの説明を入力', icon: '＋', items: [content(`overview-${Date.now()}`, '概要', 'このカテゴリの概要です。')] }; setCatalog((current) => ({ ...current, [id]: { ...current[id], categoryGroups: current[id].categoryGroups.map((group) => group.id === groupId ? { ...group, categories: [...group.categories, nextCategory] } : group) } })); setServiceNavigation((current) => ({ ...current, [id]: { categoryId, contentId: null } })) }
   const updateService = (id: ServiceId, next: ServiceConfig) => { void persistService(id, next).catch(() => undefined) }
   const saveCategory = (id: ServiceId, category: Category, sourceGroupId: string, targetGroupId: string): Promise<void> => { const next = { ...catalog[id], categoryGroups: catalog[id].categoryGroups.map((group) => { const withoutCategory = group.categories.filter((candidate) => candidate.id !== category.id); return group.id === targetGroupId ? { ...group, categories: [...withoutCategory, category] } : group.id === sourceGroupId ? { ...group, categories: withoutCategory } : group }) }; return persistService(id, next) }
   const deleteCategory = async (id: ServiceId, categoryId: string) => { if (!(await confirmAIDesktop({ title: 'このカテゴリを削除しますか？', confirmLabel: '削除', tone: 'danger' }))) return; const next = { ...catalog[id], categoryGroups: catalog[id].categoryGroups.map((group) => ({ ...group, categories: group.categories.filter((candidate) => candidate.id !== categoryId) })) }; void persistService(id, next, () => setServiceNavigation((current) => ({ ...current, [id]: { categoryId: null, contentId: null } }))).catch(() => undefined) }
 
-  const persistDesktopState = (iconPositions: Record<AppId, DesktopIconPosition>, visible: boolean, theme: 'light' | 'dark' = dark ? 'dark' : 'light', nextCustomApps = customApps, nextVisibility = desktopAppVisibility, position = taskbarPosition) => { if (!canEdit) return; void saveAIDesktopState({ iconPositions, taskbarVisible: visible, taskbarPosition: position, theme, customApps: nextCustomApps, desktopAppVisibility: nextVisibility }).catch((error: unknown) => showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.app.settingsSaveFailed))) }
-  const saveApps = (nextApps: AIDesktopCustomApp[], nextVisibility: Record<string, boolean>) => { setCustomApps(nextApps); setDesktopAppVisibility(nextVisibility); persistDesktopState(desktopIconPositions, taskbarVisible, dark ? 'dark' : 'light', nextApps, nextVisibility) }
-  const openCustomApp = (app: AIDesktopCustomApp) => { window.open(app.url, '_blank', 'noopener,noreferrer'); setStartOpen(false) }
-  const showDesktop = () => { setWindows((current) => current.map((win) => ({ ...win, minimized: true }))); setActive(null); setStartOpen(false) }
-  const handleStart = () => { if (windows.some((win) => !win.minimized)) { showDesktop(); return } setStartOpen((current) => !current) }
-  const hideTaskbar = () => { setTaskbarPeekOpen(false); setTaskbarVisible(false); persistDesktopState(desktopIconPositions, false) }
-  const activatePeekApp = (win: WindowState) => { if (win.minimized) openApp(win.id); else focus(win.id); setTaskbarPeekOpen(false) }
-  const changeTaskbarPosition = (position: AIDesktopTaskbarPosition) => { setTaskbarPosition(position); persistDesktopState(desktopIconPositions, taskbarVisible, undefined, customApps, desktopAppVisibility, position) }
-  const toggleTheme = () => { const next = dark ? 'light' : 'dark'; setDark(next === 'dark'); persistDesktopState(desktopIconPositions, taskbarVisible, next) }
-  const startDesktopIconDrag = (event: React.PointerEvent<HTMLButtonElement>, id: AppId) => { if (event.button !== 0 || window.innerWidth <= 760 || !canEdit || !layoutEditing) return; event.stopPropagation(); const startX = event.clientX; const startY = event.clientY; const origin = desktopIconPositions[id]; let moved = false; let latest = origin; const move = (moveEvent: PointerEvent) => { const deltaX = moveEvent.clientX - startX; const deltaY = moveEvent.clientY - startY; if (!moved && Math.hypot(deltaX, deltaY) < 4) return; moved = true; latest = { x: Math.max(0, Math.min(window.innerWidth - 92, origin.x + deltaX)), y: Math.max(0, Math.min(window.innerHeight - (taskbarVisible ? 48 : 0) - 84, origin.y + deltaY)) }; setDesktopIconPositions((current) => ({ ...current, [id]: latest })) }; const stop = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', stop); if (moved) { draggedDesktopIconRef.current = id; persistDesktopState({ ...desktopIconPositions, [id]: latest }, taskbarVisible) } }; window.addEventListener('pointermove', move); window.addEventListener('pointerup', stop) }
-  const selectDesktopIcon = (id: AppId) => { if (draggedDesktopIconRef.current === id) { draggedDesktopIconRef.current = null; return } setActive(id) }
+  const persistDesktopState = (theme: 'light' | 'dark' = dark ? 'dark' : 'light', nextCustomApps = customApps, nextVisibility = desktopAppVisibility) => { if (!canEdit) return; void saveAIDesktopState({ ...desktopLayout, theme, customApps: nextCustomApps, desktopAppVisibility: nextVisibility }).catch((error: unknown) => showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.app.settingsSaveFailed))) }
+  const toggleTheme = () => { const next = dark ? 'light' : 'dark'; setDark(next === 'dark'); persistDesktopState(next) }
 
-  const startDrag = (event: React.PointerEvent, win: WindowState) => { if (win.maximized || (event.target as HTMLElement).closest('button')) return; focus(win.id); const startX = event.clientX; const startY = event.clientY; const originX = win.x; const originY = win.y; const move = (moveEvent: PointerEvent) => update(win.id, { x: Math.max(0, originX + moveEvent.clientX - startX), y: Math.max(0, originY + moveEvent.clientY - startY) }); const stop = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', stop) }; window.addEventListener('pointermove', move); window.addEventListener('pointerup', stop) }
-  const openProjectDesignDocuments = (projectId: string) => { setDocumentsProjectRequest((current) => ({ projectId, sequence: (current?.sequence ?? 0) + 1 })); openApp('design-documents') }
+  const openProject = (projectId: string) => navigate(`/ai-desktop/projects/${projectId}`)
+  const openProjectDesignDocuments = (projectId: string, documentId?: string) => { if (documentId) setDocumentRequest((current) => ({ projectId, documentId, sequence: (current?.sequence ?? 0) + 1 })); navigate(`/ai-desktop/projects/${projectId}/documents`) }
   const openProjectDocument = (document: AIDesktopProjectDocument, edit = false) => {
     setServiceNavigation((current) => ({ ...current, [document.serviceId]: { categoryId: document.categoryId, contentId: document.contentId } }))
     setServiceModes((current) => ({ ...current, [document.serviceId]: edit && canEdit ? 'edit' : 'view' }))
-    const publication = documents.find((candidate) => candidate.serviceId === document.serviceId && candidate.categoryId === document.categoryId && candidate.contentId === document.contentId)
-    if ((edit || publication?.status !== 'published') && canEdit) { setPersonalServiceId(document.serviceId); openApp('my-documents') }
-    else { setPublishedServiceId(document.serviceId); openApp('documents') }
+    setDocumentsServiceId(document.serviceId)
+    openApp('documents')
   }
   const createCatalog = async (name: string, eyebrow: string, introduction: string) => {
     const result = await createAIDesktopCatalog(name, eyebrow, introduction)
@@ -794,18 +747,22 @@ function AIDesktopPage() {
       setCatalogPublications((current) => ({ ...current, [serviceId]: { ...(current[serviceId] ?? { ownerId: accountName, createdBy: accountName, updatedBy: accountName, publishedBy: null, createdAt: Date.now(), updatedAt: Date.now(), publishedAt: null }), ...result.publication } as AIDesktopCatalogPublication }))
       await refreshDocuments(true)
       showAIDesktopNotification('success', published ? AI_DESKTOP_MESSAGES.document.published : AI_DESKTOP_MESSAGES.document.unpublished)
-      if (!published && publishedServiceId === serviceId) setPublishedServiceId(null)
     } catch (error) {
       showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.document.publicationFailed))
     }
   }
 
-  return <main className={`ai-desktop ${dark ? 'dark' : ''} ${taskbarVisible ? `taskbar-${taskbarPosition}` : 'taskbar-hidden'} ${layoutEditing ? 'layout-editing' : ''}`} onPointerDown={() => setStartOpen(false)}><AIDesktopNotifications /><AIDesktopConfirmDialog /><div className="ad-wallpaper-orb one" /><div className="ad-wallpaper-orb two" /><section className="ad-desktop-icons" aria-label="デスクトップのアプリ">{apps.filter((app) => desktopAppVisibility[app.id] !== false).map((app) => <button key={app.id} style={{ left: desktopIconPositions[app.id].x, top: desktopIconPositions[app.id].y }} onPointerDown={(event) => startDesktopIconDrag(event, app.id)} onDoubleClick={() => { if (draggedDesktopIconRef.current !== app.id) openApp(app.id) }} onClick={() => selectDesktopIcon(app.id)} className={active === app.id ? 'selected' : ''}><AppIcon id={app.id} /><span>{app.name}</span></button>)}{customApps.filter((app) => desktopAppVisibility[app.id] !== false).map((app, index) => <button key={app.id} style={{ left: 110 + Math.floor(index / 6) * 92, top: 18 + (index % 6) * 92 }} onDoubleClick={() => openCustomApp(app)}><span className="ad-app-icon large" style={{ '--app-color': app.color } as CSSProperties}>{app.mark}</span><span>{app.name}</span></button>)}</section>
-    {windows.filter((win) => !win.minimized).map((win) => <section key={win.id} className={`ad-window ${active === win.id ? 'active' : ''} ${win.maximized ? 'maximized' : ''}`} style={win.maximized ? { zIndex: win.z } : { left: win.x, top: win.y, width: win.width, height: win.height, zIndex: win.z }} onPointerDown={(event) => { event.stopPropagation(); focus(win.id) }}><div className="ad-fullscreen-titlebar-trigger" aria-hidden="true" /><header className="ad-titlebar" onPointerDown={(event) => startDrag(event, win)} onDoubleClick={() => update(win.id, { maximized: !win.maximized })}><div><AppIcon id={win.id} size="small" /><strong>{appById[win.id].name}</strong></div><nav><button aria-label="最小化" onClick={() => update(win.id, { minimized: true })}>—</button><button aria-label={win.maximized ? '元のサイズに戻す' : '最大化'} onClick={() => update(win.id, { maximized: !win.maximized })}>□</button><button aria-label="閉じる" className="close" onClick={() => close(win.id)}>×</button></nav></header><div className="ad-window-body">{win.id === 'my-documents' || win.id === 'documents' ? <DocumentsWorkspace kind={win.id === 'my-documents' ? 'personal' : 'published'} selectedServiceId={win.id === 'my-documents' ? personalServiceId : publishedServiceId} catalog={catalog} publications={catalogPublications} modes={serviceModes} navigation={serviceNavigation} canEdit={canEdit} onService={win.id === 'my-documents' ? setPersonalServiceId : setPublishedServiceId} onMode={(serviceId, mode) => setServiceModes((current) => ({ ...current, [serviceId]: mode }))} onChange={(serviceId, next) => setServiceNavigation((current) => ({ ...current, [serviceId]: next }))} onAddCategory={addCategory} onUpdateService={updateService} onSaveCategory={saveCategory} onDelete={deleteCategory} onCreateCatalog={createCatalog} onCatalogPublication={updateCatalogPublication} /> : <GenericContent id={win.id} canEdit={canEdit} catalog={catalog} documents={documents} customApps={customApps} visibility={desktopAppVisibility} onTheme={toggleTheme} onSaveApps={saveApps} onOpenProjectDocument={openProjectDocument} documentsProjectRequest={documentsProjectRequest} onOpenProjectDesignDocuments={openProjectDesignDocuments} taskbarPosition={taskbarPosition} onTaskbarPosition={changeTaskbarPosition} />}</div></section>)}
-    {startOpen && <section className="ad-start" onPointerDown={(event) => event.stopPropagation()}><label className="ad-start-search">⌕ <input autoFocus placeholder="アプリ、設定、コンテンツを検索" /></label><div className="ad-start-label"><strong>ピン留め済み</strong><button>すべてのアプリ ›</button></div><div className="ad-pinned">{apps.map((app) => <button key={app.id} onClick={() => openApp(app.id)}><AppIcon id={app.id} /><span>{app.name}</span></button>)}{customApps.map((app) => <button key={app.id} onClick={() => openCustomApp(app)}><span className="ad-app-icon large" style={{ '--app-color': app.color } as CSSProperties}>{app.mark}</span><span>{app.name}</span></button>)}</div><div className="ad-recommended"><strong>おすすめ</strong><button onClick={() => { setPersonalServiceId('codex'); openApp('my-documents') }}><span>✦</span><div><b>Codex資料を開く</b><small>マイ資料・Codex</small></div></button></div><footer><button className="ad-account" type="button" title={accountName} onClick={() => { setStartOpen(false); setAccountDialogOpen(true) }}><span className="ad-user">{accountName.charAt(0).toUpperCase() || 'H'}</span><strong>{accountName}</strong></button><button className="ad-start-apple" type="button" aria-label="Apple Intelligenceを開く" title="Apple Intelligence" onClick={() => { setStartOpen(false); openAppleIntelligence('ai-desktop') }}><AppleIntelligenceMark compact /></button><button className="ad-home-link" type="button" onClick={() => navigate('/')}><span>‹</span> Hundred Home</button></footer></section>}
+  // 統合した機能の以前のURLは、統合先へ移す。
+  if (section === 'my-documents') return <Navigate to="/ai-desktop/documents" replace />
+  if (section === 'design-documents') return <Navigate to="/ai-desktop/projects" replace />
+  return <main className={`ai-desktop ad-workspace ${dark ? 'dark' : ''}`}><AIDesktopNotifications /><AIDesktopConfirmDialog />
+    <AIDesktopNavigation apps={apps} active={activeApp} accountName={canEdit ? accountName : 'ゲスト'} onAccount={() => setAccountDialogOpen(true)} />
+    <div className="ad-workspace-main">
+      {!activeApp && <AIDesktopHome canEdit={canEdit} documents={documents} onOpenDocument={openProjectDocument} onOpenProject={openProject} onOpenDesignDocuments={openProjectDesignDocuments} />}
+      {visitedApps.map((id) => <section key={id} className="ad-workspace-app" hidden={id !== activeApp} aria-label={apps.find((app) => app.id === id)?.name}>{id === 'documents' ? <DocumentsWorkspace selectedServiceId={documentsServiceId} catalog={catalog} publications={catalogPublications} modes={serviceModes} navigation={serviceNavigation} canEdit={canEdit} onService={setDocumentsServiceId} onMode={(serviceId, mode) => setServiceModes((current) => ({ ...current, [serviceId]: mode }))} onChange={(serviceId, next) => setServiceNavigation((current) => ({ ...current, [serviceId]: next }))} onAddCategory={addCategory} onUpdateService={updateService} onSaveCategory={saveCategory} onDelete={deleteCategory} onCreateCatalog={createCatalog} onCatalogPublication={updateCatalogPublication} /> : id === 'projects' ? <AIDesktopProjects active={activeApp === 'projects'} canEdit={canEdit} catalog={catalog} publishedDocuments={documents.filter((document) => document.status === 'published')} documentRequest={documentRequest} onOpenDocument={openProjectDocument} /> : <div className="ad-generic"><p className="ad-eyebrow">PERSONALIZE</p><h1>設定</h1><div className="ad-setting-row"><div><strong>カラーモード</strong><p>{canEdit ? '表示を切り替え、DBへ保存します。' : '表示を切り替えます。ゲスト利用中の変更は保存されません。'}</p></div><button onClick={toggleTheme}>ライト / ダークを切り替え</button></div></div>}</section>)}
+    </div>
     {accountDialogOpen && <div className="hundred-login-confirm ad-account-confirm" role="presentation" onPointerDown={(event) => { event.stopPropagation(); if (event.target === event.currentTarget && !changingAccount) setAccountDialogOpen(false) }}><section className="hundred-login-confirm__panel" role="dialog" aria-modal="true" aria-labelledby="ad-account-confirm-title"><p>ACCOUNT</p><h2 id="ad-account-confirm-title">{canEdit ? 'サインアウトしますか？' : 'サインイン画面へ移動しますか？'}</h2><p>{canEdit ? <><strong>{accountName}</strong>からサインアウトし、サインイン画面へ戻ります。</> : <>現在は<strong>ゲスト</strong>として利用しています。移動するとゲスト利用を終了し、Hundredのサインイン画面を表示します。</>}</p><div className="hundred-login-confirm__actions"><button type="button" onClick={() => setAccountDialogOpen(false)} disabled={changingAccount} autoFocus>キャンセル</button><button type="button" data-primary="true" onClick={() => void goToSignIn()} disabled={changingAccount}>{changingAccount ? '移動中…' : canEdit ? 'サインアウト' : 'サインイン画面へ'}</button></div></section></div>}
-    {!taskbarVisible && <div ref={hiddenTaskbarRef} className={`ad-hidden-taskbar-launcher ${taskbarPeekOpen ? 'open' : ''}`} onPointerDown={(event) => event.stopPropagation()} onMouseEnter={() => setTaskbarPeekOpen(true)}>{taskbarPeekOpen && <section className="ad-running-apps" aria-label="起動中のアプリ"><strong>起動中のアプリ</strong>{windows.length ? <nav>{windows.map((win) => <div className="ad-running-app-row" key={win.id}><button type="button" className={active === win.id && !win.minimized ? 'active' : ''} onClick={() => activatePeekApp(win)}><AppIcon id={win.id} size="small" /><span><b>{appById[win.id].name}</b><small>{win.minimized ? '最小化中' : active === win.id ? '表示中' : '起動中'}</small></span></button><button type="button" className="ad-running-app-close" aria-label={`${appById[win.id].name}を閉じる`} title="閉じる" onClick={(event) => { event.stopPropagation(); close(win.id) }}>×</button></div>)}</nav> : <p>起動中のアプリはありません。</p>}</section>}<button type="button" className="ad-show-taskbar" aria-label="タスクバーを表示" title="ホバーで起動中のアプリを表示" aria-expanded={taskbarPeekOpen} onFocus={() => setTaskbarPeekOpen(true)} onClick={() => { setTaskbarPeekOpen(false); setTaskbarVisible(true); persistDesktopState(desktopIconPositions, true) }}>↑</button></div>}
-    {taskbarVisible && <footer className="ad-taskbar" onPointerDown={(event) => event.stopPropagation()}><div className="ad-taskbar-spacer" /><nav><button className={startOpen ? 'active' : ''} onClick={handleStart} aria-label="スタート"><span className="ad-windows-logo">◆</span></button>{windows.map((win) => <div className="ad-taskbar-app" key={win.id}><button className={active === win.id && !win.minimized ? 'running active' : 'running'} aria-label={appById[win.id].name} onClick={() => win.minimized ? openApp(win.id) : (active === win.id ? update(win.id, { minimized: true }) : focus(win.id))}><AppIcon id={win.id} size="small" /></button><button type="button" className="ad-taskbar-close" aria-label={`${appById[win.id].name}を閉じる`} title="閉じる" onClick={(event) => { event.stopPropagation(); close(win.id) }}>×</button></div>)}</nav><div className="ad-tray"><button type="button" className={`ad-layout-edit ${layoutEditing ? 'active' : ''}`} aria-label={layoutEditing ? '配置変更を終了' : '配置変更'} title={canEdit ? layoutEditing ? '配置変更を終了' : 'デスクトップアイコンの配置を変更' : '配置変更にはサインインが必要です'} disabled={!canEdit} onClick={() => setLayoutEditing((current) => !current)}>✥</button><button type="button" className="ad-hide-taskbar" aria-label="タスクバーを非表示" title="タスクバーを非表示" onClick={hideTaskbar}>⌄</button></div></footer>}<p className={`ad-hint ${layoutEditing ? 'editing' : ''}`}>{layoutEditing ? 'アイコンをドラッグして配置を変更' : 'アイコンをダブルクリックして起動'}</p></main>
+  </main>
 }
 
 export default AIDesktopPage

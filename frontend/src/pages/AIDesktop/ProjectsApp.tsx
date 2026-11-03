@@ -3,7 +3,6 @@ import {
   createAIDesktopProject,
   deleteAIDesktopProject,
   getAIDesktopProject,
-  listAIDesktopProjects,
   searchAIDesktopUsers,
   updateAIDesktopProject,
   type AIDesktopProject,
@@ -17,7 +16,6 @@ import {
   type AIDesktopProjectLink,
   type AIDesktopProjectRule,
   type AIDesktopProjectStatus,
-  type AIDesktopProjectSummary,
   type AIDesktopUserSearchResult,
 } from '../../services/AIDesktop/aiDesktopApi'
 import type { ServiceConfig } from './contentBlocks'
@@ -25,7 +23,8 @@ import { AI_DESKTOP_MESSAGES, localizedErrorMessage } from './aiDesktopMessages'
 import { MermaidDiagram } from './MermaidDiagram'
 import { validateMermaidSource } from './mermaidDiagramValidation'
 import { showAIDesktopNotification } from './aiDesktopNotificationBus'
-import { AppHeader, AppMain, AppShell, AppSidebar } from './AppLayout'
+import { AppHeader, AppMain, AppShell } from './AppLayout'
+import { developmentModeLabels, statusLabels } from './aiDesktopProjectLabels'
 import { isWorkspaceCancelled, projectWorkspacePath, readProjectWorkspace, selectWorkspaceFolder, supportsWorkspaceFolder, workspaceContextText, writeProjectWorkspace, type ProjectWorkspaceTarget } from './aiDesktopWorkspaceFolder'
 import { confirmAIDesktop } from './aiDesktopConfirmBus'
 import { isRecordValue, readAIDesktopSessionState, useAIDesktopSessionStateSaver } from './aiDesktopSessionState'
@@ -38,10 +37,6 @@ type ProjectWorkspaceTab = ProjectDetailTab | 'environmentSetup' | 'commands' | 
 type ProjectTemplateProject = Omit<AIDesktopProjectInput, 'relatedDocuments' | 'memberUserIds' | 'editableMemberUserIds' | 'customerName' | 'objective' | 'designNotes'>
 type ProjectTemplate = { format: 'hundred-ai-desktop'; version: 1; resourceType: 'project'; target: { projectId: string | null }; guide?: Record<string, unknown>; reference?: Record<string, unknown>; data: { project: ProjectTemplateProject } }
 
-const statusLabels: Record<AIDesktopProjectStatus, string> = {
-  planning: '企画', proposal: '提案', design: '設計', development: '開発', review: '確認', completed: '完了', 'on-hold': '保留',
-}
-const developmentModeLabels: Record<AIDesktopProjectDevelopmentMode, string> = { personal: '個人開発', team: 'チーム開発' }
 const workspaceTabLabels: Record<ProjectWorkspaceTab, string> = { technologyStack: '技術スタック', databaseInfo: 'DB情報', environmentSetup: '開発環境', commands: 'よく使うコマンド', links: 'リンク集', developmentNotes: '開発メモ', projectRules: 'プロジェクトルール', members: 'メンバー' }
 const documentPhases = [
   ['common', '共通'], ['planning', '企画'], ['requirements', '要件定義'], ['basic-design', '基本設計'], ['detailed-design', '詳細設計'], ['implementation', '実装'], ['test', 'テスト'], ['release', 'リリース'], ['operation', '運用'], ['research', '調査'],
@@ -405,25 +400,25 @@ function ProjectEnvironmentEditor({ environment, onChange }: { environment: AIDe
 type ProjectsSession = { selectedId: string | null; workspaceTab: ProjectWorkspaceTab }
 const isProjectsSession = (value: unknown): value is ProjectsSession => isRecordValue(value) && (value.selectedId === null || typeof value.selectedId === 'string') && Object.hasOwn(workspaceTabLabels, String(value.workspaceTab))
 
-export default function ProjectsApp({ canManage, catalog, publishedDocuments, onOpenDocument, onOpenDesignDocuments }: {
+export default function ProjectsApp({ canManage, projectId, catalog, publishedDocuments, onOpenDocument, onCreated, onDeleted }: {
   canManage: boolean
+  projectId: string | null
   catalog: Record<ServiceId, ServiceConfig>
   publishedDocuments: AIDesktopDocument[]
   onOpenDocument: (document: AIDesktopProjectDocument, edit?: boolean) => void
-  onOpenDesignDocuments: (projectId: string) => void
+  onCreated: (projectId: string) => void
+  onDeleted: () => void
 }) {
-  const [projects, setProjects] = useState<AIDesktopProjectSummary[]>([])
   const [restoredSession] = useState(() => readAIDesktopSessionState('projects', isProjectsSession))
-  const [selectedId, setSelectedId] = useState<string | null>(restoredSession?.selectedId ?? null)
   const [project, setProject] = useState<AIDesktopProject | null>(null)
   const [draft, setDraft] = useState<AIDesktopProjectInput>(blankProject)
-  const [view, setView] = useState<ProjectView>('dashboard')
-  const [creating, setCreating] = useState(false)
-  const [loading, setLoading] = useState(canManage)
+  const [view, setView] = useState<ProjectView>(projectId ? 'dashboard' : 'edit')
+  const [creating, setCreating] = useState(projectId === null)
+  const [loading, setLoading] = useState(projectId !== null)
   const [saving, setSaving] = useState(false)
   const [architectureTab, setArchitectureTab] = useState<ArchitectureTab>('system')
   const [workspaceTab, setWorkspaceTab] = useState<ProjectWorkspaceTab>(restoredSession?.workspaceTab ?? 'technologyStack')
-  useAIDesktopSessionStateSaver('projects', { selectedId, workspaceTab })
+  useAIDesktopSessionStateSaver('projects', { selectedId: projectId, workspaceTab })
   const [expandedDatabaseIndex, setExpandedDatabaseIndex] = useState<number | null>(null)
   const [commandCategory, setCommandCategory] = useState('すべて')
   const [expandedCommandIndex, setExpandedCommandIndex] = useState<number | null>(null)
@@ -455,46 +450,17 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
   const baseline = project ? projectInput(project) : blankProject()
   const dirty = JSON.stringify(draft) !== JSON.stringify(baseline)
 
-  const refreshProjects = async (preferredId?: string | null) => {
-    const result = await listAIDesktopProjects()
-    setProjects(result.projects)
-    const nextId = preferredId === undefined ? selectedId ?? result.projects[0]?.id ?? null : preferredId ?? result.projects[0]?.id ?? null
-    setSelectedId(nextId)
-    return nextId
-  }
-
-  const loadProject = async (id: string) => {
-    setLoading(true)
-    try {
-      const result = await getAIDesktopProject(id)
-      setProject(result.project)
-      setDraft(projectInput(result.project))
-      setKnownMembers(Object.fromEntries((result.project.members ?? []).map((member) => [member.userId, member.displayName])))
-      setCreating(false)
-      setView('dashboard')
-    } catch (error) {
-      showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.project.loadFailed))
-    } finally { setLoading(false) }
-  }
-
   useEffect(() => {
-    if (!canManage) return
+    if (!canManage || !projectId) return
     let active = true
-    void listAIDesktopProjects().then(async (result) => {
-      if (!active) return
-      setProjects(result.projects)
-      const restoredId = restoredSession?.selectedId
-      const firstId = restoredId && result.projects.some((item) => item.id === restoredId) ? restoredId : result.projects[0]?.id ?? null
-      setSelectedId(firstId)
-      if (!firstId) return
-      const detail = await getAIDesktopProject(firstId)
+    void getAIDesktopProject(projectId).then((detail) => {
       if (!active) return
       setProject(detail.project)
       setDraft(projectInput(detail.project))
       setKnownMembers(Object.fromEntries((detail.project.members ?? []).map((member) => [member.userId, member.displayName])))
-    }).catch((error) => showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.project.listFailed))).finally(() => { if (active) setLoading(false) })
+    }).catch((error) => showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.project.loadFailed))).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [canManage, restoredSession])
+  }, [canManage, projectId])
 
   useEffect(() => {
     if (workspaceTab !== 'members' || view !== 'edit' || !(creating || project?.canManageMembers)) return
@@ -510,9 +476,6 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
     return () => { active = false; window.clearTimeout(timeout) }
   }, [creating, memberQuery, project?.canManageMembers, view, workspaceTab])
 
-  const confirmDiscard = async () => !dirty || await confirmAIDesktop({ title: '保存していない変更があります', message: '移動すると、変更内容は破棄されます。', confirmLabel: '破棄して移動', tone: 'danger' })
-  const selectProject = async (id: string) => { if (!(await confirmDiscard())) return; setSelectedId(id); setCreating(false); void loadProject(id) }
-  const startCreate = async () => { if (!(await confirmDiscard())) return; setSelectedId(null); setProject(null); setDraft(blankProject()); setCreating(true); setView('edit') }
 
   const save = async () => {
     if (!draft.name.trim() || saving) return
@@ -546,7 +509,7 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
       setKnownMembers(Object.fromEntries((result.project.members ?? []).map((member) => [member.userId, member.displayName])))
       setCreating(false)
       setView('dashboard')
-      await refreshProjects(result.project.id)
+      if (isNewProject) onCreated(result.project.id)
       showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.project.saved)
     } catch (error) {
       showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.project.saveFailed))
@@ -558,11 +521,7 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
     setSaving(true)
     try {
       await deleteAIDesktopProject(project.id)
-      setProject(null)
-      setDraft(blankProject())
-      const nextId = await refreshProjects(null)
-      if (nextId) await loadProject(nextId)
-      else setCreating(false)
+      onDeleted()
       showAIDesktopNotification('success', AI_DESKTOP_MESSAGES.project.deleted)
     } catch (error) {
       showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.project.deleteFailed))
@@ -803,16 +762,14 @@ export default function ProjectsApp({ canManage, catalog, publishedDocuments, on
             ? <textarea className="ad-project-development-editor" rows={14} maxLength={50000} value={draft.developmentNotes} placeholder={'例：\nnpm run dev\nnpx wrangler d1 migrations apply hundred-apps-prod --local'} onChange={(event) => setDraft({ ...draft, developmentNotes: event.target.value })} />
             : <div className="ad-project-member-editor"><section><h4>プロジェクトメンバー</h4>{!project && <p>作成者は保存時に自動追加されます。</p>}{(project?.members ?? []).filter((member) => member.role === 'owner').map((member) => <article key={member.userId}><span>{member.displayName.charAt(0).toUpperCase()}</span><strong>{member.displayName}</strong><small>作成者</small></article>)}{draft.memberUserIds.map((userId) => <article key={userId}><span>{(knownMembers[userId] ?? userId).charAt(0).toUpperCase()}</span><strong>{knownMembers[userId] ?? userId}</strong>{canManageMembers ? <select aria-label={`${knownMembers[userId] ?? userId}の権限`} value={draft.editableMemberUserIds.includes(userId) ? 'edit' : 'view'} onChange={(event) => setMemberCanEdit(userId, event.target.value === 'edit')}><option value="view">閲覧のみ</option><option value="edit">閲覧・編集</option></select> : <small>{draft.editableMemberUserIds.includes(userId) ? '閲覧・編集' : '閲覧のみ'}</small>}{canManageMembers && <button type="button" onClick={() => removeMember(userId)}>解除</button>}</article>)}</section>{canManageMembers ? <section><h4>Hundredユーザーを検索</h4><input type="search" maxLength={100} value={memberQuery} placeholder="表示名を入力" onChange={(event) => setMemberQuery(event.target.value)} />{searchingMembers ? <p>検索しています…</p> : <div className="ad-project-member-results">{memberResults.map((user) => { const added = draft.memberUserIds.includes(user.userId); return <button type="button" key={user.userId} disabled={user.isCurrentUser || added} onClick={() => addMember(user)}><span>{user.displayName.charAt(0).toUpperCase()}</span><strong>{user.displayName}</strong><small>{user.isCurrentUser ? '自分' : added ? '追加済み' : '追加'}</small></button> })}</div>}</section> : <section><p>メンバーの追加・解除と権限の変更は、作成者だけが行えます。</p></section>}</div>
 
-  return <AppShell className="ad-projects" split>
-    <AppSidebar className="ad-project-list"><header><div><small>PROJECT WORKSPACE</small><h1>Projects</h1></div><button type="button" onClick={startCreate}>＋ 新規</button></header><div className="ad-project-list-body">{loading && projects.length === 0 ? <p>読み込んでいます…</p> : projects.length === 0 ? <div className="ad-project-empty"><span>◇</span><strong>プロジェクトがありません</strong></div> : projects.map((item) => <button type="button" key={item.id} className={item.id === selectedId ? 'active' : ''} onClick={() => selectProject(item.id)}><span className={`status ${item.status}`}>{statusLabels[item.status]}</span><strong>{item.name}</strong><small>{developmentModeLabels[item.developmentMode]} ・ {new Date(item.updatedAt).toLocaleDateString('ja-JP')}</small></button>)}</div></AppSidebar>
-    <AppMain className="ad-project-main">{!creating && !project ? <div className="ad-project-welcome"><span>◆</span><h2>プロジェクトを選択してください</h2><button type="button" onClick={startCreate}>新しいプロジェクトを作成</button></div> : <>
+  return <AppShell className="ad-projects">
+    <AppMain className="ad-project-main">{!creating && !project ? <div className="ad-project-welcome"><h2>{loading ? '読み込んでいます…' : 'プロジェクトを表示できません'}</h2></div> : <>
       <AppHeader className="ad-project-header" eyebrow={creating ? 'NEW PROJECT' : `PROJECT · ${developmentModeLabels[draft.developmentMode]}`} title={draft.name || '新しいプロジェクト'} titleAs="h2" actions={<nav className="ad-project-toolbar">
           {project && <div className="ad-project-view-switch" aria-label="Projectの表示モード">
             <button type="button" className={view === 'dashboard' ? 'active' : ''} onClick={async () => { if (dirty && !(await confirmAIDesktop({ title: '保存していない変更があります', message: 'ダッシュボードへ移動すると、変更内容は破棄されます。', confirmLabel: '破棄して移動', tone: 'danger' }))) return; if (dirty) setDraft(projectInput(project)); setView('dashboard') }}>ダッシュボード</button>
             {project.canEdit !== false && <button type="button" className={view === 'edit' ? 'active' : ''} onClick={() => setView('edit')}>編集</button>}
           </div>}
           <div className="ad-project-toolbar-actions">
-            {project && !creating && <button type="button" onClick={() => onOpenDesignDocuments(project.id)}>ドキュメントを開く</button>}
             <button type="button" onClick={() => void copyProjectInfo()} disabled={!draft.name.trim()}>プロジェクト情報をコピー</button>
             {view === 'edit' && (creating || project?.canEdit !== false) && <>
               {(dirty || creating) && <span className="ad-project-unsaved"><i />未保存</span>}

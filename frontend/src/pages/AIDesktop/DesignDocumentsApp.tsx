@@ -4,7 +4,7 @@ import { BlockRenderer, ContentCanvas, type ContentBlock, type ContentItem } fro
 import { AI_DESKTOP_MESSAGES, localizedErrorMessage } from './aiDesktopMessages'
 import { showAIDesktopNotification } from './aiDesktopNotificationBus'
 import DesignDeliverables from './DesignDeliverables'
-import { AppContent, AppHeader, AppShell } from './AppLayout'
+import { AppHeader } from './AppLayout'
 import { createDesignDocumentJson, parseDesignDocumentJson } from './designDocumentJson'
 import { basicDesignMasterTemplates, createStandardDesignContent, type DesignDocumentContent, type StandardDesignTemplate } from './designDocumentStandardTemplates'
 import { designDocumentWorkspacePath, isWorkspaceCancelled, readDesignDocumentWorkspace, selectWorkspaceFolder, supportsWorkspaceFolder, workspaceContextText, writeDesignDocumentWorkspace, type DesignDocumentWorkspaceTarget } from './aiDesktopWorkspaceFolder'
@@ -275,19 +275,19 @@ function ProjectTabs({ current, onNavigate }: { current: ProjectSection; onNavig
   return <div className="ad-design-project-tabs" aria-label="プロジェクト内メニュー"><button type="button" className={current === 'workspace' ? 'active' : ''} onClick={() => onNavigate('workspace')}>ドキュメント</button><button type="button" className={current === 'templates' ? 'active' : ''} onClick={() => onNavigate('templates')}>テンプレート</button><button type="button" className={current === 'deliverables' ? 'active' : ''} onClick={() => onNavigate('deliverables')}>成果物・納品</button></div>
 }
 
-function ProjectSectionHeader({ projectName, title, current, breadcrumbSuffix, onBack, onNavigate }: { projectName: string; title: string; current: ProjectSection; breadcrumbSuffix?: string; onBack: () => void; onNavigate: (destination: ProjectSection) => void }) {
-  return <AppHeader className="ad-design-workspace-header" breadcrumb={<>ドキュメント ＞ {projectName}{breadcrumbSuffix ? ` ＞ ${breadcrumbSuffix}` : ''}</>} title={title} titleAs="h2" actions={<nav className="ad-design-toolbar"><button onClick={onBack}>← プロジェクト一覧</button><ProjectTabs current={current} onNavigate={onNavigate} /></nav>} />
+function ProjectSectionHeader({ projectName, title, current, breadcrumbSuffix, onNavigate }: { projectName: string; title: string; current: ProjectSection; breadcrumbSuffix?: string; onNavigate: (destination: ProjectSection) => void }) {
+  return <AppHeader className="ad-design-workspace-header" breadcrumb={<>ドキュメント ＞ {projectName}{breadcrumbSuffix ? ` ＞ ${breadcrumbSuffix}` : ''}</>} title={title} titleAs="h2" actions={<nav className="ad-design-toolbar"><ProjectTabs current={current} onNavigate={onNavigate} /></nav>} />
 }
 
 // リロードしても同じ画面に戻れるよう、開いている画面だけをタブ単位で保つ。編集モードは保たず、閲覧で開き直す。
-type DocumentsScreen = 'projects' | 'workspace' | 'document' | 'file' | 'master-templates' | 'templates' | 'project-template-picker' | 'template-edit' | 'deliverables'
+type DocumentsScreen = 'workspace' | 'document' | 'file' | 'templates' | 'project-template-picker' | 'template-edit' | 'deliverables'
 type DocumentsSession = { screen: DocumentsScreen; projectId: string | null; categoryFilter: string; selectedId: string | null }
-const documentsScreens = new Set<string>(['projects', 'workspace', 'document', 'file', 'master-templates', 'templates', 'project-template-picker', 'template-edit', 'deliverables'])
+const documentsScreens = new Set<string>(['workspace', 'document', 'file', 'templates', 'project-template-picker', 'template-edit', 'deliverables'])
 const isDocumentsSession = (value: unknown): value is DocumentsSession => isRecordValue(value) && documentsScreens.has(String(value.screen)) && (value.projectId === null || typeof value.projectId === 'string') && typeof value.categoryFilter === 'string' && (value.selectedId === null || typeof value.selectedId === 'string')
 // テンプレートの編集中は内容を保たないため、テンプレート一覧へ戻す。
-const restoredScreen = (session: DocumentsSession | null): DocumentsScreen => !session ? 'projects' : session.screen === 'template-edit' ? 'templates' : session.screen
+const restoredScreen = (session: DocumentsSession | null): DocumentsScreen => !session ? 'workspace' : session.screen === 'template-edit' ? 'templates' : session.screen
 
-export type DesignDocumentsProjectRequest = { projectId: string; sequence: number }
+export type DesignDocumentRequest = { documentId: string; sequence: number }
 
 const LAST_POSITION_STORAGE_KEY = 'hundred.aiDesktop.documents.lastPosition'
 type LastDocumentsPosition = { projectId: string | null; categoryByProject: Record<string, string> }
@@ -313,16 +313,16 @@ const rememberedCategory = (projectId: string, categories: AIDesktopDesignCatego
   return saved && categories.some((item) => item.id === saved && item.projectId === projectId) ? saved : 'all'
 }
 
-export default function DesignDocumentsApp({ canManage, projectRequest }: { canManage: boolean; projectRequest: DesignDocumentsProjectRequest | null }) {
+export default function DesignDocumentsApp({ canManage, projectId, visible, documentRequest }: { canManage: boolean; projectId: string; visible: boolean; documentRequest: DesignDocumentRequest | null }) {
   const [projects, setProjects] = useState<AIDesktopProjectSummary[]>([])
   const [documents, setDocuments] = useState<AIDesktopDesignDocumentSummary[]>([])
   const [categories, setCategories] = useState<AIDesktopDesignCategory[]>([])
   const [templates, setTemplates] = useState<AIDesktopDesignTemplate<DesignDocumentContent>[]>([])
   const [includeAiPrompt, setIncludeAiPrompt] = useState(false)
   const [masterTemplates, setMasterTemplates] = useState<RuntimeMasterTemplate[]>(fallbackMasterTemplates)
-  const [restoredSession] = useState(() => readAIDesktopSessionState('documents', isDocumentsSession))
+  // 表示状態はタブに1つなので、同じプロジェクトのものだけを復元する。
+  const [restoredSession] = useState(() => { const session = readAIDesktopSessionState('documents', isDocumentsSession); return session?.projectId === projectId ? session : null })
   const [screen, setScreen] = useState<DocumentsScreen>(() => restoredScreen(restoredSession))
-  const [projectId, setProjectId] = useState<string | null>(restoredSession?.projectId ?? null)
   const [selectedId, setSelectedId] = useState<string | null>(restoredSession?.selectedId ?? null)
   const [document, setDocument] = useState<AIDesktopDesignDocument<DesignDocumentContent> | null>(null)
   const [draft, setDraft] = useState<AIDesktopDesignDocumentInput<DesignDocumentContent> | null>(null)
@@ -333,7 +333,6 @@ export default function DesignDocumentsApp({ canManage, projectRequest }: { canM
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'uncategorized' | string>(restoredSession?.categoryFilter ?? 'all')
   useAIDesktopSessionStateSaver('documents', { screen, projectId, categoryFilter, selectedId })
   const [loaded, setLoaded] = useState(false)
-  const [appliedRequestSequence, setAppliedRequestSequence] = useState<number | null>(null)
   const [deliverySelectionMode, setDeliverySelectionMode] = useState(false)
   const [deliveryDocumentIds, setDeliveryDocumentIds] = useState<string[]>([])
   const [deliverySeedIds, setDeliverySeedIds] = useState<string[]>([])
@@ -343,6 +342,8 @@ export default function DesignDocumentsApp({ canManage, projectRequest }: { canM
   const [exportingAgents, setExportingAgents] = useState(false)
   const [agentFolderName, setAgentFolderName] = useState<string | null>(null)
   const [agentPendingCount, setAgentPendingCount] = useState<number | null>(null)
+  const [agentPendingCheck, setAgentPendingCheck] = useState(0)
+  const openedRequestRef = useRef<number | null>(null)
   const [createMode, setCreateMode] = useState<'template' | 'file'>('template')
   const [createFile, setCreateFile] = useState<File | null>(null)
   const [fileTitle, setFileTitle] = useState('')
@@ -387,13 +388,7 @@ export default function DesignDocumentsApp({ canManage, projectRequest }: { canM
       setTemplates(normalizeTemplates(t.templates))
       setCategories(c.categories)
       setLoaded(true)
-      if (restoredSession) {
-        // リロード前のプロジェクトが削除されていた場合は、プロジェクト一覧へ戻す。
-        if (restoredSession.projectId && !p.projects.some((item) => item.id === restoredSession.projectId)) { setProjectId(null); setSelectedId(null); setScreen('projects') }
-      } else {
-        const last = readLastPosition().projectId
-        if (last && p.projects.some((item) => item.id === last)) { setProjectId(last); setCategoryFilter(rememberedCategory(last, c.categories, d.documents)); setScreen('workspace') }
-      }
+      if (!restoredSession) setCategoryFilter(rememberedCategory(projectId, c.categories, d.documents))
       void listAIDesktopDesignMasterTemplates<unknown>().then((m) => {
         if (active) setMasterTemplates(hydrateMasterTemplates(m.masterTemplates))
       }).catch(() => {
@@ -401,11 +396,11 @@ export default function DesignDocumentsApp({ canManage, projectRequest }: { canM
       })
     }).catch((error) => showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.designDocument.listFailed)))
     return () => { active = false }
-  }, [canManage, restoredSession])
+  }, [canManage, projectId, restoredSession])
   const showLoadedDocument = (value: AIDesktopDesignDocument<unknown>) => { setFileTitle(value.title); setFileCategoryId(value.categoryId); const input = documentInput(value); setDocument({ ...value, content: input.content }); setDraft(input); setActivePageId(input.content.pages[0]?.id ?? null); setSnapshot(JSON.stringify(input)); setJsonImportPending(false) }
   useEffect(() => { if (projectId) writeLastPosition(projectId, categoryFilter) }, [projectId, categoryFilter])
-  // 別ウィンドウで作成した直後のプロジェクトは一覧に無いため、取得し直してから切り替える。
-  useEffect(() => { if (!projectRequest || !loaded || projects.some((item) => item.id === projectRequest.projectId)) return; let active = true; void listAIDesktopProjects().then((p) => { if (active) setProjects(p.projects) }).catch(() => undefined); return () => { active = false } }, [projectRequest, loaded]) // eslint-disable-line react-hooks/exhaustive-deps
+  // 非表示の間にプロジェクト情報が変わることがあるため、タブを開くたびに読み直す。
+  useEffect(() => { if (visible && loaded) queueMicrotask(() => void refresh().catch(() => undefined)) }, [visible]) // eslint-disable-line react-hooks/exhaustive-deps
   // 取り込んだPDFは、画面内でプレビューできるよう一時的なURLにする。
   useEffect(() => { if (screen !== 'file' || !document || document.id !== selectedId || document.format !== 'pdf') return; let active = true; let url: string | null = null; void fetchAIDesktopDesignDocumentFile(document.id).then((blob) => { if (!active) return; url = URL.createObjectURL(blob); setFilePreviewUrl(url) }).catch(() => undefined); return () => { active = false; if (url) URL.revokeObjectURL(url); setFilePreviewUrl(null) } }, [screen, document?.id, document?.format, selectedId]) // eslint-disable-line react-hooks/exhaustive-deps
   // 編集画面を開いている間は20秒ごとにロックを延長する。画面を離れるとロックを外す。
@@ -539,12 +534,13 @@ export default function DesignDocumentsApp({ canManage, projectRequest }: { canM
     return () => window.clearTimeout(timer)
   }, [mode, document, draft, dirty]) // eslint-disable-line react-hooks/exhaustive-deps
   const navigateProjectSection = (destination: ProjectSection) => { if (destination === 'deliverables') setDeliverySeedIds([]); setScreen(destination) }
-  const chooseProject = (id: string) => { setProjectId(id); setCategoryFilter(rememberedCategory(id, categories, documents)); setQuery(''); setDeliverySelectionMode(false); setDeliveryDocumentIds([]); setDeliverySeedIds([]); setScreen('workspace') }
-  // プロジェクトから「ドキュメントを開く」で渡された対象へ、描画中に一度だけ切り替える。編集中の未保存内容は優先して残す。
-  if (projectRequest && projectRequest.sequence !== appliedRequestSequence && loaded && projects.some((item) => item.id === projectRequest.projectId) && !(screen === 'document' && dirty)) {
-    setAppliedRequestSequence(projectRequest.sequence)
-    chooseProject(projectRequest.projectId)
-  }
+  // ホームから文書を指定して開かれたときは、その文書を開く。編集中の未保存内容は優先して残す。
+  useEffect(() => {
+    if (!documentRequest || !loaded || openedRequestRef.current === documentRequest.sequence || (screen === 'document' && dirty)) return
+    openedRequestRef.current = documentRequest.sequence
+    const item = documents.find((candidate) => candidate.id === documentRequest.documentId)
+    if (item) queueMicrotask(() => openDocument(item))
+  }, [documentRequest, loaded]) // eslint-disable-line react-hooks/exhaustive-deps
   const openCreateDialog = () => {
     setCreateMode('template')
     setCreateFile(null)
@@ -678,22 +674,23 @@ export default function DesignDocumentsApp({ canManage, projectRequest }: { canM
       const root = await repositoryFolderWithPermission(projectId)
       if (!root) { showAIDesktopNotification('error', AI_DESKTOP_MESSAGES.designDocument.agentFolderPermissionDenied); return }
       const result = await buildAgentFiles()
-      const written = await writeAgentExportToFolder(root, result.files, result.documentVersions)
+      const written = await writeAgentExportToFolder(root, result.files, result.projectVersion, result.documentVersions)
       setAgentPendingCount(0)
       showAIDesktopNotification('success', written.written || written.removed ? AI_DESKTOP_MESSAGES.designDocument.agentWritten(written.folderName, written.written, written.removed) : AI_DESKTOP_MESSAGES.designDocument.agentUnchanged(written.folderName))
       if (written.skipped.length) showAIDesktopNotification('warning', AI_DESKTOP_MESSAGES.designDocument.agentSkipped(written.skipped))
       warnIfAgentsFileTooLong(result.agentsLineCount)
     } catch (error) { showAIDesktopNotification('error', localizedErrorMessage(error, AI_DESKTOP_MESSAGES.designDocument.agentExportFailed)) } finally { setExportingAgents(false) }
   }
-  // 前回リポジトリへ書き出したあとに更新された文書の数を数え、書き出し忘れに気付けるようにする。
+  // 前回リポジトリへ書き出したあとに変更されたプロジェクト情報と文書を数え、書き出し忘れに気付けるようにする。
+  // プロジェクト情報は別のアプリで編集されるため、数えるたびに最新の更新日時を読み直す。
   const documentVersionKey = JSON.stringify(projectDocuments.map((item) => [item.id, item.updatedAt]))
   useEffect(() => {
     if (!projectId || !agentFolderName) return
     let active = true
     const versions = (JSON.parse(documentVersionKey) as Array<[string, number]>).map(([id, updatedAt]) => ({ id, updatedAt }))
-    void pendingAgentExportCount(projectId, versions).then((count) => { if (active) setAgentPendingCount(count) }).catch(() => undefined)
+    void getAIDesktopProject(projectId).then(({ project: latest }) => pendingAgentExportCount(projectId, latest.updatedAt, versions)).then((count) => { if (active) setAgentPendingCount(count) }).catch(() => undefined)
     return () => { active = false }
-  }, [projectId, agentFolderName, documentVersionKey])
+  }, [projectId, agentFolderName, documentVersionKey, agentPendingCheck, visible])
   // プロジェクトを切り替えたら、そのプロジェクトの書き出し先の名前を読み込む。
   useEffect(() => { if (!projectId) return; let active = true; void storedRepositoryFolderName(projectId).then((name) => { if (active) setAgentFolderName(name) }); return () => { active = false } }, [projectId])
   const safeJsonName = (value: string) => value.trim().replace(/[/:*?"<>|]/gu, '-') || 'ドキュメント'
@@ -750,15 +747,13 @@ export default function DesignDocumentsApp({ canManage, projectRequest }: { canM
   const removeTemplatePage = async () => { if (!templateDraft || !activeTemplatePage || templateDraft.content.pages.length === 1 || !(await confirmAIDesktop({ title: `ページ「${activeTemplatePage.navTitle}」を削除しますか？`, confirmLabel: '削除', tone: 'danger' }))) return; const pages = templateDraft.content.pages.filter((page) => page.id !== activeTemplatePage.id); setTemplateDraft({ ...templateDraft, content: { ...templateDraft.content, pages } }); setActiveTemplatePageId(pages[0]?.id ?? null) }
 
   if (!canManage) return <div className="ad-auth-required"><span>▧</span><h1>ドキュメント</h1><p>プロジェクトのドキュメントを閲覧・作成するには、Hundredへサインインしてください。</p></div>
-  if (screen === 'projects') return <AppShell className="ad-design-home"><AppHeader eyebrow="DESIGN WORKSPACE" title="プロジェクト一覧" description="ドキュメントを確認・作成するプロジェクトを選択してください。" actions={<nav><button onClick={() => setScreen('master-templates')}>標準テンプレート</button></nav>} /><AppContent><div className="ad-design-project-grid">{projects.map((item) => { const count = documents.filter((doc) => doc.projectId === item.id); return <button key={item.id} onClick={() => chooseProject(item.id)}><span>◆</span><div><strong>{item.name}</strong><p>{item.summary || 'プロジェクトのドキュメントを管理します。'}</p><small>ドキュメント {count.length}件</small></div><b>›</b></button> })}</div></AppContent></AppShell>
-  if (screen === 'master-templates') return <div className="ad-design-template-manager"><header><div><small>DESIGN WORKSPACE</small><h1>標準テンプレート</h1><p>すべてのプロジェクトで利用できる、最初から用意された構成です。</p></div><nav className="ad-design-toolbar"><button onClick={() => setScreen('projects')}>← プロジェクト一覧</button></nav></header>{navigationPhases.map((itemPhase) => { const phaseTemplates = activeMasterTemplates.filter((item) => item.phase === itemPhase).sort(compareRuntimeItems); if (!phaseTemplates.length) return null; return <section key={itemPhase}><div className="ad-design-section-title"><div><small>MASTER</small><h2>{navigationPhaseLabel(itemPhase)}</h2><p>{navigationPhaseLabel(itemPhase)}で使用するテンプレートです。</p></div><span>{phaseTemplates.length}件</span></div><div className="ad-design-template-grid">{phaseTemplates.map((item) => <article key={item.id}><h3>{item.name}</h3><p>{item.description}</p><small>表示順 {item.sortOrder} ・ v{item.version}</small></article>)}</div></section> })}</div>
-  if (screen === 'templates' && project) return <div className="ad-design-template-manager ad-design-project-section-page"><ProjectSectionHeader projectName={project.name} title="テンプレート" current="templates" onBack={() => { setProjectId(null); setScreen('projects') }} onNavigate={navigateProjectSection} /><div className="ad-design-list-tools"><span>{projectTemplates.length}件</span>{project.canEdit && <div className="ad-design-list-actions"><button className="primary" onClick={() => setScreen('project-template-picker')}>標準テンプレートから作成</button></div>}</div><section><div className="ad-design-section-title"><div><small>PROJECT</small><h2>独自テンプレート</h2><p>同じ種類は1件だけ保持され、作成後も内容を編集できます。</p></div></div><div className="ad-design-template-grid">{projectTemplates.map((item) => <article key={item.id}><h3>{item.name}</h3><p>{item.description || '説明はありません。'}</p><small>{item.phase === 'basic-design' ? phaseLabels[item.phase] : `${phaseLabels[item.phase]} ・ ${runtimeTypeLabel(item.domain, item.documentType)}`} ・ v{item.version}</small>{item.canEdit && <footer><button onClick={() => editTemplate(item)}>編集</button><button className="danger" onClick={() => void removeTemplate(item)}>削除</button></footer>}</article>)}{!projectTemplates.length && <div className="ad-design-template-empty"><span>▧</span><strong>独自テンプレートはありません</strong><p>「標準テンプレートから作成」で元にする構成を選ぶか、ドキュメントの画面から「独自テンプレートとして保存」で作成できます。</p></div>}</div></section></div>
+  if (screen === 'templates' && project) return <div className="ad-design-template-manager ad-design-project-section-page"><ProjectSectionHeader projectName={project.name} title="テンプレート" current="templates" onNavigate={navigateProjectSection} /><div className="ad-design-list-tools"><span>{projectTemplates.length}件</span>{project.canEdit && <div className="ad-design-list-actions"><button className="primary" onClick={() => setScreen('project-template-picker')}>標準テンプレートから作成</button></div>}</div><section><div className="ad-design-section-title"><div><small>PROJECT</small><h2>独自テンプレート</h2><p>同じ種類は1件だけ保持され、作成後も内容を編集できます。</p></div></div><div className="ad-design-template-grid">{projectTemplates.map((item) => <article key={item.id}><h3>{item.name}</h3><p>{item.description || '説明はありません。'}</p><small>{item.phase === 'basic-design' ? phaseLabels[item.phase] : `${phaseLabels[item.phase]} ・ ${runtimeTypeLabel(item.domain, item.documentType)}`} ・ v{item.version}</small>{item.canEdit && <footer><button onClick={() => editTemplate(item)}>編集</button><button className="danger" onClick={() => void removeTemplate(item)}>削除</button></footer>}</article>)}{!projectTemplates.length && <div className="ad-design-template-empty"><span>▧</span><strong>独自テンプレートはありません</strong><p>「標準テンプレートから作成」で元にする構成を選ぶか、ドキュメントの画面から「独自テンプレートとして保存」で作成できます。</p></div>}</div></section></div>
   if (screen === 'project-template-picker' && project) return <div className="ad-design-template-manager"><header><div><small>{project.name}</small><h1>標準テンプレートから作成</h1><p>このプロジェクト用に調整する標準テンプレートを選択してください。</p></div><nav className="ad-design-toolbar"><button onClick={() => setScreen('templates')}>← テンプレート</button></nav></header>{navigationPhases.map((itemPhase) => { const phaseTemplates = activeMasterTemplates.filter((item) => item.phase === itemPhase).sort(compareRuntimeItems); if (!phaseTemplates.length) return null; return <section key={itemPhase}><div className="ad-design-section-title"><div><small>MASTER</small><h2>{navigationPhaseLabel(itemPhase)}</h2><p>{navigationPhaseLabel(itemPhase)}の標準テンプレートから独自テンプレートを作成します。</p></div><span>{phaseTemplates.length}件</span></div><div className="ad-design-template-grid">{phaseTemplates.map((item) => { const existing = projectTemplates.find((template) => template.domain === item.domain && template.phase === item.phase && template.documentType === item.documentType); return <article key={item.id}><h3>{item.name}</h3><p>{item.description}</p><small>表示順 {item.sortOrder} ・ v{item.version}</small>{project.canEdit && <button disabled={busy || Boolean(existing)} onClick={() => void duplicateTemplate(item)}>{existing ? '作成済み' : '独自テンプレートを作成'}</button>}</article> })}</div></section> })}</div>
   if (screen === 'template-edit' && templateDraft && project) return <div className="ad-design-template-editor"><header><div><small>{project.name}</small><h1>独自テンプレートを編集</h1></div><nav className="ad-design-toolbar"><button onClick={() => setScreen('templates')}>← テンプレート一覧</button><button onClick={() => setScreen('templates')}>キャンセル</button><button className="primary" disabled={busy || !templateDraft.name.trim()} onClick={() => void saveTemplate()}>保存</button></nav></header><section className="ad-design-fields template"><label><span>テンプレート名</span><input value={templateDraft.name} onChange={(event) => setTemplateDraft({ ...templateDraft, name: event.target.value })} /></label><label><span>工程</span><select disabled value={templateDraft.phase}>{runtimePhasesForDomain(templateDraft.domain).map((value) => <option value={value} key={value}>{phaseLabels[value]}</option>)}</select></label>{templateDraft.phase !== 'basic-design' && <label><span>種別</span><select disabled value={templateDraft.documentType}>{runtimeTypesForPhase(templateDraft.domain, templateDraft.phase).map((item) => <option value={item.type} key={item.type}>{item.label}</option>)}</select></label>}<label className="description"><span>説明</span><input value={templateDraft.description} onChange={(event) => setTemplateDraft({ ...templateDraft, description: event.target.value })} /></label></section><div className="ad-design-page-workspace"><aside className="ad-design-page-nav"><header><strong>ページ</strong><button onClick={addTemplatePage}>＋ 追加</button></header><nav>{templateDraft.content.pages.map((page, index) => <button className={page.id === activeTemplatePage?.id ? 'active' : ''} key={page.id} onClick={() => setActiveTemplatePageId(page.id)}><span>{String(index + 1).padStart(2, '0')}</span><strong>{page.navTitle}</strong></button>)}</nav><footer><button disabled={!activeTemplatePage} onClick={duplicateTemplatePage}>複製</button><button className="danger" disabled={templateDraft.content.pages.length === 1} onClick={removeTemplatePage}>削除</button></footer></aside><div className="ad-design-template-canvas">{activeTemplatePage && <ContentCanvas item={activeTemplatePage} nameLabel="ページ名" onChange={updateTemplatePage} />}</div></div></div>
-  if (screen === 'deliverables' && project) return <DesignDeliverables project={project} documents={projectDocuments} initialDocumentIds={deliverySeedIds} header={<ProjectSectionHeader projectName={project.name} title="成果物・納品" current="deliverables" onBack={() => { setProjectId(null); setScreen('projects') }} onNavigate={navigateProjectSection} />} onCreateFromDocuments={beginDeliveryFromHistory} />
+  if (screen === 'deliverables' && project) return <DesignDeliverables project={project} documents={projectDocuments} initialDocumentIds={deliverySeedIds} header={<ProjectSectionHeader projectName={project.name} title="成果物・納品" current="deliverables" onNavigate={navigateProjectSection} />} onCreateFromDocuments={beginDeliveryFromHistory} />
   if (screen === 'workspace' && project) return (
     <div className="ad-design-workspace ad-design-workspace--category-layout">
-      <ProjectSectionHeader projectName={project.name} title="ドキュメント" current="workspace" breadcrumbSuffix={categoryFilter !== 'all' ? selectedCategory?.name ?? '未分類' : undefined} onBack={() => { setProjectId(null); setScreen('projects') }} onNavigate={navigateProjectSection} />
+      <ProjectSectionHeader projectName={project.name} title="ドキュメント" current="workspace" breadcrumbSuffix={categoryFilter !== 'all' ? selectedCategory?.name ?? '未分類' : undefined} onNavigate={navigateProjectSection} />
       <aside>
         <div className="ad-design-nav-label">カテゴリ</div>
         <nav>
@@ -782,10 +777,10 @@ export default function DesignDocumentsApp({ canManage, projectRequest }: { canM
               <span>{filtered.length}件</span>
             </>}
             <div className="ad-design-list-actions">
-              {projectDocuments.length > 0 && <details className="ad-project-json-menu ad-project-json-menu--labeled ad-agent-export-menu"><summary>{exportingAgents ? '書き出し中…' : agentFolderName && agentPendingCount ? `AI向けに書き出す（書き出し待ち ${agentPendingCount}件）` : 'AI向けに書き出す'} <span aria-hidden="true">⌄</span></summary><div>
+              <details className="ad-project-json-menu ad-project-json-menu--labeled ad-agent-export-menu" onToggle={(event) => { if (event.currentTarget.open) setAgentPendingCheck((value) => value + 1) }}><summary>{exportingAgents ? '書き出し中…' : agentFolderName && agentPendingCount ? `AI向けに書き出す（書き出し待ち ${agentPendingCount}件）` : 'AI向けに書き出す'} <span aria-hidden="true">⌄</span></summary><div>
                 <section><strong>リポジトリ</strong>{supportsRepositoryFolder() ? <><button type="button" disabled={exportingAgents} onClick={() => void writeAgentFolder(false)}>{agentFolderName ? `「${agentFolderName}」に書き出す` : 'リポジトリを選んで書き出す'}</button>{agentFolderName && <button type="button" disabled={exportingAgents} onClick={() => void writeAgentFolder(true)}>書き出し先を変更</button>}</> : <p>このブラウザでは、フォルダへ直接書き出せません。ZIPをダウンロードしてください。</p>}</section>
                 <section><strong>ファイル</strong><button type="button" disabled={exportingAgents} onClick={() => void downloadAgentZip()}>ZIPでダウンロード</button></section>
-              </div></details>}
+              </div></details>
               {project.canEdit && projectDocuments.length > 0 && <button className="success" onClick={beginDeliverySelection}>成果物を作成</button>}
               {project.canEdit && <button className="primary" onClick={openCreateDialog}>＋ 新規</button>}
             </div>

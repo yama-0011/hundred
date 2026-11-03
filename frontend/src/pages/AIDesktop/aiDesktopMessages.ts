@@ -1,4 +1,7 @@
 export const AI_DESKTOP_MESSAGES = {
+  home: {
+    loadFailed: 'ホームの情報を読み込めませんでした。',
+  },
   // マイ資料・ドキュメント・プロジェクトのJSON連携（ワークスペースのフォルダ）で共通の表示。
   workspace: {
     written: (path: string) => `${path} へJSONを書き出しました。`,
@@ -24,7 +27,7 @@ export const AI_DESKTOP_MESSAGES = {
     invalidUrl: '有効なURLを入力してください。',
     httpUrlRequired: 'http または https のURLを入力してください。',
     nameRequired: 'APP名を入力してください。',
-    settingsSaveFailed: 'デスクトップ設定を保存できませんでした。',
+    settingsSaveFailed: '設定を保存できませんでした。',
   },
   project: {
     listFailed: 'プロジェクト一覧を取得できませんでした。',

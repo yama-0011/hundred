@@ -1,0 +1,96 @@
+.ai-desktop.ad-workspace{--ad-attention-bg:#fbefd5;--ad-attention-text:#6e4500;display:flex;background:var(--ad-content-background)}
+.ai-desktop.ad-workspace.dark{--ad-attention-bg:#3a2c10;--ad-attention-text:#eec26c}
+
+.ad-workspace-nav{position:relative;z-index:10;flex:none;width:224px;box-sizing:border-box;padding:12px;display:flex;flex-direction:column;gap:16px;overflow-x:hidden;overflow-y:auto;background:var(--ad-nav-bg);border-right:1px solid var(--line);transition:width .15s ease}
+.ad-workspace-nav__head{min-height:36px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ad-workspace-nav__title{padding:0 10px;font-size:15px;white-space:nowrap}
+.ad-workspace-nav__toggle{flex:none;width:36px;height:36px;display:grid;place-items:center;padding:0;border:0;border-radius:6px;background:none;color:var(--muted);cursor:pointer}
+.ad-workspace-nav__toggle:hover{background:var(--ad-hover-bg);color:var(--ad-primary-text)}
+.ad-workspace-nav__icon{flex:none}
+.ad-workspace-nav__group{display:flex;flex-direction:column;gap:2px}
+.ad-workspace-nav__group>a,.ad-workspace-nav__group>button{position:relative;min-height:40px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:0 10px;border:0;border-radius:6px;background:none;color:var(--text);font:inherit;font-size:14px;text-align:left;text-decoration:none;cursor:pointer}
+.ad-workspace-nav__group>a>span,.ad-workspace-nav__group>button>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ad-workspace-nav__group>a:hover,.ad-workspace-nav__group>button:hover{background:var(--ad-hover-bg)}
+.ad-workspace-nav__group>a.active{background:var(--ad-selected-bg);color:var(--ad-primary-text);font-weight:600}
+.ad-workspace-nav__foot{margin-top:auto;padding-top:12px;border-top:1px solid var(--line)}
+.ad-workspace-nav.collapsed{width:60px;overflow:visible}
+.ad-workspace-nav.collapsed .ad-workspace-nav__head{justify-content:center}
+.ad-workspace-nav.collapsed .ad-workspace-nav__title,.ad-workspace-nav.collapsed .ad-workspace-nav__group>a>span,.ad-workspace-nav.collapsed .ad-workspace-nav__group>button>span{display:none}
+.ad-workspace-nav.collapsed .ad-workspace-nav__group>a,.ad-workspace-nav.collapsed .ad-workspace-nav__group>button{justify-content:center;padding:0}
+.ad-workspace-nav.collapsed [data-label]{position:relative}
+.ad-workspace-nav.collapsed [data-label]:hover::after,.ad-workspace-nav.collapsed [data-label]:focus-visible::after{position:absolute;z-index:30;top:50%;left:calc(100% + 8px);padding:5px 10px;border:1px solid var(--line);border-radius:6px;background:var(--ad-surface-raised);box-shadow:var(--ad-shadow-md);color:var(--text);font-size:13px;font-weight:500;white-space:nowrap;transform:translateY(-50%);content:attr(data-label);pointer-events:none}
+@media(prefers-reduced-motion:reduce){.ad-workspace-nav{transition:none}}
+.ad-workspace-nav a:focus-visible,.ad-workspace-nav button:focus-visible,.ad-home button:focus-visible{outline:2px solid var(--ad-primary);outline-offset:-2px}
+
+.ad-workspace-main{flex:1;min-width:0;height:100%;overflow:hidden;user-select:text;background:var(--ad-content-background)}
+.ad-workspace-app{height:100%;overflow:auto;container-type:inline-size;container-name:ad-window-content}
+.ad-workspace-app[hidden]{display:none}
+.ad-workspace .ad-article-layout>.ai-desktop-sidebar{max-height:100vh}
+
+.ad-home{box-sizing:border-box;height:100%;overflow-y:auto;padding:32px 40px;display:flex;flex-direction:column;gap:28px;font-size:14px}
+.ad-home section{display:flex;flex-direction:column;gap:12px}
+.ad-home h1{margin:0;font-size:22px;line-height:1.35}
+.ad-home h2{margin:0;font-size:16px}
+.ad-home button{border:0;color:var(--text);font:inherit;text-align:left;cursor:pointer}
+.ad-home__empty{margin:0;color:var(--muted)}
+.ad-home__empty a{margin-left:8px;color:var(--ad-primary-text)}
+.ad-home__recent{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.ad-home__recent button{display:flex;flex-direction:column;gap:4px;padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-radius:6px}
+.ad-home__recent button:hover{border-color:var(--ad-primary-border);background:var(--ad-hover-bg)}
+.ad-home__recent strong{font-weight:600;overflow-wrap:anywhere}
+.ad-home__recent span{color:var(--muted);font-size:13px}
+.ad-home__recent small{color:var(--muted);font-size:12px}
+.ad-home__attention{display:flex;flex-direction:column;gap:8px}
+.ad-home__attention button{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding:12px 16px;background:var(--ad-attention-bg);border-radius:6px}
+.ad-home__attention strong{color:var(--ad-attention-text);font-weight:600}
+.ad-home__list{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.ad-home__list button{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;padding:12px 16px;background:none;border-bottom:1px solid var(--line)}
+.ad-home__list button:last-child{border-bottom:0}
+.ad-home__list button:hover{background:var(--ad-hover-bg)}
+.ad-home__list strong{font-weight:600}
+.ad-home__list span{color:var(--muted);font-size:13px}
+
+@media(max-width:760px){
+  .ai-desktop.ad-workspace{flex-direction:column}
+  .ad-workspace-nav{width:auto;flex-direction:row;align-items:center;overflow-x:auto;overflow-y:hidden;padding:8px 12px;border-right:0;border-bottom:1px solid var(--line)}
+  .ad-workspace-nav__head{display:none}
+  .ad-workspace-nav.collapsed{width:auto;overflow-x:auto;overflow-y:hidden}
+  .ad-workspace-nav.collapsed .ad-workspace-nav__group>a>span,.ad-workspace-nav.collapsed .ad-workspace-nav__group>button>span{display:inline}
+  .ad-workspace-nav.collapsed .ad-workspace-nav__group>a,.ad-workspace-nav.collapsed .ad-workspace-nav__group>button{padding:0 10px}
+  .ad-workspace-nav.collapsed [data-label]:hover::after,.ad-workspace-nav.collapsed [data-label]:focus-visible::after{display:none}
+  .ad-workspace-nav__group{flex-direction:row;white-space:nowrap}
+  .ad-workspace-nav__foot{margin:0;padding:0;border:0}
+  .ad-workspace-main{flex:1;min-height:0;height:auto}
+  .ad-home{padding:20px 16px}
+}
+
+.ad-project-index{box-sizing:border-box;height:100%;overflow-y:auto;padding:32px 40px;display:flex;flex-direction:column;gap:16px;font-size:14px}
+.ad-project-index>header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px}
+.ad-project-index h1{margin:0;font-size:22px;line-height:1.35}
+.ad-project-index>header a{min-height:40px;box-sizing:border-box;display:flex;align-items:center;padding:0 14px;border-radius:6px;background:var(--ad-primary-fill);color:#fff;font-weight:600;text-decoration:none}
+.ad-project-index>header a:hover{background:var(--ad-primary-fill-hover)}
+.ad-project-index__list{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.ad-project-index__list>a{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 24px;padding:14px 16px;border-bottom:1px solid var(--line);color:var(--text);text-decoration:none}
+.ad-project-index__list>a:last-child{border-bottom:0}
+.ad-project-index__list>a:hover{background:var(--ad-hover-bg)}
+.ad-project-index__list span:first-child{flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.ad-project-index__list strong{font-weight:600}
+.ad-project-index__list small{color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ad-project-index__meta{color:var(--muted);font-size:13px}
+.ad-project-index__meta b{margin-right:10px;color:var(--text);font-weight:600}
+
+.ad-project-workspace{height:100%;display:flex;flex-direction:column}
+.ad-project-workspace[hidden],.ad-project-workspace__panel[hidden]{display:none}
+.ad-project-workspace__bar{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:8px 24px;padding:6px 20px 0;background:var(--ad-header-bg);border-bottom:1px solid var(--line);font-size:14px}
+.ad-project-workspace__bar>a{padding:8px 0;color:var(--muted);text-decoration:none}
+.ad-project-workspace__bar>a:hover{color:var(--ad-primary-text)}
+.ad-project-workspace__bar>div>a:hover{background:var(--ad-hover-bg)}
+.ad-project-workspace__bar>div{display:flex;gap:2px;overflow-x:auto}
+.ad-project-workspace__bar>div>a{padding:8px 14px;border-bottom:2px solid transparent;color:var(--muted);white-space:nowrap;text-decoration:none}
+.ad-project-workspace__bar>div>a.active{border-color:var(--ad-primary);color:var(--ad-primary-text);font-weight:600}
+.ad-project-workspace__panel{flex:1;min-height:0;overflow:auto}
+.ad-project-workspace__panel>*{min-height:100%}
+
+/* プロジェクト一覧を別の画面へ移したため、プロジェクト情報は1列で表示する。 */
+.ai-desktop.ad-workspace .ad-projects{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);height:100%}
+.ai-desktop.ad-workspace .ad-project-main{grid-column:1}

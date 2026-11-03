@@ -12,8 +12,6 @@ import {
   hasHundredGuestSession,
 } from './hundredGuestSession'
 import '../../../styles/Hundred/hundred-login-status.css'
-import { useHundredAppleIntelligence } from '../AppleIntelligence/HundredAppleIntelligenceContext'
-import AppleIntelligenceMark from '../AppleIntelligence/AppleIntelligenceMark'
 
 type LoginStatus = {
   sessionType: 'member' | 'guest'
@@ -40,7 +38,6 @@ function resolveDisplayName(
 /** Hundred共通ヘッダーで現在の表示名とサインイン導線を表示する。 */
 function HundredLoginStatus() {
   const navigate = useNavigate()
-  const { openAppleIntelligence } = useHundredAppleIntelligence()
   const [loginStatus, setLoginStatus] = useState<LoginStatus | null>(null)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -202,15 +199,6 @@ function HundredLoginStatus() {
             </strong>
             <small>{loginStatus.providerLabel}・サインイン画面を開く</small>
           </span>
-        </button>
-        <button
-          className="hundred-apple-launcher"
-          type="button"
-          aria-label="Apple Intelligenceを開く"
-          title="Apple Intelligence"
-          onClick={() => openAppleIntelligence()}
-        >
-          <AppleIntelligenceMark compact />
         </button>
         <button
           className="hundred-login-status__toggle"

@@ -1,20 +1,18 @@
 .ai-desktop {
   --ad-bg: #f5f7fb;
-  --ad-content-background:
-    radial-gradient(circle at 78% 10%, rgba(65, 124, 196, 0.08), transparent 34%),
-    linear-gradient(145deg, #f8faff 0%, #f3f6fb 55%, #eef3f9 100%);
-  --ad-header-bg: linear-gradient(135deg, #e7edf6 0%, #dce6f3 100%);
+  --ad-content-background: linear-gradient(160deg, #f8fafe 0%, #e9eff8 100%);
+  --ad-header-bg: linear-gradient(135deg, #f1f5fb 0%, #dee7f4 100%);
   --ad-header-text: #172033;
-  --ad-header-muted: #667085;
+  --ad-header-muted: #566176;
   --ad-header-border: rgba(56, 71, 104, 0.14);
   --ad-header-control-bg: rgba(255, 255, 255, 0.56);
   --ad-header-control-hover: rgba(255, 255, 255, 0.9);
-  --ad-sidebar-bg: linear-gradient(180deg, #eef3f9 0%, #e8eef6 100%);
+  --ad-sidebar-bg: linear-gradient(180deg, #f2f6fb 0%, #e4ebf5 100%);
   --ad-surface: #ffffff;
   --ad-surface-subtle: #f8fafc;
   --ad-surface-raised: #ffffff;
   --ad-text: #172033;
-  --ad-text-muted: #667085;
+  --ad-text-muted: #566176;
   --ad-border: rgba(56, 71, 104, 0.14);
   --ad-primary: #3975cf;
   --ad-primary-hover: #2f68ba;
@@ -30,20 +28,25 @@
   --muted: var(--ad-text-muted);
   --line: var(--ad-border);
   --glass: color-mix(in srgb, var(--ad-surface) 88%, transparent);
+  --ad-nav-bg: linear-gradient(180deg, #eef3fa 0%, #d6e0ef 100%);
+  --ad-primary-text: #255599;
+  --ad-primary-fill: linear-gradient(180deg, #3975cf 0%, #2a5ca8 100%);
+  --ad-primary-fill-hover: linear-gradient(180deg, #2f68ba 0%, #214d8c 100%);
+  --ad-primary-border: color-mix(in srgb, var(--ad-primary) 55%, transparent);
+  --ad-selected-bg: color-mix(in srgb, var(--ad-primary) 15%, transparent);
+  --ad-hover-bg: color-mix(in srgb, var(--ad-primary) 8%, transparent);
 }
 
 .ai-desktop.dark {
   --ad-bg: #162131;
-  --ad-content-background:
-    radial-gradient(circle at 78% 12%, rgba(54, 117, 190, 0.1), transparent 36%),
-    linear-gradient(145deg, #172436 0%, #152130 55%, #121d2b 100%);
-  --ad-header-bg: linear-gradient(135deg, #0b1421 0%, #101d2d 100%);
+  --ad-content-background: linear-gradient(160deg, #1a2739 0%, #0f1825 100%);
+  --ad-header-bg: linear-gradient(135deg, #1c2a3e 0%, #141f2e 100%);
   --ad-header-text: #f1f5ff;
   --ad-header-muted: #96a5bc;
   --ad-header-border: rgba(255, 255, 255, 0.09);
   --ad-header-control-bg: rgba(255, 255, 255, 0.045);
   --ad-header-control-hover: rgba(255, 255, 255, 0.1);
-  --ad-sidebar-bg: linear-gradient(180deg, #111c2b 0%, #142235 100%);
+  --ad-sidebar-bg: linear-gradient(180deg, #182538 0%, #101a28 100%);
   --ad-surface: #1b2839;
   --ad-surface-subtle: #182536;
   --ad-surface-raised: #213044;
@@ -55,6 +58,18 @@
   --ad-focus: rgba(79, 141, 231, 0.3);
   --ad-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
   --ad-shadow-md: 0 14px 36px rgba(0, 0, 0, 0.26);
+  --ad-nav-bg: linear-gradient(180deg, #1a283b 0%, #0c1420 100%);
+  --ad-primary-text: #8ab8f7;
+  --ad-primary-fill: linear-gradient(180deg, #3975cf 0%, #2a5ca8 100%);
+  --ad-primary-fill-hover: linear-gradient(180deg, #2f68ba 0%, #214d8c 100%);
+  --ad-primary-border: color-mix(in srgb, var(--ad-primary) 60%, transparent);
+  --ad-selected-bg: color-mix(in srgb, var(--ad-primary) 24%, transparent);
+  --ad-hover-bg: color-mix(in srgb, var(--ad-primary) 12%, transparent);
+  --panel: var(--ad-surface);
+  --text: var(--ad-text);
+  --muted: var(--ad-text-muted);
+  --line: var(--ad-border);
+  --glass: color-mix(in srgb, var(--ad-surface) 88%, transparent);
 }
 
 .ad-app-shell {
@@ -105,7 +120,7 @@
 }
 
 .ad-app-header__eyebrow {
-  color: var(--ad-primary);
+  color: var(--ad-primary-text);
   letter-spacing: 0.12em;
 }
 
@@ -203,11 +218,11 @@
 .ad-app-shell :where(.primary, [data-variant="primary"]) {
   border-color: var(--ad-primary) !important;
   color: #fff !important;
-  background: var(--ad-primary) !important;
+  background: var(--ad-primary-fill) !important;
 }
 
 .ad-app-shell :where(.primary, [data-variant="primary"]):hover:not(:disabled) {
-  background: var(--ad-primary-hover) !important;
+  background: var(--ad-primary-fill-hover) !important;
 }
 
 /* Legacy APP integration. These rules keep existing feature CSS inside the shared shell. */
@@ -274,7 +289,8 @@
   .ad-design-template-editor,
   .ad-projects
 ) {
-  background: var(--ad-content-background);
+  /* グラデーションは .ad-workspace-main に1枚だけ敷く。入れ子で塗ると境目が見える。 */
+  background: transparent;
 }
 
 .ai-desktop :is(
@@ -331,7 +347,7 @@
 }
 
 .ai-desktop .ad-app-header .ad-app-header__eyebrow {
-  color: var(--ad-primary);
+  color: var(--ad-primary-text);
 }
 
 .ai-desktop .ad-app-header .ad-app-header__actions :is(button, a):not(.primary):not(.active):not([data-variant="primary"]) {

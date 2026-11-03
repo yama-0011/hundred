@@ -134,26 +134,27 @@ async function removeFile(root: FileSystemDirectoryHandle, path: string) {
   return true
 }
 
-type Manifest = { files: string[]; documents: Record<string, number> }
+type Manifest = { files: string[]; project?: number; documents: Record<string, number> }
 function parseManifest(source: string | null): Manifest {
   try {
     const value: unknown = JSON.parse(source ?? 'null')
     if (!value || typeof value !== 'object') return { files: [], documents: {} }
-    const { files, documents } = value as Partial<Manifest>
-    return { files: Array.isArray(files) ? files.filter((item): item is string => typeof item === 'string') : [], documents: documents && typeof documents === 'object' ? documents : {} }
+    const { files, project, documents } = value as Partial<Manifest>
+    return { files: Array.isArray(files) ? files.filter((item): item is string => typeof item === 'string') : [], project, documents: documents && typeof documents === 'object' ? documents : {} }
   } catch { return { files: [], documents: {} } }
 }
 
 /**
- * 概要: 前回の書き出しより後に更新・追加・削除された文書の数を返す。
+ * 概要: 前回の書き出しより後に変更されたプロジェクト情報と、更新・追加・削除された文書の数を返す。プロジェクト情報は1件として数える。
  * 責務: 許可を求めずに読める場合だけ数える。読めない場合はnullを返し、表示しない。
  */
-export async function pendingAgentExportCount(projectId: string, documents: Array<{ id: string; updatedAt: number }>) {
+export async function pendingAgentExportCount(projectId: string, projectVersion: number, documents: Array<{ id: string; updatedAt: number }>) {
   const handle = await storedFolder(projectId).catch(() => null)
   if (!handle || await handle.queryPermission({ mode: 'read' }) !== 'granted') return null
-  const previous = parseManifest(await readText(handle, MANIFEST_PATH)).documents
+  const manifest = parseManifest(await readText(handle, MANIFEST_PATH))
+  const previous = manifest.documents
   const currentIds = new Set(documents.map((item) => item.id))
-  return documents.filter((item) => previous[item.id] !== item.updatedAt).length + Object.keys(previous).filter((id) => !currentIds.has(id)).length
+  return (manifest.project === projectVersion ? 0 : 1) + documents.filter((item) => previous[item.id] !== item.updatedAt).length + Object.keys(previous).filter((id) => !currentIds.has(id)).length
 }
 
 /** 生成した範囲だけを差し替える。目印がなければ、手書きの内容の後ろに追加する。 */
@@ -169,7 +170,7 @@ function mergeGeneratedBlock(existing: string | null, generated: string) {
  * 概要: ファイル一式をリポジトリのフォルダへ書き出す。
  * 責務: 前回の一覧と比べて、AI Desktopが作ったファイルだけを更新・削除する。手書きのファイルは上書きせず、skippedとして返す。
  */
-export async function writeAgentExportToFolder(root: FileSystemDirectoryHandle, files: AgentExportFile[], documentVersions: Record<string, number>): Promise<RepositoryWriteResult> {
+export async function writeAgentExportToFolder(root: FileSystemDirectoryHandle, files: AgentExportFile[], projectVersion: number, documentVersions: Record<string, number>): Promise<RepositoryWriteResult> {
   const previous = new Set<string>(parseManifest(await readText(root, MANIFEST_PATH)).files)
   const generatedPaths = files.filter((file) => !MERGED_FILES.has(file.path)).map((file) => file.path)
   const skipped: string[] = []
@@ -188,7 +189,7 @@ export async function writeAgentExportToFolder(root: FileSystemDirectoryHandle, 
   const current = new Set(generatedPaths.filter((path) => !skipped.includes(path)))
   let removed = 0
   for (const path of previous) if (!current.has(path) && path.startsWith('docs/') && await removeFile(root, path)) removed += 1
-  const manifest = `${JSON.stringify({ note: 'AI Desktopが書き出したファイルの一覧と、各設計書のAI Desktop上の最終更新日時です。次の書き出しで、不要になったファイルの片付けと、書き出し待ちの確認に使います。', files: [...current].sort(), documents: Object.fromEntries(Object.entries(documentVersions).sort(([left], [right]) => left.localeCompare(right))) }, null, 2)}\n`
+  const manifest = `${JSON.stringify({ note: 'AI Desktopが書き出したファイルの一覧と、プロジェクト情報と各設計書のAI Desktop上の最終更新日時です。次の書き出しで、不要になったファイルの片付けと、書き出し待ちの確認に使います。', files: [...current].sort(), project: projectVersion, documents: Object.fromEntries(Object.entries(documentVersions).sort(([left], [right]) => left.localeCompare(right))) }, null, 2)}\n`
   if (manifest !== await readText(root, MANIFEST_PATH)) await writeText(root, MANIFEST_PATH, manifest)
   return { folderName: root.name, written, removed, skipped }
 }

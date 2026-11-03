@@ -24,8 +24,8 @@ export const GENERATED_END = '<!-- ai-desktop:end -->'
 
 export type AgentExportFile = { path: string; content: string }
 export type AgentExportDocument = { document: AIDesktopDesignDocument<DesignDocumentContent>; categoryName: string }
-// documentVersions は、文書ごとのAI Desktop上の最終更新日時。前回の書き出しと比べて、書き出し待ちの文書を数えるために使う。
-export type AgentExportResult = { files: AgentExportFile[]; agentsLineCount: number; documentVersions: Record<string, number> }
+// projectVersion と documentVersions は、プロジェクト情報と文書ごとのAI Desktop上の最終更新日時。前回の書き出しと比べて、書き出し待ちを数えるために使う。
+export type AgentExportResult = { files: AgentExportFile[]; agentsLineCount: number; projectVersion: number; documentVersions: Record<string, number> }
 
 const formatLabels: Record<string, string> = { pdf: 'PDF', word: 'Word', excel: 'Excel' }
 // 大きな設計書はページごとのファイルに分け、AIが必要なページだけを読めるようにする。
@@ -175,7 +175,7 @@ export function buildAgentExport(project: AIDesktopProject, categories: AIDeskto
     })
     indexSections.push(lines(`## ${categoryName}`, '', ...entries))
   })
-  files.push({ path: 'docs/design/README.md', content: `${lines('# 設計書の一覧', '', '作業に関係する設計書だけを開いて読んでください。', '', indexSections.join('\n\n'))}\n` })
+  if (documents.length > 0) files.push({ path: 'docs/design/README.md', content: `${lines('# 設計書の一覧', '', '作業に関係する設計書だけを開いて読んでください。', '', indexSections.join('\n\n'))}\n` })
 
   files.push({ path: 'docs/ai-desktop/README.md', content: `${aiDesktopGuide()}\n` })
   // 設計書ではScreen Mapブロックを使わないため、設計書向けのブロック一覧には含めない。
@@ -194,13 +194,13 @@ export function buildAgentExport(project: AIDesktopProject, categories: AIDeskto
     pinnedCommands.length > 0 && `\n## よく使うコマンド\n\n${pinnedCommands.map((command) => `- ${command.name}：\`${command.command.split('\n')[0]}\`${command.directory ? `（${command.directory}）` : ''}`).join('\n')}`,
     '\n## 詳しい情報の置き場所',
     '',
-    '- 設計書：`docs/design/`（一覧は `docs/design/README.md`）。要件や設計に関わる作業では、該当する設計書を読んでから始めてください。',
+    documents.length > 0 && '- 設計書：`docs/design/`（一覧は `docs/design/README.md`）。要件や設計に関わる作業では、該当する設計書を読んでから始めてください。',
     projectDocs.length > 0 && `- プロジェクト情報：${projectDocs.map((file) => `${file.title}は \`${file.path}\``).join('、')}`,
-    '- `docs/design/` と `docs/project/` はAI Desktopが生成したファイルです。直接編集せず、変更が必要なときは `docs/ai-desktop/README.md` の手順に従ってください。',
+    '- ' + (documents.length > 0 ? '`docs/design/` と ' : '') + '`docs/project/` はAI Desktopが生成したファイルです。直接編集せず、変更が必要なときは `docs/ai-desktop/README.md` の手順に従ってください。',
   )
   files.unshift({ path: 'AGENTS.md', content: generated(agents) }, { path: 'CLAUDE.md', content: generated('@AGENTS.md') })
   const documentVersions = Object.fromEntries(documents.map((item) => [item.document.id, item.document.updatedAt]))
-  return { files, agentsLineCount: agents.split('\n').length, documentVersions }
+  return { files, agentsLineCount: agents.split('\n').length, projectVersion: project.updatedAt, documentVersions }
 }
 
 const crcTable = Array.from({ length: 256 }, (_, index) => { let value = index; for (let bit = 0; bit < 8; bit += 1) value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1; return value >>> 0 })
